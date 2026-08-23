@@ -10,26 +10,53 @@ import { FaultInjectionPanel } from './components/FaultInjectionPanel';
 import { AudioControls } from './components/AudioControls';
 import { TutorialGuide } from './components/TutorialGuide';
 
+type ActiveTab = 'workbench' | 'tutorial';
+
 const SimulatorWorkbench: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<ActiveTab>('workbench');
   const [loadTorque, setLoadTorque] = useState(20);
 
   // Executa o cálculo contínuo de aceleração e física
   usePhysicsLoop({ loadTorquePercent: loadTorque, enableNoise: true });
 
-  // Habilita atalhos físicos do PC
+  // Habilita atalhos físicos do teclado
   useKeyboardControls();
 
   return (
     <div style={mainContainerStyle}>
-      {/* BARRA DE ÁUDIO E VOLUME */}
-      <AudioControls />
+      {/* BARRA SUPERIOR: ÁUDIO E NAVEGAÇÃO POR ABAS */}
+      <div style={headerNavContainerStyle}>
+        <div style={tabsButtonGroupStyle}>
+          <button
+            onClick={() => setActiveTab('workbench')}
+            style={{
+              ...tabButtonStyle,
+              background: activeTab === 'workbench' ? '#0288d1' : '#1a1d21',
+              color: activeTab === 'workbench' ? '#fff' : '#90a4ae',
+              borderColor: activeTab === 'workbench' ? '#29b6f6' : '#323842',
+            }}
+          >
+            🎛️ Bancada de Operação
+          </button>
+          <button
+            onClick={() => setActiveTab('tutorial')}
+            style={{
+              ...tabButtonStyle,
+              background: activeTab === 'tutorial' ? '#0288d1' : '#1a1d21',
+              color: activeTab === 'tutorial' ? '#fff' : '#90a4ae',
+              borderColor: activeTab === 'tutorial' ? '#29b6f6' : '#323842',
+            }}
+          >
+            🎓 Modo Aula & Tutoriais
+          </button>
+        </div>
 
-      {/* MODO TUTORIAL / AULA */}
-      <TutorialGuide />
+        <AudioControls />
+      </div>
 
-      {/* BANNER DE ATALHOS (visível confortavelmente em tablets e desktops) */}
+      {/* BANNER DE ATALHOS DE TECLADO */}
       <div style={shortcutsBannerStyle}>
-        <span>⌨️ <strong>Atalhos de Teclado (PC):</strong></span>
+        <span>⌨️ <strong>Atalhos (PC):</strong></span>
         <span><kbd style={kbdStyle}>P</kbd> / <kbd style={kbdStyle}>Enter</kbd> = PROG</span>
         <span><kbd style={kbdStyle}>▲</kbd> / <kbd style={kbdStyle}>▼</kbd> = Navegar</span>
         <span><kbd style={kbdStyle}>I</kbd> = Ligar (Run)</span>
@@ -37,41 +64,62 @@ const SimulatorWorkbench: React.FC = () => {
         <span><kbd style={kbdStyle}>L</kbd> = LOC/REM</span>
       </div>
 
-      {/* LINHA 1: IHM + MOTOR & CARGA */}
-      <div style={rowStyle}>
-        <IHM />
-        <div style={motorColumnStyle}>
-          <MotorVisualizer loadTorquePercent={loadTorque} />
-          <div style={loadBoxStyle}>
-            <label style={{ fontSize: '11px', color: '#90a4ae', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Carga Mecânica no Eixo (Freio)</span>
-              <strong>{loadTorque}%</strong>
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={loadTorque}
-              onChange={(e) => setLoadTorque(Number(e.target.value))}
-              style={{ width: '100%', marginTop: '8px', cursor: 'pointer', height: '28px' }}
-            />
+      {/* CONTEÚDO DA ABA 1: BANCADA DE OPERAÇÃO */}
+      {activeTab === 'workbench' && (
+        <div style={tabContentStyle}>
+          {/* LINHA 1: IHM + MOTOR & CARGA */}
+          <div style={rowStyle}>
+            <IHM />
+            <div style={motorColumnStyle}>
+              <MotorVisualizer loadTorquePercent={loadTorque} />
+              <div style={loadBoxStyle}>
+                <label style={{ fontSize: '11px', color: '#90a4ae', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Carga Mecânica no Eixo (Freio)</span>
+                  <strong>{loadTorque}%</strong>
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={loadTorque}
+                  onChange={(e) => setLoadTorque(Number(e.target.value))}
+                  style={{ width: '100%', marginTop: '8px', cursor: 'pointer', height: '28px' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* LINHA 2: BORNES I/O + RELÉS */}
+          <div style={rowStyle}>
+            <TerminalBlock />
+            <RelayPanel />
+          </div>
+
+          {/* LINHA 3: INJEÇÃO DE FALHAS */}
+          <FaultInjectionPanel />
+        </div>
+      )}
+
+      {/* CONTEÚDO DA ABA 2: MODO AULA / TUTORIAIS */}
+      {activeTab === 'tutorial' && (
+        <div style={tabContentStyle}>
+          <TutorialGuide />
+          
+          {/* Vista Compacta de Apoio para a Aula */}
+          <div style={rowStyle}>
+            <IHM />
+            <div style={motorColumnStyle}>
+              <MotorVisualizer loadTorquePercent={loadTorque} />
+              <TerminalBlock />
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* LINHA 2: BORNES I/O + RELÉS */}
-      <div style={rowStyle}>
-        <TerminalBlock />
-        <RelayPanel />
-      </div>
-
-      {/* LINHA 3: INJEÇÃO DE FALHAS */}
-      <FaultInjectionPanel />
+      )}
     </div>
   );
 };
 
-// ESTILOS DE LAYOUT RESPONSIVO
+// ESTILOS VISUAIS
 const mainContainerStyle: React.CSSProperties = {
   maxWidth: '1100px',
   width: '100%',
@@ -81,6 +129,38 @@ const mainContainerStyle: React.CSSProperties = {
   flexDirection: 'column',
   gap: '14px',
   boxSizing: 'border-box',
+};
+
+const headerNavContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: '10px',
+};
+
+const tabsButtonGroupStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  flexWrap: 'wrap',
+};
+
+const tabButtonStyle: React.CSSProperties = {
+  padding: '10px 18px',
+  borderRadius: '8px',
+  border: '1px solid',
+  fontSize: '13px',
+  fontWeight: 700,
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+};
+
+const tabContentStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '14px',
+  width: '100%',
 };
 
 const rowStyle: React.CSSProperties = {
