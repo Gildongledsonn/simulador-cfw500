@@ -12,7 +12,6 @@ export const AdminPanel: React.FC = () => {
     setIsRefreshing(false);
   }, []);
 
-  // Recarrega dados na montagem e ouve eventos de storage locais
   useEffect(() => {
     loadData();
 
@@ -23,8 +22,8 @@ export const AdminPanel: React.FC = () => {
     window.addEventListener('auth_users_updated', handleLocalUpdate);
     window.addEventListener('storage', handleLocalUpdate);
 
-    // Auto-polling a cada 10 segundos para buscar novas solicitações
-    const interval = setInterval(loadData, 10000);
+    // Atualiza automaticamente a cada 6 segundos
+    const interval = setInterval(loadData, 6000);
 
     return () => {
       window.removeEventListener('auth_users_updated', handleLocalUpdate);
@@ -33,20 +32,26 @@ export const AdminPanel: React.FC = () => {
     };
   }, [loadData]);
 
-  const handleApprove = (userId: string) => {
-    updateUserStatus(userId, 'APPROVED');
+  const handleApprove = async (userId: string) => {
+    setIsRefreshing(true);
+    await updateUserStatus(userId, 'APPROVED');
     setUsers(getStoredUsers());
+    setIsRefreshing(false);
   };
 
-  const handleReject = (userId: string) => {
-    updateUserStatus(userId, 'REJECTED');
+  const handleReject = async (userId: string) => {
+    setIsRefreshing(true);
+    await updateUserStatus(userId, 'REJECTED');
     setUsers(getStoredUsers());
+    setIsRefreshing(false);
   };
 
-  const handleDelete = (userId: string) => {
+  const handleDelete = async (userId: string) => {
     if (window.confirm('Deseja realmente remover este cadastro?')) {
-      deleteUser(userId);
+      setIsRefreshing(true);
+      await deleteUser(userId);
       setUsers(getStoredUsers());
+      setIsRefreshing(false);
     }
   };
 
