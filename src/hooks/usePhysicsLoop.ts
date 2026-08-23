@@ -14,6 +14,9 @@ export const usePhysicsLoop = ({ loadTorquePercent = 20, enableNoise = true }: P
   const currentRef = useRef(state.outputCurrent);
   const lastTimeRef = useRef<number | null>(null);
 
+  // Temporizador de inatividade para a função Sleep (P0217 / P0218)
+  const idleTimerRef = useRef<number>(0);
+
   useEffect(() => {
     let animationId: number;
 
@@ -22,7 +25,31 @@ export const usePhysicsLoop = ({ loadTorquePercent = 20, enableNoise = true }: P
       const dt = Math.min((timestamp - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = timestamp;
 
-      // Parâmetros de física
+      // ============================================================
+      // 1. LÓGICA SLEEP MODE (P0217 = 1 e P0218 = Tempo em Segundos)
+      // ============================================================
+      const isSleepEnabled = state.parameters.P0217?.currentValue === 1;
+      const sleepTimeout = state.parameters.P0218?.currentValue ?? 120;
+
+      // Se a esteira estiver rodando (DI1=ON) sem produto no sensor (DI2=OFF)
+      if (state.motorStatus === 'RUNNING' && isSleepEnabled && !state.digitalInputs.di2) {
+        idleTimerRef.current += dt;
+        if (idleTimerRef.current >= sleepTimeout) {
+          // Atingiu o tempo limite: Desliga o comando DI1 e entra em Sleep/Ready
+          idleTimerRef.current = 0;
+          dispatch({
+            type: 'SET_DIGITAL_INPUT',
+            payload: { input: 'di1', value: false },
+          });
+        }
+      } else {
+        // Se houver passagem no sensor DI2 ou a esteira parar, reinicia a contagem
+        idleTimerRef.current = 0;
+      }
+
+      // ============================================================
+      // 2. CÁLCULO DE FREQUÊNCIA ALVO E RAMPAS (P0100 / P0101)
+      // ============================================================
       const targetFreq = state.motorStatus === 'RUNNING' && !state.activeFault
         ? (state.parameters.P0121?.currentValue ?? 60.0)
         : 0.0;
@@ -37,20 +64,20 @@ export const usePhysicsLoop = ({ loadTorquePercent = 20, enableNoise = true }: P
       const accelRate = fMax / accelTime;
       const decelRate = fMax / decelTime;
 
-      // Atualização de Frequência
       if (freqRef.current < effectiveTargetFreq) {
         freqRef.current = Math.min(effectiveTargetFreq, freqRef.current + accelRate * dt);
       } else if (freqRef.current > effectiveTargetFreq) {
         freqRef.current = Math.max(effectiveTargetFreq, freqRef.current - decelRate * dt);
       }
 
-      // Cálculo de RPM com escorregamento proporcional à carga
-      const syncRPM = (freqRef.current * 120) / 4; // Motor 4 polos
-      const nominalSlipRPM = 50; // 1800 - 1750 = 50 RPM
+      // ============================================================
+      // 3. CÁLCULO DE RPM E CORRENTE COM ESCORREGAMENTO
+      // ============================================================
+      const syncRPM = (freqRef.current * 120) / 4;
+      const nominalSlipRPM = 50;
       const slipRPM = syncRPM > 0 ? (nominalSlipRPM * (loadTorquePercent / 100)) : 0;
       rpmRef.current = Math.max(0, Math.round(syncRPM - slipRPM));
 
-      // Cálculo de Corrente
       const iNominal = state.parameters.P0403?.currentValue ?? 4.5;
       const iNoLoad = iNominal * 0.35;
       const iLoad = iNoLoad + (iNominal - iNoLoad) * (loadTorquePercent / 100);
@@ -62,7 +89,7 @@ export const usePhysicsLoop = ({ loadTorquePercent = 20, enableNoise = true }: P
         ? Math.max(0, (iLoad * (freqRef.current / fMax) + iAccelBoost + noise))
         : 0;
 
-      // Proteção de Sobrecarga F006
+      // Proteção F006
       const iMax = state.parameters.P0135?.currentValue ?? 10.0;
       if (currentRef.current > iMax && !state.activeFault) {
         dispatch({
@@ -90,5 +117,5 @@ export const usePhysicsLoop = ({ loadTorquePercent = 20, enableNoise = true }: P
 
     animationId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animationId);
-  }, [state.motorStatus, state.activeFault, state.parameters, loadTorquePercent, enableNoise, dispatch]);
+  }, [state.motorStatus, state.activeFault, state.parameters, state.digitalInputs, loadTorquePercent, enableNoise, dispatch]);
 };

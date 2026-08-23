@@ -42,12 +42,12 @@ export const inverterReducer = (state: InverterState, action: InverterAction): I
     case 'PRESS_PROG': {
       if (state.activeFault) return state;
 
-      // 1. Se estiver na tela principal (MONIT), vai para a lista de parâmetros
+      // 1. Se estiver no modo de monitoramento (MONIT), vai para a seleção de parâmetros
       if (state.ihmMode === 'MONIT') {
         return { ...state, ihmMode: 'PARAM_SELECT' };
       }
 
-      // 2. Se estiver selecionando o parâmetro, abre o valor para edição
+      // 2. Se estiver selecionando o parâmetro, abre para edição do valor
       if (state.ihmMode === 'PARAM_SELECT') {
         if (!currentParam || currentParam.readOnly) return state;
         return {
@@ -57,9 +57,9 @@ export const inverterReducer = (state: InverterState, action: InverterAction): I
         };
       }
 
-      // 3. Se estiver editando, SALVA O VALOR na memória EEPROM
+      // 3. Se estiver editando, grava na memória
       if (state.ihmMode === 'PARAM_EDIT') {
-        // RESET DE FÁBRICA VIA P0204 = 5
+        // Reset de Fábrica: P0204 configurado para 5
         if (currentKey === 'P0204' && Math.round(state.editBuffer) === 5) {
           const resetParams = executeFactoryReset(state.parameters);
           return {
@@ -166,16 +166,18 @@ export const inverterReducer = (state: InverterState, action: InverterAction): I
       let targetSpeed = state.parameters.P0121?.currentValue ?? 60.0;
 
       if (state.controlSource === 'REM' && !state.activeFault) {
+        // DI1 = Comando de Partida Remoto (Gira/Para)
         nextStatus = nextInputs.di1 ? 'RUNNING' : 'READY';
-        nextForward = !nextInputs.di2;
 
+        // LÓGICA DE MULTISPEED (P0222 = 6) - Automação da Esteira e Aplicações Industriais
         if (state.parameters.P0222?.currentValue === 6) {
-          const bit0 = nextInputs.di2 ? 1 : 0;
-          const bit1 = nextInputs.di3 ? 1 : 0;
-          const bit2 = nextInputs.di4 ? 1 : 0;
-          const idx = (bit2 << 2) | (bit1 << 1) | bit0;
-          const targetKey = `P012${4 + idx}` as ParameterKey;
-          targetSpeed = state.parameters[targetKey]?.currentValue ?? 5.0;
+          if (nextInputs.di2) {
+            // Sensor de Entrada Ativo -> Comuta para Velocidade 2 (P0125 = 50.0 Hz)
+            targetSpeed = state.parameters.P0125?.currentValue ?? 50.0;
+          } else {
+            // Esteira em Operação Padrão -> Velocidade 1 (P0124 = 15.0 Hz)
+            targetSpeed = state.parameters.P0124?.currentValue ?? 15.0;
+          }
         }
       }
 
