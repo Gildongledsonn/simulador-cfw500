@@ -4,14 +4,10 @@ export type ParameterKey =
   | 'P0121' | 'P0122' | 'P0124' | 'P0125' | 'P0126' | 'P0127' | 'P0128' | 'P0129' | 'P0130' | 'P0131'
   | 'P0133' | 'P0134' | 'P0135'
   | 'P0202' | 'P0204' | 'P0220' | 'P0221' | 'P0222'
-  | 'P0275' | 'P0277'
-  | 'P0295' | 'P0400' | 'P0401' | 'P0402' | 'P0403';
+  | 'P0275' | 'P0277' | 'P0295'
+  | 'P0400' | 'P0401' | 'P0402' | 'P0403';
 
-export type IHMMode = 'MONIT' | 'PARAM_SELECT' | 'PARAM_EDIT';
-export type ControlSource = 'LOC' | 'REM';
-export type MotorStatus = 'READY' | 'RUNNING' | 'FAULT';
-
-export interface ParameterMetadata {
+export interface ParameterConfig {
   code: ParameterKey;
   description: string;
   min: number;
@@ -23,12 +19,13 @@ export interface ParameterMetadata {
   readOnly?: boolean;
 }
 
-export type ParameterMap = Record<ParameterKey, ParameterMetadata>;
+export type ParameterMap = Record<ParameterKey, ParameterConfig>;
 
 export interface FaultData {
   code: string;
+  name: string;
   description: string;
-  active: boolean;
+  autoResetable: boolean;
 }
 
 export interface DigitalInputsState {
@@ -42,9 +39,9 @@ export interface InverterState {
   parameters: ParameterMap;
   selectedParamIndex: number;
   editBuffer: number;
-  ihmMode: IHMMode;
-  controlSource: ControlSource;
-  motorStatus: MotorStatus;
+  ihmMode: 'MONIT' | 'PARAM_SELECT' | 'PARAM_EDIT';
+  controlSource: 'LOC' | 'REM';
+  motorStatus: 'READY' | 'RUNNING' | 'FAULT';
   isForwardDirection: boolean;
   activeFault: FaultData | null;
   digitalInputs: DigitalInputsState;
@@ -53,4 +50,5 @@ export interface InverterState {
   outputCurrent: number;
   motorRPM: number;
   dcBusVoltage: number;
+  lastFactoryResetTimestamp?: number;
 }

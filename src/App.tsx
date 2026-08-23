@@ -9,20 +9,25 @@ import { RelayPanel } from './components/RelayPanel';
 import { FaultInjectionPanel } from './components/FaultInjectionPanel';
 import { AudioControls } from './components/AudioControls';
 import { TutorialGuide } from './components/TutorialGuide';
-import { ModbusPanel } from './components/ModbusPanel'; // <-- 1. Importar o painel Modbus
+import { ModbusPanel } from './components/ModbusPanel';
+import { COURSE_MODULES } from './constants/courseModules';
+import { Lesson } from './types/tutorial';
 
-type ActiveTab = 'workbench' | 'modbus' | 'tutorial'; // <-- 2. Adicionar 'modbus'
+type ActiveTab = 'workbench' | 'modbus' | 'tutorial';
 
 const SimulatorWorkbench: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('workbench');
   const [loadTorque, setLoadTorque] = useState(20);
+
+  // Guarda a lição atualmente selecionada no Modo Aula
+  const [currentLesson, setCurrentLesson] = useState<Lesson>(COURSE_MODULES[0].lessons[0]);
 
   usePhysicsLoop({ loadTorquePercent: loadTorque, enableNoise: true });
   useKeyboardControls();
 
   return (
     <div style={mainContainerStyle}>
-      {/* BARRA SUPERIOR COM 3 ABAS */}
+      {/* BARRA SUPERIOR COM 3 ABAS E CONTROLE DE SOM */}
       <div style={headerNavContainerStyle}>
         <div style={tabsButtonGroupStyle}>
           <button
@@ -58,7 +63,7 @@ const SimulatorWorkbench: React.FC = () => {
               borderColor: activeTab === 'tutorial' ? '#29b6f6' : '#323842',
             }}
           >
-            🎓 Modo Aula & Tutoriais
+            🎓 Modo Aula & Trilha
           </button>
         </div>
 
@@ -75,7 +80,7 @@ const SimulatorWorkbench: React.FC = () => {
         <span><kbd style={kbdStyle}>L</kbd> = LOC/REM</span>
       </div>
 
-      {/* ABA 1: BANCADA DE OPERAÇÃO */}
+      {/* ABA 1: BANCADA DE OPERAÇÃO LIVRE */}
       {activeTab === 'workbench' && (
         <div style={tabContentStyle}>
           <div style={rowStyle}>
@@ -119,17 +124,30 @@ const SimulatorWorkbench: React.FC = () => {
         </div>
       )}
 
-      {/* ABA 3: MODO AULA / TUTORIAIS */}
+      {/* ABA 3: MODO AULA & TRILHA PEDAGÓGICA */}
       {activeTab === 'tutorial' && (
         <div style={tabContentStyle}>
-          <TutorialGuide />
-          <div style={rowStyle}>
-            <IHM />
-            <div style={motorColumnStyle}>
-              <MotorVisualizer loadTorquePercent={loadTorque} />
-              <TerminalBlock />
+          <TutorialGuide
+            selectedLesson={currentLesson}
+            setSelectedLesson={setCurrentLesson}
+          />
+
+          {/* SÓ MOSTRA A BANCADA SE FOR UMA AULA PRÁTICA */}
+          {currentLesson.type === 'PRACTICE' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '6px' }}>
+              <div style={{ fontSize: '12px', color: '#64b5f6', fontWeight: 'bold' }}>
+                🎛️ Bancada de Testes Ativa para a Prática:
+              </div>
+              <div style={rowStyle}>
+                <IHM />
+                <div style={motorColumnStyle}>
+                  <MotorVisualizer loadTorquePercent={loadTorque} />
+                  <TerminalBlock />
+                </div>
+              </div>
+              <FaultInjectionPanel />
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

@@ -1,5 +1,7 @@
 import { InverterState } from './cfw500';
 
+export type LessonType = 'THEORY' | 'PRACTICE';
+
 export interface TutorialStep {
   id: string;
   title: string;
@@ -8,10 +10,28 @@ export interface TutorialStep {
   isCompleted: (state: InverterState) => boolean;
 }
 
-export interface TutorialLesson {
+export interface TheorySection {
+  title: string;
+  content: string[];
+  keyTakeaway: string;
+  diagramInfo?: string;
+}
+
+export interface Lesson {
   id: string;
   title: string;
-  category: 'Básico' | 'Controle Remoto' | 'Multispeed' | 'Diagnóstico';
+  type: LessonType;
+  durationMin: number;
   description: string;
-  steps: TutorialStep[];
+  theoryData?: TheorySection;
+  steps?: TutorialStep[];
+}
+
+export interface CourseModule {
+  id: string;
+  moduleNumber: number;
+  title: string;
+  description: string;
+  icon: string;
+  lessons: Lesson[];
 }
