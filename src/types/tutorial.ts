@@ -1,4 +1,4 @@
-import { InverterState } from '../context/InverterContext';
+import { InverterState } from './cfw500';
 
 export interface TutorialStep {
   id: string;

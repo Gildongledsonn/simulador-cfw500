@@ -24,6 +24,7 @@ export const INITIAL_PARAMETERS: ParameterMap = {
   P0134: { code: 'P0134', description: 'Frequência Máxima', min: 0.0, max: 300.0, step: 0.1, defaultValue: 60.0, currentValue: 60.0, unit: 'Hz' },
   P0135: { code: 'P0135', description: 'Corrente Máxima de Saída', min: 0.0, max: 50.0, step: 0.1, defaultValue: 10.0, currentValue: 10.0, unit: 'A' },
   P0202: { code: 'P0202', description: 'Tipo de Controle (0=V/F, 1=VVW)', min: 0, max: 1, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
+  P0204: { code: 'P0204', description: 'Carrega Padrão Fábrica (5=Reset)', min: 0, max: 5, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
   P0220: { code: 'P0220', description: 'Seleção Modo Local/Remoto', min: 0, max: 3, step: 1, defaultValue: 2, currentValue: 2, unit: '' },
   P0221: { code: 'P0221', description: 'Referência Local (0=IHM, 1=AI1)', min: 0, max: 1, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
   P0222: { code: 'P0222', description: 'Referência Remota (0=IHM, 1=AI1, 6=Multi)', min: 0, max: 10, step: 1, defaultValue: 1, currentValue: 1, unit: '' },
