@@ -25,8 +25,8 @@ interface LadderRung {
   cells: [LadderCell, LadderCell, LadderCell]; // 3 colunas de contatos
   coil: {
     type: CoilType;
-    tag: string; // Ex: Q1 (RUN Inversor), Q2 (Sentido), M1, MB_SPEED
-    speedValue?: number; // Valor em Hz caso seja MB_SPEED
+    tag: string; // Ex: Q1 (RUN Inversor), Q2, M1, MB_SPEED
+    speedValue?: number;
   };
 }
 
@@ -37,14 +37,15 @@ export const ModbusPanel: React.FC = () => {
   const [slaveAddress, setSlaveAddress] = useState(1);
   const [modbusSpeedHz, setModbusSpeedHz] = useState(45.0);
 
-  // ESTADO DO PLC CLIC-02
+  // ESTADO DO PLC CLIC-02 COM ENTRADAS EXPANSÍVEIS
   const [isPlcRun, setIsPlcRun] = useState(true);
   const [inputsState, setInputsState] = useState<{ [key: string]: boolean }>({
     I1: false, // Start
     I2: true,  // Stop (NF)
-    I3: false, // Sentido
+    I3: false, // Sentido / Speed
     I4: false,
   });
+
   const [flagsState, setFlagsState] = useState<{ [key: string]: boolean }>({
     M1: false,
     M2: false,
@@ -100,6 +101,26 @@ export const ModbusPanel: React.FC = () => {
     ]);
   };
 
+  // GERENCIAR ENTRADAS DINÂMICAS (ADICIONAR / REMOVER)
+  const handleAddInput = () => {
+    const inputKeys = Object.keys(inputsState);
+    if (inputKeys.length >= 12) return; // Limite máximo de 12 entradas
+    const nextIndex = inputKeys.length + 1;
+    const nextKey = `I${nextIndex}`;
+    setInputsState((prev) => ({ ...prev, [nextKey]: false }));
+  };
+
+  const handleRemoveInput = () => {
+    const inputKeys = Object.keys(inputsState);
+    if (inputKeys.length <= 2) return; // Mínimo de 2 entradas (I1 e I2)
+    const lastKey = inputKeys[inputKeys.length - 1];
+    setInputsState((prev) => {
+      const next = { ...prev };
+      delete next[lastKey];
+      return next;
+    });
+  };
+
   // EVALUADOR DO FLUXO LADDER EM TEMPO REAL (PLC SCAN ENGINE)
   const evalCellPower = (cell: LadderCell): boolean => {
     if (cell.type === 'NONE') return false;
@@ -126,7 +147,7 @@ export const ModbusPanel: React.FC = () => {
     return power;
   };
 
-  // CICLO DE VARREDURA DO PLC (SCAN CYCLE 100ms)
+  // CICLO DE VARREDURA DO PLC (SCAN CYCLE)
   useEffect(() => {
     if (!isPlcRun || activeSubMode !== 'ladder') return;
 
@@ -168,7 +189,7 @@ export const ModbusPanel: React.FC = () => {
 
   // FUNÇÕES DE EDIÇÃO LADDER
   const handleCellClick = (rungIndex: number, cellIndex: number) => {
-    if (isPlcRun) return; // Trava edição em RUN como no Edit-CLIC
+    if (isPlcRun) return;
 
     const nextRungs = [...rungs];
     const currentCell = nextRungs[rungIndex].cells[cellIndex];
@@ -261,6 +282,8 @@ export const ModbusPanel: React.FC = () => {
       }, 500);
     }, 400);
   };
+
+  const availableInputKeys = Object.keys(inputsState);
 
   return (
     <div style={panelContainerStyle}>
@@ -387,10 +410,11 @@ export const ModbusPanel: React.FC = () => {
                                   onClick={(e) => e.stopPropagation()}
                                   style={tagSelectStyle}
                                 >
-                                  <option value="I1">I1 (Start)</option>
-                                  <option value="I2">I2 (Stop NF)</option>
-                                  <option value="I3">I3 (Sentido)</option>
-                                  <option value="I4">I4</option>
+                                  {availableInputKeys.map((k) => (
+                                    <option key={k} value={k}>
+                                      {k} {k === 'I1' ? '(Start)' : k === 'I2' ? '(Stop NF)' : ''}
+                                    </option>
+                                  ))}
                                   <option value="M1">M1 (Flag)</option>
                                   <option value="M2">M2 (Flag)</option>
                                 </select>
@@ -482,17 +506,53 @@ export const ModbusPanel: React.FC = () => {
             })}
           </div>
 
-          {/* PAINEL DE ENTRADAS DIGITAIS FÍSICAS (CLIC-02 FRONT PANEL) */}
+          {/* PAINEL DE ENTRADAS DIGITAIS FÍSICAS (CLIC-02 EXPANSÍVEL) */}
           <div style={subBoxStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '11px', color: '#90caf9', fontWeight: 'bold' }}>
-                Bancada de Chaves do CLP (Entradas I1 a I4):
-              </span>
-              <span style={{ fontSize: '10px', color: '#90a4ae' }}>Acione as chaves para simular botões e sensores</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '11px', color: '#90caf9', fontWeight: 'bold' }}>
+                  Bancada de Chaves do CLP (Entradas I1 a I{availableInputKeys.length}):
+                </span>
+                <span style={{ fontSize: '10px', color: '#80cbc4' }}>({availableInputKeys.length} entradas ativas)</span>
+              </div>
+
+              {/* BOTÕES PARA ADICIONAR E REMOVER ENTRADAS */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  onClick={handleAddInput}
+                  disabled={availableInputKeys.length >= 12}
+                  style={{
+                    ...btnStyle,
+                    background: availableInputKeys.length >= 12 ? '#37474f' : '#0288d1',
+                    padding: '4px 8px',
+                    fontSize: '10px',
+                    opacity: availableInputKeys.length >= 12 ? 0.5 : 1,
+                    cursor: availableInputKeys.length >= 12 ? 'not-allowed' : 'pointer',
+                  }}
+                  title="Adicionar entrada digital (até I12)"
+                >
+                  ➕ Adicionar Entrada
+                </button>
+                <button
+                  onClick={handleRemoveInput}
+                  disabled={availableInputKeys.length <= 2}
+                  style={{
+                    ...btnStyle,
+                    background: availableInputKeys.length <= 2 ? '#37474f' : '#b71c1c',
+                    padding: '4px 8px',
+                    fontSize: '10px',
+                    opacity: availableInputKeys.length <= 2 ? 0.5 : 1,
+                    cursor: availableInputKeys.length <= 2 ? 'not-allowed' : 'pointer',
+                  }}
+                  title="Remover última entrada (mínimo 2)"
+                >
+                  ➖ Remover Entrada
+                </button>
+              </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              {Object.keys(inputsState).map((key) => {
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {availableInputKeys.map((key) => {
                 const isPressed = inputsState[key];
                 return (
                   <button
@@ -503,7 +563,7 @@ export const ModbusPanel: React.FC = () => {
                       background: isPressed ? '#00e676' : '#263238',
                       color: isPressed ? '#0f2410' : '#eceff1',
                       border: isPressed ? '1px solid #69f0ae' : '1px solid #455a64',
-                      minWidth: '100px',
+                      minWidth: '85px',
                       padding: '8px',
                       display: 'flex',
                       flexDirection: 'column',
