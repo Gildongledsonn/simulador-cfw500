@@ -1,8 +1,37 @@
-import React, { useState } from 'react';
-import { getStoredUsers, updateUserStatus, deleteUser, UserAccount } from '../services/authService';
+import React, { useState, useEffect, useCallback } from 'react';
+import { getStoredUsers, updateUserStatus, deleteUser, fetchCloudUsers, UserAccount } from '../services/authService';
 
 export const AdminPanel: React.FC = () => {
   const [users, setUsers] = useState<UserAccount[]>(getStoredUsers());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadData = useCallback(async () => {
+    setIsRefreshing(true);
+    const updated = await fetchCloudUsers();
+    setUsers(updated);
+    setIsRefreshing(false);
+  }, []);
+
+  // Recarrega dados na montagem e ouve eventos de storage locais
+  useEffect(() => {
+    loadData();
+
+    const handleLocalUpdate = () => {
+      setUsers(getStoredUsers());
+    };
+
+    window.addEventListener('auth_users_updated', handleLocalUpdate);
+    window.addEventListener('storage', handleLocalUpdate);
+
+    // Auto-polling a cada 10 segundos para buscar novas solicitações
+    const interval = setInterval(loadData, 10000);
+
+    return () => {
+      window.removeEventListener('auth_users_updated', handleLocalUpdate);
+      window.removeEventListener('storage', handleLocalUpdate);
+      clearInterval(interval);
+    };
+  }, [loadData]);
 
   const handleApprove = (userId: string) => {
     updateUserStatus(userId, 'APPROVED');
@@ -15,7 +44,7 @@ export const AdminPanel: React.FC = () => {
   };
 
   const handleDelete = (userId: string) => {
-    if (window.confirm('Deseja realmente excluir este usuário?')) {
+    if (window.confirm('Deseja realmente remover este cadastro?')) {
       deleteUser(userId);
       setUsers(getStoredUsers());
     }
@@ -27,7 +56,7 @@ export const AdminPanel: React.FC = () => {
     <div style={containerStyle}>
       <div style={headerStyle}>
         <div>
-          <h3 style={{ fontSize: '15px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h3 style={{ fontSize: '15px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
             <span>🛡️</span> Gestão de Acessos & Aprovação de Alunos
           </h3>
           <span style={{ fontSize: '11px', color: '#90a4ae' }}>
@@ -35,11 +64,26 @@ export const AdminPanel: React.FC = () => {
           </span>
         </div>
 
-        {pendingCount > 0 && (
-          <span style={pendingBadgeStyle}>
-            ⚠️ {pendingCount} {pendingCount === 1 ? 'solicitação pendente' : 'solicitações pendentes'}
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {pendingCount > 0 && (
+            <span style={pendingBadgeStyle}>
+              ⚠️ {pendingCount} {pendingCount === 1 ? 'pendente' : 'pendentes'}
+            </span>
+          )}
+
+          <button
+            onClick={loadData}
+            disabled={isRefreshing}
+            style={{
+              ...refreshBtnStyle,
+              opacity: isRefreshing ? 0.6 : 1,
+              cursor: isRefreshing ? 'wait' : 'pointer',
+            }}
+            title="Recarregar cadastros mais recentes"
+          >
+            {isRefreshing ? '⏳ Sincronizando...' : '🔄 Atualizar Lista'}
+          </button>
+        </div>
       </div>
 
       {/* TABELA DE USUÁRIOS */}
@@ -134,6 +178,16 @@ const pendingBadgeStyle: React.CSSProperties = {
   color: '#000',
   padding: '4px 10px',
   borderRadius: '6px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+};
+
+const refreshBtnStyle: React.CSSProperties = {
+  background: '#0288d1',
+  color: '#fff',
+  border: 'none',
+  borderRadius: '6px',
+  padding: '6px 12px',
   fontSize: '11px',
   fontWeight: 'bold',
 };

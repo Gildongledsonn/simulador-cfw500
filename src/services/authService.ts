@@ -9,8 +9,12 @@ export interface UserAccount {
   requestedAt: string;
 }
 
-const STORAGE_KEY = 'cfw500_user_accounts_v1';
+const STORAGE_KEY = 'cfw500_user_accounts_v2';
 const ADMIN_EMAIL = 'gildongledson@gmail.com';
+
+// Endpoint em nuvem gratuito com chave de sincronização global para o seu domínio
+const CLOUD_SYNC_ENDPOINT = 'https://api.jsonstorage.net/v1/json';
+const CLOUD_BIN_ID = 'cfw500-gaflink-auth-sync';
 
 const INITIAL_USERS: UserAccount[] = [
   {
@@ -50,6 +54,62 @@ export const getStoredUsers = (): UserAccount[] => {
 
 export const saveUsers = (users: UserAccount[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+  // Dispara evento customizado para atualizar os componentes React na mesma aba
+  window.dispatchEvent(new Event('auth_users_updated'));
+};
+
+// Sincronização assíncrona para buscar cadastros feitos em outros aparelhos
+export const fetchCloudUsers = async (): Promise<UserAccount[]> => {
+  try {
+    const res = await fetch(`https://api.restful-api.dev/objects?id=${CLOUD_BIN_ID}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json[0]?.data?.users) {
+        const cloudUsers: UserAccount[] = json[0].data.users;
+        const localUsers = getStoredUsers();
+        
+        // Mescla usuários locais e da nuvem sem duplicar IDs
+        const userMap = new Map<string, UserAccount>();
+        localUsers.forEach((u) => userMap.set(u.username.toLowerCase(), u));
+        cloudUsers.forEach((u) => {
+          if (!userMap.has(u.username.toLowerCase())) {
+            userMap.set(u.username.toLowerCase(), u);
+          } else {
+            // Se na nuvem tiver atualização de status feita pelo admin, prevalece
+            const existing = userMap.get(u.username.toLowerCase())!;
+            if (u.status !== existing.status) {
+              userMap.set(u.username.toLowerCase(), { ...existing, status: u.status });
+            }
+          }
+        });
+
+        const merged = Array.from(userMap.values());
+        saveUsers(merged);
+        return merged;
+      }
+    }
+  } catch (err) {
+    console.warn('Sincronização em nuvem offline, usando dados locais:', err);
+  }
+  return getStoredUsers();
+};
+
+export const pushCloudUsers = async (users: UserAccount[]) => {
+  try {
+    await fetch('https://api.restful-api.dev/objects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: CLOUD_BIN_ID,
+        name: 'CFW500_AUTH_ACCOUNTS',
+        data: { users },
+      }),
+    });
+  } catch (err) {
+    console.warn('Erro ao salvar em nuvem:', err);
+  }
 };
 
 export const requestRegistration = async (newUser: {
@@ -64,7 +124,7 @@ export const requestRegistration = async (newUser: {
     (u: UserAccount) => u.username.toLowerCase() === newUser.username.trim().toLowerCase()
   );
   if (userExists) {
-    return { success: false, message: 'Este nome de usuário já está em uso.' };
+    return { success: false, message: 'Este nome de usuário já está cadastrado.' };
   }
 
   const emailExists = users.some(
@@ -87,7 +147,9 @@ export const requestRegistration = async (newUser: {
 
   users.push(userRecord);
   saveUsers(users);
+  await pushCloudUsers(users);
 
+  // Disparo de notificação HTTP para a caixa de e-mail do Administrador
   try {
     fetch('https://formsubmit.co/ajax/' + ADMIN_EMAIL, {
       method: 'POST',
@@ -118,10 +180,12 @@ export const updateUserStatus = (userId: string, newStatus: 'APPROVED' | 'REJECT
   const users = getStoredUsers();
   const updated = users.map((u: UserAccount) => (u.id === userId ? { ...u, status: newStatus } : u));
   saveUsers(updated);
+  pushCloudUsers(updated);
 };
 
 export const deleteUser = (userId: string) => {
   const users = getStoredUsers();
   const filtered = users.filter((u: UserAccount) => u.id !== userId);
   saveUsers(filtered);
+  pushCloudUsers(filtered);
 };
