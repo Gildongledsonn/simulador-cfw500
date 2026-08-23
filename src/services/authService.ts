@@ -11,9 +11,6 @@ export interface UserAccount {
 
 const STORAGE_KEY = 'cfw500_user_accounts_v3';
 const ADMIN_EMAIL = 'gildongledson@gmail.com';
-
-// Chave e Endpoint exclusivo para sincronizar o simulador da GafLink
-const CLOUD_SYNC_URL = 'https://api.jsonstorage.net/v1/json/00000000-0000-0000-0000-000000000000/cfw500_gaflink_auth';
 const BACKUP_KV_URL = 'https://kvstore.p1k.org/cfw500_gaflink_users';
 
 const INITIAL_USERS: UserAccount[] = [
@@ -70,16 +67,14 @@ export const fetchCloudUsers = async (): Promise<UserAccount[]> => {
       if (Array.isArray(cloudUsers) && cloudUsers.length > 0) {
         const localUsers = getStoredUsers();
 
-        // Faz o merge inteligente entre usuários locais e nuvem
         const map = new Map<string, UserAccount>();
         localUsers.forEach((u) => map.set(u.username.toLowerCase(), u));
-        
+
         cloudUsers.forEach((u) => {
           const existing = map.get(u.username.toLowerCase());
           if (!existing) {
             map.set(u.username.toLowerCase(), u);
           } else {
-            // Se o status na nuvem foi modificado pelo admin, mantém o status atualizado
             map.set(u.username.toLowerCase(), { ...existing, status: u.status });
           }
         });
@@ -113,7 +108,6 @@ export const requestRegistration = async (newUser: {
   email: string;
   password: string;
 }): Promise<{ success: boolean; message: string }> => {
-  // Primeiro atualiza da nuvem para evitar conflitos de usuário
   let users = await fetchCloudUsers();
 
   const userExists = users.some(
@@ -145,7 +139,6 @@ export const requestRegistration = async (newUser: {
   saveUsers(users);
   await pushCloudUsers(users);
 
-  // Disparo de notificação HTTP para seu e-mail
   try {
     fetch('https://formsubmit.co/ajax/' + ADMIN_EMAIL, {
       method: 'POST',
