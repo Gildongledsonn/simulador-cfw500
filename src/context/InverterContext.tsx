@@ -1,64 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { InverterState, ParameterKey, ParameterMap, ParameterMetadata } from '../types/cfw500';
+import { inverterReducer, InverterAction } from './inverterReducer';
 
-// 1. DEFINIÇÃO DE TIPOS
-export type ParameterKey =
-  | 'P0000' | 'P0001' | 'P0002' | 'P0003' | 'P0004'
-  | 'P0100' | 'P0101' | 'P0102' | 'P0103'
-  | 'P0121' | 'P0122' | 'P0124' | 'P0125' | 'P0126' | 'P0127' | 'P0128' | 'P0129' | 'P0130' | 'P0131'
-  | 'P0133' | 'P0134' | 'P0135'
-  | 'P0202' | 'P0220' | 'P0221' | 'P0222'
-  | 'P0275' | 'P0277'
-  | 'P0295' | 'P0400' | 'P0401' | 'P0402' | 'P0403';
-
-export type IHMMode = 'MONIT' | 'PARAM_SELECT' | 'PARAM_EDIT';
-export type ControlSource = 'LOC' | 'REM';
-export type MotorStatus = 'READY' | 'RUNNING' | 'FAULT';
-
-export interface ParameterMetadata {
-  code: ParameterKey;
-  description: string;
-  min: number;
-  max: number;
-  step: number;
-  defaultValue: number;
-  currentValue: number;
-  unit: string;
-  readOnly?: boolean;
-}
-
-export type ParameterMap = Record<ParameterKey, ParameterMetadata>;
-
-export interface FaultData {
-  code: string;
-  description: string;
-  active: boolean;
-}
-
-export interface DigitalInputsState {
-  di1: boolean;
-  di2: boolean;
-  di3: boolean;
-  di4: boolean;
-}
-
-export interface InverterState {
-  parameters: ParameterMap;
-  selectedParamIndex: number;
-  editBuffer: number;
-  ihmMode: IHMMode;
-  controlSource: ControlSource;
-  motorStatus: MotorStatus;
-  isForwardDirection: boolean;
-  activeFault: FaultData | null;
-  digitalInputs: DigitalInputsState;
-  ai1Voltage: number;
-  outputFrequency: number;
-  outputCurrent: number;
-  motorRPM: number;
-  dcBusVoltage: number;
-}
-
-// 2. PARÂMETROS PADRÃO DE FÁBRICA
 export const INITIAL_PARAMETERS: ParameterMap = {
   P0000: { code: 'P0000', description: 'Acesso aos Parâmetros', min: 0, max: 9999, step: 1, defaultValue: 0, currentValue: 5, unit: '' },
   P0001: { code: 'P0001', description: 'Velocidade de Saída (RPM)', min: 0, max: 9999, step: 1, defaultValue: 0, currentValue: 0, unit: 'RPM', readOnly: true },
@@ -83,6 +26,7 @@ export const INITIAL_PARAMETERS: ParameterMap = {
   P0134: { code: 'P0134', description: 'Frequência Máxima', min: 0.0, max: 300.0, step: 0.1, defaultValue: 60.0, currentValue: 60.0, unit: 'Hz' },
   P0135: { code: 'P0135', description: 'Corrente Máxima de Saída', min: 0.0, max: 50.0, step: 0.1, defaultValue: 10.0, currentValue: 10.0, unit: 'A' },
   P0202: { code: 'P0202', description: 'Tipo de Controle (0=V/F, 1=VVW)', min: 0, max: 1, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
+  P0204: { code: 'P0204', description: 'Carrega Padrão Fábrica (5=Reset)', min: 0, max: 5, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
   P0220: { code: 'P0220', description: 'Seleção Modo Local/Remoto', min: 0, max: 3, step: 1, defaultValue: 2, currentValue: 2, unit: '' },
   P0221: { code: 'P0221', description: 'Referência Local (0=IHM, 1=AI1)', min: 0, max: 1, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
   P0222: { code: 'P0222', description: 'Referência Remota (0=IHM, 1=AI1, 6=Multi)', min: 0, max: 10, step: 1, defaultValue: 1, currentValue: 1, unit: '' },
@@ -95,203 +39,25 @@ export const INITIAL_PARAMETERS: ParameterMap = {
   P0403: { code: 'P0403', description: 'Corrente Nominal Motor', min: 0.1, max: 50.0, step: 0.1, defaultValue: 4.5, currentValue: 4.5, unit: 'A' },
 };
 
-// 3. AÇÕES DO REDUCER
-export type InverterAction =
-  | { type: 'PRESS_PROG' }
-  | { type: 'PRESS_UP' }
-  | { type: 'PRESS_DOWN' }
-  | { type: 'PRESS_RUN' }
-  | { type: 'PRESS_STOP' }
-  | { type: 'PRESS_LOCREM' }
-  | { type: 'PRESS_DIRECTION' }
-  | { type: 'SELECT_PARAM_DIRECT'; payload: ParameterKey }
-  | { type: 'SET_DIGITAL_INPUT'; payload: { input: keyof DigitalInputsState; value: boolean } }
-  | { type: 'SET_ANALOG_INPUT_1'; payload: number }
-  | { type: 'TRIGGER_FAULT'; payload: FaultData }
-  | { type: 'RESET_FAULT' }
-  | { type: 'UPDATE_DYNAMIC_TELEMETRY'; payload: { freq: number; current: number; rpm: number } };
-
-export const inverterReducer = (state: InverterState, action: InverterAction): InverterState => {
-  const paramKeys = Object.keys(state.parameters) as ParameterKey[];
-  const currentKey = paramKeys[state.selectedParamIndex];
-  const currentParam = state.parameters[currentKey];
-
-  switch (action.type) {
-    case 'PRESS_PROG': {
-      if (state.activeFault) return state;
-      if (state.ihmMode === 'MONIT') return { ...state, ihmMode: 'PARAM_SELECT' };
-      if (state.ihmMode === 'PARAM_SELECT') {
-        if (currentParam.readOnly) return state;
-        const isUnlocked = state.parameters.P0000.currentValue === 5 || currentKey === 'P0000';
-        if (!isUnlocked) return state;
-        return { ...state, ihmMode: 'PARAM_EDIT', editBuffer: currentParam.currentValue };
-      }
-      if (state.ihmMode === 'PARAM_EDIT') {
-        return {
-          ...state,
-          ihmMode: 'PARAM_SELECT',
-          parameters: {
-            ...state.parameters,
-            [currentKey]: { ...currentParam, currentValue: state.editBuffer },
-          },
-        };
-      }
-      return state;
-    }
-
-    case 'PRESS_UP': {
-      if (state.ihmMode === 'PARAM_SELECT') {
-        return { ...state, selectedParamIndex: (state.selectedParamIndex + 1) % paramKeys.length };
-      }
-      if (state.ihmMode === 'PARAM_EDIT') {
-        const nextVal = Math.min(currentParam.max, +(state.editBuffer + currentParam.step).toFixed(2));
-        return { ...state, editBuffer: nextVal };
-      }
-      return state;
-    }
-
-    case 'PRESS_DOWN': {
-      if (state.ihmMode === 'PARAM_SELECT') {
-        return { ...state, selectedParamIndex: (state.selectedParamIndex - 1 + paramKeys.length) % paramKeys.length };
-      }
-      if (state.ihmMode === 'PARAM_EDIT') {
-        const prevVal = Math.max(currentParam.min, +(state.editBuffer - currentParam.step).toFixed(2));
-        return { ...state, editBuffer: prevVal };
-      }
-      return state;
-    }
-
-    case 'SELECT_PARAM_DIRECT': {
-      const idx = paramKeys.indexOf(action.payload);
-      if (idx === -1) return state;
-      return { ...state, selectedParamIndex: idx, ihmMode: 'PARAM_SELECT' };
-    }
-
-    case 'PRESS_RUN': {
-      if (state.activeFault || state.controlSource !== 'LOC') return state;
-      return { ...state, motorStatus: 'RUNNING' };
-    }
-
-    case 'PRESS_STOP': {
-      if (state.activeFault) return { ...state, activeFault: null, motorStatus: 'READY' };
-      if (state.ihmMode === 'PARAM_EDIT') return { ...state, ihmMode: 'PARAM_SELECT' };
-      if (state.ihmMode === 'PARAM_SELECT') return { ...state, ihmMode: 'MONIT' };
-      return { ...state, motorStatus: 'READY' };
-    }
-
-    case 'PRESS_LOCREM': {
-      return {
-        ...state,
-        controlSource: state.controlSource === 'LOC' ? 'REM' : 'LOC',
-        motorStatus: 'READY',
-      };
-    }
-
-    case 'PRESS_DIRECTION': {
-      return { ...state, isForwardDirection: !state.isForwardDirection };
-    }
-
-    case 'SET_DIGITAL_INPUT': {
-      const nextInputs = { ...state.digitalInputs, [action.payload.input]: action.payload.value };
-      let nextStatus = state.motorStatus;
-      let nextForward = state.isForwardDirection;
-      let targetSpeed = state.parameters.P0121.currentValue;
-
-      if (state.controlSource === 'REM' && !state.activeFault) {
-        nextStatus = nextInputs.di1 ? 'RUNNING' : 'READY';
-        nextForward = !nextInputs.di2;
-
-        if (state.parameters.P0222.currentValue === 6) {
-          const bit0 = nextInputs.di2 ? 1 : 0;
-          const bit1 = nextInputs.di3 ? 1 : 0;
-          const bit2 = nextInputs.di4 ? 1 : 0;
-          const idx = (bit2 << 2) | (bit1 << 1) | bit0;
-          const targetKey = `P012${4 + idx}` as ParameterKey;
-          targetSpeed = state.parameters[targetKey]?.currentValue ?? 5.0;
-        }
-      }
-
-      return {
-        ...state,
-        digitalInputs: nextInputs,
-        motorStatus: nextStatus,
-        isForwardDirection: nextForward,
-        parameters: {
-          ...state.parameters,
-          P0121: { ...state.parameters.P0121, currentValue: targetSpeed },
-        },
-      };
-    }
-
-    case 'SET_ANALOG_INPUT_1': {
-      const voltage = Math.min(10, Math.max(0, action.payload));
-      const fMin = state.parameters.P0133.currentValue;
-      const fMax = state.parameters.P0134.currentValue;
-      const targetFreqFromAI = fMin + (voltage / 10) * (fMax - fMin);
-
-      return {
-        ...state,
-        ai1Voltage: voltage,
-        parameters:
-          state.controlSource === 'REM' && state.parameters.P0222.currentValue === 1
-            ? {
-                ...state.parameters,
-                P0121: { ...state.parameters.P0121, currentValue: +targetFreqFromAI.toFixed(1) },
-              }
-            : state.parameters,
-      };
-    }
-
-    case 'TRIGGER_FAULT': {
-      return {
-        ...state,
-        activeFault: action.payload,
-        motorStatus: 'FAULT',
-        outputFrequency: 0,
-        outputCurrent: 0,
-        motorRPM: 0,
-      };
-    }
-
-    case 'RESET_FAULT': {
-      return { ...state, activeFault: null, motorStatus: 'READY' };
-    }
-
-    case 'UPDATE_DYNAMIC_TELEMETRY': {
-      return {
-        ...state,
-        outputFrequency: action.payload.freq,
-        outputCurrent: action.payload.current,
-        motorRPM: action.payload.rpm,
-        parameters: {
-          ...state.parameters,
-          P0001: { ...state.parameters.P0001, currentValue: action.payload.rpm },
-          P0002: { ...state.parameters.P0002, currentValue: action.payload.freq },
-          P0003: { ...state.parameters.P0003, currentValue: action.payload.current },
-        },
-      };
-    }
-
-    default:
-      return state;
-  }
-};
-
-// 4. CONTEXTO E PROVEDOR
-interface InverterContextType {
-  state: InverterState;
-  dispatch: React.Dispatch<InverterAction>;
-  currentDisplayValue: string;
-  selectedParameter: ParameterMetadata;
-}
-
 const STORAGE_KEY = '@CFW500_EEPROM_STORAGE';
 
 const loadSavedParameters = (): ParameterMap => {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return INITIAL_PARAMETERS;
   try {
-    return { ...INITIAL_PARAMETERS, ...JSON.parse(saved) };
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return INITIAL_PARAMETERS;
+    const parsed = JSON.parse(saved);
+    
+    // Mescla garantindo que parâmetros novos (como P0204) e defaultValues existam
+    const merged: ParameterMap = { ...INITIAL_PARAMETERS };
+    (Object.keys(INITIAL_PARAMETERS) as ParameterKey[]).forEach((key) => {
+      if (parsed[key] && typeof parsed[key].currentValue === 'number') {
+        merged[key] = {
+          ...INITIAL_PARAMETERS[key],
+          currentValue: parsed[key].currentValue,
+        };
+      }
+    });
+    return merged;
   } catch {
     return INITIAL_PARAMETERS;
   }
@@ -314,11 +80,19 @@ const initialState: InverterState = {
   dcBusVoltage: 310,
 };
 
+interface InverterContextType {
+  state: InverterState;
+  dispatch: React.Dispatch<InverterAction>;
+  currentDisplayValue: string;
+  selectedParameter: ParameterMetadata;
+}
+
 const InverterContext = createContext<InverterContextType | undefined>(undefined);
 
 export const InverterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(inverterReducer, initialState);
 
+  // Sincroniza sempre com o localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.parameters));
   }, [state.parameters]);
