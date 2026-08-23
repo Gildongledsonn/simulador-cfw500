@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { InverterProvider } from './context/InverterContext';
 import { usePhysicsLoop } from './hooks/usePhysicsLoop';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
@@ -10,16 +10,22 @@ import { FaultInjectionPanel } from './components/FaultInjectionPanel';
 import { AudioControls } from './components/AudioControls';
 import { TutorialGuide } from './components/TutorialGuide';
 import { ModbusPanel } from './components/ModbusPanel';
+import { LoginScreen } from './components/LoginScreen';
+import { AdminPanel } from './components/AdminPanel';
 import { COURSE_MODULES } from './constants/courseModules';
 import { Lesson } from './types/tutorial';
 
-type ActiveTab = 'workbench' | 'modbus' | 'tutorial';
+type ActiveTab = 'workbench' | 'modbus' | 'tutorial' | 'admin';
 
-const SimulatorWorkbench: React.FC = () => {
+interface AuthUser {
+  name: string;
+  role: string;
+  username: string;
+}
+
+const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('workbench');
   const [loadTorque, setLoadTorque] = useState(20);
-
-  // Guarda a lição atualmente selecionada no Modo Aula
   const [currentLesson, setCurrentLesson] = useState<Lesson>(COURSE_MODULES[0].lessons[0]);
 
   usePhysicsLoop({ loadTorquePercent: loadTorque, enableNoise: true });
@@ -27,7 +33,24 @@ const SimulatorWorkbench: React.FC = () => {
 
   return (
     <div style={mainContainerStyle}>
-      {/* BARRA SUPERIOR COM 3 ABAS E CONTROLE DE SOM */}
+      {/* BARRA SUPERIOR DE USUÁRIO */}
+      <div style={userHeaderBarStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '16px' }}>👤</span>
+          <div>
+            <strong style={{ fontSize: '12px', color: '#fff' }}>{user.name}</strong>
+            <span style={{ fontSize: '10px', color: '#90a4ae', marginLeft: '6px' }}>
+              ({user.role === 'ADMIN' ? 'Instrutor / Admin' : 'Aluno'}) • @{user.username}
+            </span>
+          </div>
+        </div>
+
+        <button onClick={onLogout} style={btnLogoutStyle} title="Encerrar sessão">
+          🚪 Sair
+        </button>
+      </div>
+
+      {/* BARRA DE NAVEGAÇÃO ENTRE ABAS */}
       <div style={headerNavContainerStyle}>
         <div style={tabsButtonGroupStyle}>
           <button
@@ -65,22 +88,27 @@ const SimulatorWorkbench: React.FC = () => {
           >
             🎓 Modo Aula & Trilha
           </button>
+
+          {/* ABA EXCLUSIVA DO INSTRUTOR/ADMIN */}
+          {user.role === 'ADMIN' && (
+            <button
+              onClick={() => setActiveTab('admin')}
+              style={{
+                ...tabButtonStyle,
+                background: activeTab === 'admin' ? '#f57c00' : '#1a1d21',
+                color: activeTab === 'admin' ? '#fff' : '#ffb74d',
+                borderColor: activeTab === 'admin' ? '#ffa726' : '#323842',
+              }}
+            >
+              🛡️ Painel Admin (Aprovações)
+            </button>
+          )}
         </div>
 
         <AudioControls />
       </div>
 
-      {/* BANNER DE ATALHOS */}
-      <div style={shortcutsBannerStyle}>
-        <span>⌨️ <strong>Atalhos (PC):</strong></span>
-        <span><kbd style={kbdStyle}>P</kbd> / <kbd style={kbdStyle}>Enter</kbd> = PROG</span>
-        <span><kbd style={kbdStyle}>▲</kbd> / <kbd style={kbdStyle}>▼</kbd> = Navegar</span>
-        <span><kbd style={kbdStyle}>I</kbd> = Ligar (Run)</span>
-        <span><kbd style={kbdStyle}>O</kbd> / <kbd style={kbdStyle}>Espaço</kbd> = Parar/Reset</span>
-        <span><kbd style={kbdStyle}>L</kbd> = LOC/REM</span>
-      </div>
-
-      {/* ABA 1: BANCADA DE OPERAÇÃO LIVRE */}
+      {/* ABA 1: BANCADA */}
       {activeTab === 'workbench' && (
         <div style={tabContentStyle}>
           <div style={rowStyle}>
@@ -111,7 +139,7 @@ const SimulatorWorkbench: React.FC = () => {
         </div>
       )}
 
-      {/* ABA 2: MÓDULO SERIAL / MODBUS RTU */}
+      {/* ABA 2: MODBUS */}
       {activeTab === 'modbus' && (
         <div style={tabContentStyle}>
           <ModbusPanel />
@@ -124,7 +152,7 @@ const SimulatorWorkbench: React.FC = () => {
         </div>
       )}
 
-      {/* ABA 3: MODO AULA & TRILHA PEDAGÓGICA */}
+      {/* ABA 3: MODO AULA */}
       {activeTab === 'tutorial' && (
         <div style={tabContentStyle}>
           <TutorialGuide
@@ -132,7 +160,6 @@ const SimulatorWorkbench: React.FC = () => {
             setSelectedLesson={setCurrentLesson}
           />
 
-          {/* SÓ MOSTRA A BANCADA SE FOR UMA AULA PRÁTICA */}
           {currentLesson.type === 'PRACTICE' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '6px' }}>
               <div style={{ fontSize: '12px', color: '#64b5f6', fontWeight: 'bold' }}>
@@ -150,9 +177,52 @@ const SimulatorWorkbench: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* ABA 4: PAINEL DO ADMINISTRADOR */}
+      {activeTab === 'admin' && user.role === 'ADMIN' && (
+        <div style={tabContentStyle}>
+          <AdminPanel />
+        </div>
+      )}
     </div>
   );
 };
+
+export default function App() {
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    const savedLocal = localStorage.getItem('cfw500_auth_user');
+    if (savedLocal) {
+      try {
+        setCurrentUser(JSON.parse(savedLocal));
+      } catch {
+        localStorage.removeItem('cfw500_auth_user');
+      }
+    }
+    setIsInitializing(false);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('cfw500_auth_user');
+    setCurrentUser(null);
+  };
+
+  if (isInitializing) {
+    return <div style={{ background: '#0a0d11', minHeight: '100vh' }} />;
+  }
+
+  if (!currentUser) {
+    return <LoginScreen onLoginSuccess={setCurrentUser} />;
+  }
+
+  return (
+    <InverterProvider>
+      <SimulatorWorkbench user={currentUser} onLogout={handleLogout} />
+    </InverterProvider>
+  );
+}
 
 // ESTILOS VISUAIS
 const mainContainerStyle: React.CSSProperties = {
@@ -164,6 +234,27 @@ const mainContainerStyle: React.CSSProperties = {
   flexDirection: 'column',
   gap: '14px',
   boxSizing: 'border-box',
+};
+
+const userHeaderBarStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  background: '#13171d',
+  border: '1px solid #232b36',
+  borderRadius: '8px',
+  padding: '8px 14px',
+};
+
+const btnLogoutStyle: React.CSSProperties = {
+  background: '#b71c1c',
+  border: 'none',
+  borderRadius: '6px',
+  color: '#fff',
+  padding: '5px 12px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
 };
 
 const headerNavContainerStyle: React.CSSProperties = {
@@ -218,34 +309,3 @@ const loadBoxStyle: React.CSSProperties = {
   borderRadius: '12px',
   padding: '12px 14px',
 };
-
-const shortcutsBannerStyle: React.CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: '10px',
-  alignItems: 'center',
-  background: '#141619',
-  padding: '8px 12px',
-  borderRadius: '8px',
-  border: '1px solid #282e38',
-  fontSize: '11px',
-  color: '#90a4ae',
-};
-
-const kbdStyle: React.CSSProperties = {
-  background: '#252a33',
-  border: '1px solid #3e4756',
-  borderRadius: '3px',
-  padding: '2px 5px',
-  color: '#eceff1',
-  fontWeight: 'bold',
-  fontFamily: 'monospace',
-};
-
-export default function App() {
-  return (
-    <InverterProvider>
-      <SimulatorWorkbench />
-    </InverterProvider>
-  );
-}

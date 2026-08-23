@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getStoredUsers, requestRegistration } from '../services/authService';
+import { getStoredUsers, requestRegistration, UserAccount } from '../services/authService';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: { name: string; role: string; username: string }) => void;
@@ -8,11 +8,9 @@ interface LoginScreenProps {
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
 
-  // Estados do formulário de Login
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
-  // Estados do formulário de Cadastro
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regUsername, setRegUsername] = useState('');
@@ -21,7 +19,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Execução do Login
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
@@ -30,7 +27,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setTimeout(() => {
       const users = getStoredUsers();
       const foundUser = users.find(
-        (u) =>
+        (u: UserAccount) =>
           u.username.toLowerCase() === loginUsername.trim().toLowerCase() &&
           u.password === loginPassword
       );
@@ -70,7 +67,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     }, 300);
   };
 
-  // Execução do Cadastro
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
@@ -105,18 +101,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   return (
     <div style={overlayStyle}>
       <div style={cardStyle}>
-        {/* CABEÇALHO */}
         <div style={headerStyle}>
           <div style={badgeIconStyle}>⚡</div>
           <h2 style={{ fontSize: '18px', color: '#fff', margin: '8px 0 2px 0' }}>
-            GAF Treinamentos
+            Portal de Treinamento CFW500
           </h2>
           <span style={{ fontSize: '11px', color: '#90a4ae' }}>
             GafLink Automação • Plataforma de Capacitação Técnica
           </span>
         </div>
 
-        {/* FEEDBACK DE SUCESSO OU ERRO */}
         {feedback && (
           <div
             style={{
@@ -130,7 +124,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           </div>
         )}
 
-        {/* ABA: FORMULÁRIO DE LOGIN */}
         {!isRegisterMode && (
           <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
@@ -186,7 +179,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           </form>
         )}
 
-        {/* ABA: FORMULÁRIO DE CADASTRO */}
         {isRegisterMode && (
           <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
@@ -269,7 +261,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   );
 };
 
-// ESTILOS VISUAIS
 const overlayStyle: React.CSSProperties = {
   minHeight: '100vh',
   width: '100vw',
