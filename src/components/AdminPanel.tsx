@@ -1,57 +1,74 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { getStoredUsers, updateUserStatus, deleteUser, fetchCloudUsers, UserAccount } from '../services/authService';
+import React, { useState, useEffect } from 'react';
+import { getStoredUsers, updateUserStatus, deleteUser, adminAddUser, UserAccount } from '../services/authService';
 
 export const AdminPanel: React.FC = () => {
   const [users, setUsers] = useState<UserAccount[]>(getStoredUsers());
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setIsRefreshing(true);
-    const updated = await fetchCloudUsers();
-    setUsers(updated);
-    setIsRefreshing(false);
-  }, []);
+  // Estados para cadastro manual de alunos pelo Instrutor
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [formFeedback, setFormFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+
+  const refreshList = () => {
+    setUsers(getStoredUsers());
+  };
 
   useEffect(() => {
-    loadData();
-
-    const handleLocalUpdate = () => {
+    const handleUpdate = () => {
       setUsers(getStoredUsers());
     };
-
-    window.addEventListener('auth_users_updated', handleLocalUpdate);
-    window.addEventListener('storage', handleLocalUpdate);
-
-    // Atualiza automaticamente a cada 6 segundos
-    const interval = setInterval(loadData, 6000);
-
+    window.addEventListener('auth_users_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
     return () => {
-      window.removeEventListener('auth_users_updated', handleLocalUpdate);
-      window.removeEventListener('storage', handleLocalUpdate);
-      clearInterval(interval);
+      window.removeEventListener('auth_users_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
     };
-  }, [loadData]);
+  }, []);
 
-  const handleApprove = async (userId: string) => {
-    setIsRefreshing(true);
-    await updateUserStatus(userId, 'APPROVED');
-    setUsers(getStoredUsers());
-    setIsRefreshing(false);
+  const handleCreateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormFeedback(null);
+
+    const res = adminAddUser({
+      name: newName,
+      email: newEmail,
+      username: newUsername,
+      password: newPassword,
+    });
+
+    if (res.success) {
+      setFormFeedback({ type: 'success', text: res.message });
+      setNewName('');
+      setNewEmail('');
+      setNewUsername('');
+      setNewPassword('');
+      refreshList();
+      setTimeout(() => {
+        setShowAddModal(false);
+        setFormFeedback(null);
+      }, 1500);
+    } else {
+      setFormFeedback({ type: 'error', text: res.message });
+    }
   };
 
-  const handleReject = async (userId: string) => {
-    setIsRefreshing(true);
-    await updateUserStatus(userId, 'REJECTED');
-    setUsers(getStoredUsers());
-    setIsRefreshing(false);
+  const handleApprove = (userId: string) => {
+    updateUserStatus(userId, 'APPROVED');
+    refreshList();
   };
 
-  const handleDelete = async (userId: string) => {
+  const handleReject = (userId: string) => {
+    updateUserStatus(userId, 'REJECTED');
+    refreshList();
+  };
+
+  const handleDelete = (userId: string) => {
     if (window.confirm('Deseja realmente remover este cadastro?')) {
-      setIsRefreshing(true);
-      await deleteUser(userId);
-      setUsers(getStoredUsers());
-      setIsRefreshing(false);
+      deleteUser(userId);
+      refreshList();
     }
   };
 
@@ -59,17 +76,18 @@ export const AdminPanel: React.FC = () => {
 
   return (
     <div style={containerStyle}>
+      {/* CABEÇALHO */}
       <div style={headerStyle}>
         <div>
           <h3 style={{ fontSize: '15px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-            <span>🛡️</span> Gestão de Acessos & Aprovação de Alunos
+            <span>🛡️</span> Painel de Gestão & Aprovação de Alunos
           </h3>
           <span style={{ fontSize: '11px', color: '#90a4ae' }}>
-            Notificações sincronizadas com: <strong style={{ color: '#81d4fa' }}>gildongledson@gmail.com</strong>
+            Notificações vinculadas a: <strong style={{ color: '#81d4fa' }}>gildongledson@gmail.com</strong>
           </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {pendingCount > 0 && (
             <span style={pendingBadgeStyle}>
               ⚠️ {pendingCount} {pendingCount === 1 ? 'pendente' : 'pendentes'}
@@ -77,19 +95,97 @@ export const AdminPanel: React.FC = () => {
           )}
 
           <button
-            onClick={loadData}
-            disabled={isRefreshing}
-            style={{
-              ...refreshBtnStyle,
-              opacity: isRefreshing ? 0.6 : 1,
-              cursor: isRefreshing ? 'wait' : 'pointer',
+            onClick={() => {
+              setShowAddModal(!showAddModal);
+              setFormFeedback(null);
             }}
-            title="Recarregar cadastros mais recentes"
+            style={btnAddStyle}
           >
-            {isRefreshing ? '⏳ Sincronizando...' : '🔄 Atualizar Lista'}
+            {showAddModal ? '✕ Fechar Cadastro' : '➕ Novo Aluno'}
           </button>
         </div>
       </div>
+
+      {/* FORMULÁRIO DE CADASTRO MANUAL DE ALUNO */}
+      {showAddModal && (
+        <div style={addCardStyle}>
+          <strong style={{ fontSize: '12px', color: '#00e676', display: 'block', marginBottom: '8px' }}>
+            ➕ Cadastrar Aluno Manualmente (Acesso Direto Liberado)
+          </strong>
+
+          {formFeedback && (
+            <div
+              style={{
+                padding: '6px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                marginBottom: '10px',
+                background: formFeedback.type === 'error' ? 'rgba(211,47,47,0.2)' : 'rgba(0,230,118,0.2)',
+                color: formFeedback.type === 'error' ? '#ff8a80' : '#b9f6ca',
+                border: `1px solid ${formFeedback.type === 'error' ? '#d32f2f' : '#00e676'}`,
+              }}
+            >
+              {formFeedback.text}
+            </div>
+          )}
+
+          <form onSubmit={handleCreateUser} style={gridFormStyle}>
+            <div>
+              <label style={labelStyle}>Nome Completo:</label>
+              <input
+                type="text"
+                required
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Ex: João da Silva"
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle}>E-mail:</label>
+              <input
+                type="email"
+                required
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="joao@gmail.com"
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Usuário de Acesso:</label>
+              <input
+                type="text"
+                required
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                placeholder="joao.silva"
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Senha:</label>
+              <input
+                type="text"
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Ex: 123456"
+                style={inputStyle}
+              />
+            </div>
+
+            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+              <button type="submit" style={btnSubmitAddStyle}>
+                💾 Salvar e Liberar Acesso
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* TABELA DE USUÁRIOS */}
       <div style={{ overflowX: 'auto' }}>
@@ -99,7 +195,7 @@ export const AdminPanel: React.FC = () => {
               <th style={{ padding: '8px' }}>NOME</th>
               <th style={{ padding: '8px' }}>USUÁRIO</th>
               <th style={{ padding: '8px' }}>E-MAIL</th>
-              <th style={{ padding: '8px' }}>SOLICITADO EM</th>
+              <th style={{ padding: '8px' }}>DATA</th>
               <th style={{ padding: '8px' }}>STATUS</th>
               <th style={{ padding: '8px', textAlign: 'center' }}>AÇÕES DE CONTROLE</th>
             </tr>
@@ -139,12 +235,12 @@ export const AdminPanel: React.FC = () => {
                           ⛔ Recusar
                         </button>
                       )}
-                      <button onClick={() => handleDelete(u.id)} style={{ ...actionBtnStyle, background: '#37474f' }} title="Remover Cadastro">
+                      <button onClick={() => handleDelete(u.id)} style={{ ...actionBtnStyle, background: '#37474f' }} title="Remover Aluno">
                         🗑️
                       </button>
                     </div>
                   ) : (
-                    <span style={{ fontSize: '10px', color: '#90a4ae' }}>Administrador Principal</span>
+                    <span style={{ fontSize: '10px', color: '#90a4ae' }}>Administrador Master</span>
                   )}
                 </td>
               </tr>
@@ -156,6 +252,7 @@ export const AdminPanel: React.FC = () => {
   );
 };
 
+// ESTILOS VISUAIS
 const containerStyle: React.CSSProperties = {
   background: '#14181f',
   borderRadius: '12px',
@@ -187,14 +284,58 @@ const pendingBadgeStyle: React.CSSProperties = {
   fontWeight: 'bold',
 };
 
-const refreshBtnStyle: React.CSSProperties = {
-  background: '#0288d1',
+const btnAddStyle: React.CSSProperties = {
+  background: '#00897b',
   color: '#fff',
   border: 'none',
   borderRadius: '6px',
   padding: '6px 12px',
   fontSize: '11px',
   fontWeight: 'bold',
+  cursor: 'pointer',
+};
+
+const addCardStyle: React.CSSProperties = {
+  background: '#0d1117',
+  border: '1px solid #30363d',
+  borderRadius: '8px',
+  padding: '14px',
+};
+
+const gridFormStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+  gap: '10px',
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: '10px',
+  color: '#cfd8dc',
+  fontWeight: 'bold',
+  display: 'block',
+  marginBottom: '4px',
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  background: '#161b22',
+  border: '1px solid #30363d',
+  borderRadius: '6px',
+  padding: '8px 10px',
+  color: '#fff',
+  fontSize: '11px',
+  boxSizing: 'border-box',
+};
+
+const btnSubmitAddStyle: React.CSSProperties = {
+  background: '#00e676',
+  color: '#000',
+  border: 'none',
+  borderRadius: '6px',
+  padding: '8px 14px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
 };
 
 const tableStyle: React.CSSProperties = {

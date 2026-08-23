@@ -9,9 +9,8 @@ export interface UserAccount {
   requestedAt: string;
 }
 
-const STORAGE_KEY = 'cfw500_user_accounts_v3';
+const STORAGE_KEY = 'cfw500_user_accounts_v4';
 const ADMIN_EMAIL = 'gildongledson@gmail.com';
-const BACKUP_KV_URL = 'https://kvstore.p1k.org/cfw500_gaflink_users';
 
 const INITIAL_USERS: UserAccount[] = [
   {
@@ -54,74 +53,59 @@ export const saveUsers = (users: UserAccount[]) => {
   window.dispatchEvent(new Event('auth_users_updated'));
 };
 
-// Sincroniza e busca cadastros feitos em outros celulares/computadores
-export const fetchCloudUsers = async (): Promise<UserAccount[]> => {
-  try {
-    const res = await fetch(BACKUP_KV_URL, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    });
+// Adição direta pelo Administrador no Painel
+export const adminAddUser = (user: {
+  name: string;
+  username: string;
+  email: string;
+  password: string;
+}): { success: boolean; message: string } => {
+  const users = getStoredUsers();
 
-    if (res.ok) {
-      const cloudUsers: UserAccount[] = await res.json();
-      if (Array.isArray(cloudUsers) && cloudUsers.length > 0) {
-        const localUsers = getStoredUsers();
-
-        const map = new Map<string, UserAccount>();
-        localUsers.forEach((u) => map.set(u.username.toLowerCase(), u));
-
-        cloudUsers.forEach((u) => {
-          const existing = map.get(u.username.toLowerCase());
-          if (!existing) {
-            map.set(u.username.toLowerCase(), u);
-          } else {
-            map.set(u.username.toLowerCase(), { ...existing, status: u.status });
-          }
-        });
-
-        const merged = Array.from(map.values());
-        saveUsers(merged);
-        return merged;
-      }
-    }
-  } catch (err) {
-    console.warn('Falha na sincronização online, mantendo dados em cache:', err);
+  const userExists = users.some(
+    (u) => u.username.toLowerCase() === user.username.trim().toLowerCase()
+  );
+  if (userExists) {
+    return { success: false, message: 'Nome de usuário já cadastrado.' };
   }
-  return getStoredUsers();
+
+  const newUser: UserAccount = {
+    id: `admin_user_${Date.now()}`,
+    name: user.name.trim(),
+    username: user.username.trim().toLowerCase(),
+    email: user.email.trim().toLowerCase(),
+    password: user.password,
+    role: 'STUDENT',
+    status: 'APPROVED',
+    requestedAt: new Date().toLocaleDateString('pt-BR'),
+  };
+
+  users.push(newUser);
+  saveUsers(users);
+  return { success: true, message: 'Aluno cadastrado e liberado com sucesso!' };
 };
 
-export const pushCloudUsers = async (users: UserAccount[]): Promise<void> => {
-  try {
-    await fetch(BACKUP_KV_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(users),
-    });
-  } catch (err) {
-    console.warn('Erro ao salvar em nuvem:', err);
-  }
-};
-
+// Solicitação enviada pelo aluno na tela de login
 export const requestRegistration = async (newUser: {
   username: string;
   name: string;
   email: string;
   password: string;
 }): Promise<{ success: boolean; message: string }> => {
-  let users = await fetchCloudUsers();
+  const users = getStoredUsers();
 
   const userExists = users.some(
-    (u: UserAccount) => u.username.toLowerCase() === newUser.username.trim().toLowerCase()
+    (u) => u.username.toLowerCase() === newUser.username.trim().toLowerCase()
   );
   if (userExists) {
-    return { success: false, message: 'Este nome de usuário já está cadastrado.' };
+    return { success: false, message: 'Este usuário já está cadastrado.' };
   }
 
   const emailExists = users.some(
-    (u: UserAccount) => u.email.toLowerCase() === newUser.email.trim().toLowerCase()
+    (u) => u.email.toLowerCase() === newUser.email.trim().toLowerCase()
   );
   if (emailExists) {
-    return { success: false, message: 'Este e-mail já possui uma solicitação de cadastro.' };
+    return { success: false, message: 'Este e-mail já possui uma solicitação.' };
   }
 
   const userRecord: UserAccount = {
@@ -135,10 +119,10 @@ export const requestRegistration = async (newUser: {
     requestedAt: new Date().toLocaleString('pt-BR'),
   };
 
-  users = [...users, userRecord];
+  users.push(userRecord);
   saveUsers(users);
-  await pushCloudUsers(users);
 
+  // Disparo de notificação por e-mail com os dados prontos
   try {
     fetch('https://formsubmit.co/ajax/' + ADMIN_EMAIL, {
       method: 'POST',
@@ -147,34 +131,33 @@ export const requestRegistration = async (newUser: {
         Accept: 'application/json',
       },
       body: JSON.stringify({
-        _subject: `⚡ Nova Solicitação de Acesso - Simulador CFW500 (${userRecord.name})`,
+        _subject: `⚡ Nova Solicitação de Aluno - CFW500 (${userRecord.name})`,
         Nome: userRecord.name,
         Usuario: userRecord.username,
         Email_Solicitante: userRecord.email,
+        Senha_Solicitada: userRecord.password,
         Data_Hora: userRecord.requestedAt,
-        Painel_Admin: 'https://simulador.gaflink.com.br',
+        Instrucao: 'Acesse o simulador como admin e libere o acesso na aba Painel Admin.',
       }),
     }).catch(() => {});
   } catch (err) {
-    console.warn('Erro ao disparar email:', err);
+    console.warn('Erro ao notificar via e-mail:', err);
   }
 
   return {
     success: true,
-    message: 'Solicitação enviada com sucesso! O instrutor avaliará seu pedido.',
+    message: 'Solicitação registrada! O instrutor foi notificado por e-mail.',
   };
 };
 
-export const updateUserStatus = async (userId: string, newStatus: 'APPROVED' | 'REJECTED') => {
+export const updateUserStatus = (userId: string, newStatus: 'APPROVED' | 'REJECTED') => {
   const users = getStoredUsers();
-  const updated = users.map((u: UserAccount) => (u.id === userId ? { ...u, status: newStatus } : u));
+  const updated = users.map((u) => (u.id === userId ? { ...u, status: newStatus } : u));
   saveUsers(updated);
-  await pushCloudUsers(updated);
 };
 
-export const deleteUser = async (userId: string) => {
+export const deleteUser = (userId: string) => {
   const users = getStoredUsers();
-  const filtered = users.filter((u: UserAccount) => u.id !== userId);
+  const filtered = users.filter((u) => u.id !== userId);
   saveUsers(filtered);
-  await pushCloudUsers(filtered);
 };
