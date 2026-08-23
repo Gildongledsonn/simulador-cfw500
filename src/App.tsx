@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { InverterProvider } from './context/InverterContext';
 import { usePhysicsLoop } from './hooks/usePhysicsLoop';
-import { useKeyboardControls } from './hooks/useKeyboardControls'; // <-- 1. Importar o hook
+import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { IHM } from './components/IHM';
 import { MotorVisualizer } from './components/MotorVisualizer';
 import { TerminalBlock } from './components/TerminalBlock';
@@ -13,32 +13,36 @@ import { TutorialGuide } from './components/TutorialGuide';
 const SimulatorWorkbench: React.FC = () => {
   const [loadTorque, setLoadTorque] = useState(20);
 
-  // Executa o cálculo contínuo de aceleração
+  // Executa o cálculo contínuo de aceleração e física
   usePhysicsLoop({ loadTorquePercent: loadTorque, enableNoise: true });
 
-  // 2. Habilita o teclado físico do PC
+  // Habilita atalhos físicos do PC
   useKeyboardControls();
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div style={mainContainerStyle}>
+      {/* BARRA DE ÁUDIO E VOLUME */}
       <AudioControls />
+
+      {/* MODO TUTORIAL / AULA */}
       <TutorialGuide />
 
-      {/* DICA DE ATALHOS DE TECLADO */}
+      {/* BANNER DE ATALHOS (visível confortavelmente em tablets e desktops) */}
       <div style={shortcutsBannerStyle}>
-        <span>⌨️ <strong>Atalhos do Teclado:</strong></span>
-        <span><kbd style={kbdStyle}>P</kbd> ou <kbd style={kbdStyle}>Enter</kbd> = PROG</span>
+        <span>⌨️ <strong>Atalhos de Teclado (PC):</strong></span>
+        <span><kbd style={kbdStyle}>P</kbd> / <kbd style={kbdStyle}>Enter</kbd> = PROG</span>
         <span><kbd style={kbdStyle}>▲</kbd> / <kbd style={kbdStyle}>▼</kbd> = Navegar</span>
         <span><kbd style={kbdStyle}>I</kbd> = Ligar (Run)</span>
-        <span><kbd style={kbdStyle}>O</kbd> ou <kbd style={kbdStyle}>Espaço</kbd> = Parar/Reset</span>
+        <span><kbd style={kbdStyle}>O</kbd> / <kbd style={kbdStyle}>Espaço</kbd> = Parar/Reset</span>
         <span><kbd style={kbdStyle}>L</kbd> = LOC/REM</span>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
+      {/* LINHA 1: IHM + MOTOR & CARGA */}
+      <div style={rowStyle}>
         <IHM />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={motorColumnStyle}>
           <MotorVisualizer loadTorquePercent={loadTorque} />
-          <div style={{ background: '#1a1d21', border: '1px solid #323842', borderRadius: '12px', padding: '12px' }}>
+          <div style={loadBoxStyle}>
             <label style={{ fontSize: '11px', color: '#90a4ae', display: 'flex', justifyContent: 'space-between' }}>
               <span>Carga Mecânica no Eixo (Freio)</span>
               <strong>{loadTorque}%</strong>
@@ -49,30 +53,64 @@ const SimulatorWorkbench: React.FC = () => {
               max="100"
               value={loadTorque}
               onChange={(e) => setLoadTorque(Number(e.target.value))}
-              style={{ width: '100%', marginTop: '6px', cursor: 'pointer' }}
+              style={{ width: '100%', marginTop: '8px', cursor: 'pointer', height: '28px' }}
             />
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
+      {/* LINHA 2: BORNES I/O + RELÉS */}
+      <div style={rowStyle}>
         <TerminalBlock />
         <RelayPanel />
       </div>
 
+      {/* LINHA 3: INJEÇÃO DE FALHAS */}
       <FaultInjectionPanel />
     </div>
   );
 };
 
-// ESTILOS
+// ESTILOS DE LAYOUT RESPONSIVO
+const mainContainerStyle: React.CSSProperties = {
+  maxWidth: '1100px',
+  width: '100%',
+  margin: '0 auto',
+  padding: '12px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '14px',
+  boxSizing: 'border-box',
+};
+
+const rowStyle: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '14px',
+  width: '100%',
+};
+
+const motorColumnStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '14px',
+  flex: '1 1 280px',
+};
+
+const loadBoxStyle: React.CSSProperties = {
+  background: '#1a1d21',
+  border: '1px solid #323842',
+  borderRadius: '12px',
+  padding: '12px 14px',
+};
+
 const shortcutsBannerStyle: React.CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
-  gap: '12px',
+  gap: '10px',
   alignItems: 'center',
   background: '#141619',
-  padding: '8px 14px',
+  padding: '8px 12px',
   borderRadius: '8px',
   border: '1px solid #282e38',
   fontSize: '11px',

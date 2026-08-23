@@ -48,7 +48,7 @@ export const MotorVisualizer: React.FC<{ loadTorquePercent?: number }> = ({ load
       ctx.fillStyle = '#455a64';
       ctx.fill();
 
-      // Bobinagem Estator
+      // Bobinas do Estator
       for (let i = 0; i < 12; i++) {
         const theta = (i * 2 * Math.PI) / 12;
         ctx.beginPath();
@@ -99,20 +99,32 @@ export const MotorVisualizer: React.FC<{ loadTorquePercent?: number }> = ({ load
     <div style={containerStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#b0bec5', borderBottom: '1px solid #2a2f38', paddingBottom: '6px' }}>
         <strong>MOTOR DE INDUÇÃO</strong>
-        <span style={{ fontSize: '10px', color: state.motorStatus === 'RUNNING' ? '#81c784' : '#888' }}>
+        <span style={{ fontSize: '11px', fontWeight: 'bold', color: state.motorStatus === 'RUNNING' ? '#00e676' : '#888' }}>
           {state.motorStatus}
         </span>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0' }}>
-        <canvas ref={canvasRef} width={240} height={240} />
+      <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0' }}>
+        <canvas ref={canvasRef} width={220} height={220} style={{ maxWidth: '100%', height: 'auto' }} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
-        <div style={metricBoxStyle}><small>ROTAÇÃO</small><strong>{state.motorRPM} RPM</strong></div>
-        <div style={metricBoxStyle}><small>FREQUÊNCIA</small><strong>{state.outputFrequency.toFixed(1)} Hz</strong></div>
-        <div style={metricBoxStyle}><small>CORRENTE</small><strong>{state.outputCurrent.toFixed(1)} A</strong></div>
-        <div style={metricBoxStyle}><small>CARGA EIXO</small><strong>{loadTorquePercent}%</strong></div>
+        <div style={metricBoxStyle}>
+          <small style={{ color: '#90a4ae', fontSize: '10px' }}>ROTAÇÃO</small>
+          <strong style={{ fontSize: '13px' }}>{state.motorRPM} RPM</strong>
+        </div>
+        <div style={metricBoxStyle}>
+          <small style={{ color: '#90a4ae', fontSize: '10px' }}>FREQUÊNCIA</small>
+          <strong style={{ fontSize: '13px' }}>{state.outputFrequency.toFixed(1)} Hz</strong>
+        </div>
+        <div style={metricBoxStyle}>
+          <small style={{ color: '#90a4ae', fontSize: '10px' }}>CORRENTE</small>
+          <strong style={{ fontSize: '13px' }}>{state.outputCurrent.toFixed(1)} A</strong>
+        </div>
+        <div style={metricBoxStyle}>
+          <small style={{ color: '#90a4ae', fontSize: '10px' }}>CARGA</small>
+          <strong style={{ fontSize: '13px' }}>{loadTorquePercent}%</strong>
+        </div>
       </div>
     </div>
   );
@@ -123,7 +135,8 @@ const containerStyle: React.CSSProperties = {
   border: '1px solid #323842',
   borderRadius: '12px',
   padding: '14px',
-  width: '280px',
+  width: '100%',
+  boxSizing: 'border-box',
   display: 'flex',
   flexDirection: 'column',
   gap: '8px',
@@ -132,8 +145,7 @@ const containerStyle: React.CSSProperties = {
 const metricBoxStyle: React.CSSProperties = {
   background: '#121417',
   padding: '6px 8px',
-  borderRadius: '4px',
+  borderRadius: '6px',
   display: 'flex',
   flexDirection: 'column',
-  fontSize: '12px',
 };
