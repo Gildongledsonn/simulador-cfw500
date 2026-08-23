@@ -9,22 +9,20 @@ import { RelayPanel } from './components/RelayPanel';
 import { FaultInjectionPanel } from './components/FaultInjectionPanel';
 import { AudioControls } from './components/AudioControls';
 import { TutorialGuide } from './components/TutorialGuide';
+import { ModbusPanel } from './components/ModbusPanel'; // <-- 1. Importar o painel Modbus
 
-type ActiveTab = 'workbench' | 'tutorial';
+type ActiveTab = 'workbench' | 'modbus' | 'tutorial'; // <-- 2. Adicionar 'modbus'
 
 const SimulatorWorkbench: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('workbench');
   const [loadTorque, setLoadTorque] = useState(20);
 
-  // Executa o cálculo contínuo de aceleração e física
   usePhysicsLoop({ loadTorquePercent: loadTorque, enableNoise: true });
-
-  // Habilita atalhos físicos do teclado
   useKeyboardControls();
 
   return (
     <div style={mainContainerStyle}>
-      {/* BARRA SUPERIOR: ÁUDIO E NAVEGAÇÃO POR ABAS */}
+      {/* BARRA SUPERIOR COM 3 ABAS */}
       <div style={headerNavContainerStyle}>
         <div style={tabsButtonGroupStyle}>
           <button
@@ -38,6 +36,19 @@ const SimulatorWorkbench: React.FC = () => {
           >
             🎛️ Bancada de Operação
           </button>
+
+          <button
+            onClick={() => setActiveTab('modbus')}
+            style={{
+              ...tabButtonStyle,
+              background: activeTab === 'modbus' ? '#0288d1' : '#1a1d21',
+              color: activeTab === 'modbus' ? '#fff' : '#90a4ae',
+              borderColor: activeTab === 'modbus' ? '#29b6f6' : '#323842',
+            }}
+          >
+            📡 Modbus RTU (RS-485)
+          </button>
+
           <button
             onClick={() => setActiveTab('tutorial')}
             style={{
@@ -54,7 +65,7 @@ const SimulatorWorkbench: React.FC = () => {
         <AudioControls />
       </div>
 
-      {/* BANNER DE ATALHOS DE TECLADO */}
+      {/* BANNER DE ATALHOS */}
       <div style={shortcutsBannerStyle}>
         <span>⌨️ <strong>Atalhos (PC):</strong></span>
         <span><kbd style={kbdStyle}>P</kbd> / <kbd style={kbdStyle}>Enter</kbd> = PROG</span>
@@ -64,10 +75,9 @@ const SimulatorWorkbench: React.FC = () => {
         <span><kbd style={kbdStyle}>L</kbd> = LOC/REM</span>
       </div>
 
-      {/* CONTEÚDO DA ABA 1: BANCADA DE OPERAÇÃO */}
+      {/* ABA 1: BANCADA DE OPERAÇÃO */}
       {activeTab === 'workbench' && (
         <div style={tabContentStyle}>
-          {/* LINHA 1: IHM + MOTOR & CARGA */}
           <div style={rowStyle}>
             <IHM />
             <div style={motorColumnStyle}>
@@ -88,24 +98,31 @@ const SimulatorWorkbench: React.FC = () => {
               </div>
             </div>
           </div>
-
-          {/* LINHA 2: BORNES I/O + RELÉS */}
           <div style={rowStyle}>
             <TerminalBlock />
             <RelayPanel />
           </div>
-
-          {/* LINHA 3: INJEÇÃO DE FALHAS */}
           <FaultInjectionPanel />
         </div>
       )}
 
-      {/* CONTEÚDO DA ABA 2: MODO AULA / TUTORIAIS */}
+      {/* ABA 2: MÓDULO SERIAL / MODBUS RTU */}
+      {activeTab === 'modbus' && (
+        <div style={tabContentStyle}>
+          <ModbusPanel />
+          <div style={rowStyle}>
+            <IHM />
+            <div style={motorColumnStyle}>
+              <MotorVisualizer loadTorquePercent={loadTorque} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ABA 3: MODO AULA / TUTORIAIS */}
       {activeTab === 'tutorial' && (
         <div style={tabContentStyle}>
           <TutorialGuide />
-          
-          {/* Vista Compacta de Apoio para a Aula */}
           <div style={rowStyle}>
             <IHM />
             <div style={motorColumnStyle}>
