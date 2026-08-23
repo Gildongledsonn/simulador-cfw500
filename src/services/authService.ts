@@ -11,9 +11,6 @@ export interface UserAccount {
 
 const STORAGE_KEY = 'cfw500_user_accounts_v2';
 const ADMIN_EMAIL = 'gildongledson@gmail.com';
-
-// Endpoint em nuvem gratuito com chave de sincronização global para o seu domínio
-const CLOUD_SYNC_ENDPOINT = 'https://api.jsonstorage.net/v1/json';
 const CLOUD_BIN_ID = 'cfw500-gaflink-auth-sync';
 
 const INITIAL_USERS: UserAccount[] = [
@@ -54,11 +51,9 @@ export const getStoredUsers = (): UserAccount[] => {
 
 export const saveUsers = (users: UserAccount[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
-  // Dispara evento customizado para atualizar os componentes React na mesma aba
   window.dispatchEvent(new Event('auth_users_updated'));
 };
 
-// Sincronização assíncrona para buscar cadastros feitos em outros aparelhos
 export const fetchCloudUsers = async (): Promise<UserAccount[]> => {
   try {
     const res = await fetch(`https://api.restful-api.dev/objects?id=${CLOUD_BIN_ID}`, {
@@ -69,15 +64,13 @@ export const fetchCloudUsers = async (): Promise<UserAccount[]> => {
       if (json && json[0]?.data?.users) {
         const cloudUsers: UserAccount[] = json[0].data.users;
         const localUsers = getStoredUsers();
-        
-        // Mescla usuários locais e da nuvem sem duplicar IDs
+
         const userMap = new Map<string, UserAccount>();
         localUsers.forEach((u) => userMap.set(u.username.toLowerCase(), u));
         cloudUsers.forEach((u) => {
           if (!userMap.has(u.username.toLowerCase())) {
             userMap.set(u.username.toLowerCase(), u);
           } else {
-            // Se na nuvem tiver atualização de status feita pelo admin, prevalece
             const existing = userMap.get(u.username.toLowerCase())!;
             if (u.status !== existing.status) {
               userMap.set(u.username.toLowerCase(), { ...existing, status: u.status });
@@ -149,7 +142,6 @@ export const requestRegistration = async (newUser: {
   saveUsers(users);
   await pushCloudUsers(users);
 
-  // Disparo de notificação HTTP para a caixa de e-mail do Administrador
   try {
     fetch('https://formsubmit.co/ajax/' + ADMIN_EMAIL, {
       method: 'POST',
