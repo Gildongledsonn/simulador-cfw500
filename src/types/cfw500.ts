@@ -19,6 +19,8 @@ export interface ParameterConfig {
   readOnly?: boolean;
 }
 
+// Exporta também o alias para compatibilidade
+export type ParameterMetadata = ParameterConfig;
 export type ParameterMap = Record<ParameterKey, ParameterConfig>;
 
 export interface FaultData {
@@ -26,6 +28,7 @@ export interface FaultData {
   name: string;
   description: string;
   autoResetable: boolean;
+  active?: boolean;
 }
 
 export interface DigitalInputsState {

@@ -23,9 +23,12 @@ export interface Lesson {
   type: LessonType;
   durationMin: number;
   description: string;
+  category?: 'Básico' | 'Controle Remoto' | 'Multispeed' | 'Diagnóstico';
   theoryData?: TheorySection;
   steps?: TutorialStep[];
 }
+
+export type TutorialLesson = Lesson;
 
 export interface CourseModule {
   id: string;
