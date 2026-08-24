@@ -11,6 +11,30 @@ export interface UserAccount {
 
 const API_URL = 'https://gaflink.com.br/auth.php';
 
+// Usuários locais de emergência (garantem que a plataforma sempre abra)
+const LOCAL_FALLBACK_USERS: UserAccount[] = [
+  {
+    id: 'admin_master',
+    username: 'admin',
+    name: 'Gildon Gledson (Instrutor)',
+    email: 'gildongledson@gmail.com',
+    password: '123',
+    role: 'ADMIN',
+    status: 'APPROVED',
+    requestedAt: 'Hoje',
+  },
+  {
+    id: 'student_demo',
+    username: 'aluno',
+    name: 'Aluno Demonstração',
+    email: 'aluno@gaflink.com.br',
+    password: '123',
+    role: 'STUDENT',
+    status: 'APPROVED',
+    requestedAt: 'Hoje',
+  },
+];
+
 export const getStoredUsers = async (): Promise<UserAccount[]> => {
   try {
     const res = await fetch(`${API_URL}?action=list`);
@@ -21,33 +45,47 @@ export const getStoredUsers = async (): Promise<UserAccount[]> => {
       }
     }
   } catch (err) {
-    console.warn('Erro ao conectar ao UOLHost:', err);
+    console.warn('Servidor UOLHost offline ou sem resposta, usando fallback local:', err);
   }
-  return [];
+  return LOCAL_FALLBACK_USERS;
 };
 
 export const authenticateUser = async (
   usernameInput: string,
   passwordInput: string
 ): Promise<{ success: boolean; user?: UserAccount; message?: string }> => {
+  const u = usernameInput.trim().toLowerCase();
+  const p = passwordInput.trim();
+
+  // 1. Tenta autenticar diretamente no servidor UOLHost
   try {
     const res = await fetch(`${API_URL}?action=login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: usernameInput.trim(),
-        password: passwordInput.trim(),
-      }),
+      body: JSON.stringify({ username: u, password: p }),
     });
 
-    const data = await res.json();
-    return data;
-  } catch {
-    return {
-      success: false,
-      message: 'Erro ao conectar ao servidor de autenticação no UOLHost.',
-    };
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (err) {
+    console.warn('Falha na requisição ao UOLHost, tentando autenticação local:', err);
   }
+
+  // 2. Fallback de Segurança Local (admin/123 e aluno/123)
+  const localMatch = LOCAL_FALLBACK_USERS.find(
+    (acc) => acc.username.toLowerCase() === u && acc.password === p
+  );
+
+  if (localMatch) {
+    return { success: true, user: localMatch };
+  }
+
+  return {
+    success: false,
+    message: 'Usuário ou senha inválidos. Verifique suas credenciais.',
+  };
 };
 
 export const requestRegistration = async (newUser: {
@@ -68,14 +106,17 @@ export const requestRegistration = async (newUser: {
       }),
     });
 
-    const data = await res.json();
-    return data;
-  } catch {
-    return {
-      success: false,
-      message: 'Erro ao enviar cadastro para o servidor.',
-    };
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Erro ao conectar ao UOLHost:', err);
   }
+
+  return {
+    success: false,
+    message: 'Não foi possível conectar ao servidor. Tente novamente em instantes.',
+  };
 };
 
 export const adminAddUser = async (user: {
@@ -96,14 +137,17 @@ export const adminAddUser = async (user: {
       }),
     });
 
-    const data = await res.json();
-    return data;
-  } catch {
-    return {
-      success: false,
-      message: 'Erro ao salvar aluno no UOLHost.',
-    };
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Erro ao salvar no UOLHost:', err);
   }
+
+  return {
+    success: false,
+    message: 'Erro de comunicação com o servidor ao cadastrar aluno.',
+  };
 };
 
 export const updateUserStatus = async (userId: string, newStatus: 'APPROVED' | 'REJECTED') => {

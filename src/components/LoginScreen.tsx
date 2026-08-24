@@ -19,7 +19,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Execução do Login com verificação online instantânea
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
@@ -40,12 +39,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     } else {
       setFeedback({
         type: 'error',
-        text: result.message || 'Erro ao realizar login.',
+        text: result.message || 'Credenciais inválidas.',
       });
     }
   };
 
-  // Execução do Cadastro
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
@@ -61,17 +59,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setIsLoading(false);
 
     if (result.success) {
-      setFeedback({
-        type: 'success',
-        text: result.message,
-      });
+      setFeedback({ type: 'success', text: result.message });
       setRegName('');
       setRegEmail('');
       setRegUsername('');
       setRegPassword('');
-      setTimeout(() => {
-        setIsRegisterMode(false);
-      }, 3500);
+      setTimeout(() => setIsRegisterMode(false), 3500);
     } else {
       setFeedback({ type: 'error', text: result.message });
     }
@@ -139,7 +132,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 cursor: isLoading ? 'not-allowed' : 'pointer',
               }}
             >
-              {isLoading ? 'Verificando Autorização...' : 'Acessar Plataforma ➔'}
+              {isLoading ? 'Verificando...' : 'Acessar Plataforma ➔'}
             </button>
 
             <div style={{ textAlign: 'center', marginTop: '6px' }}>
