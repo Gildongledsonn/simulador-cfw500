@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getStoredUsers, requestRegistration, UserAccount } from '../services/authService';
+import { authenticateUser, requestRegistration } from '../services/authService';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: { name: string; role: string; username: string }) => void;
@@ -19,54 +19,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  // Execução do Login com verificação online instantânea
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
     setIsLoading(true);
 
-    setTimeout(() => {
-      const users = getStoredUsers();
-      const foundUser = users.find(
-        (u: UserAccount) =>
-          u.username.toLowerCase() === loginUsername.trim().toLowerCase() &&
-          u.password === loginPassword
-      );
+    const result = await authenticateUser(loginUsername, loginPassword);
+    setIsLoading(false);
 
-      if (!foundUser) {
-        setFeedback({ type: 'error', text: 'Usuário ou senha incorretos.' });
-        setIsLoading(false);
-        return;
-      }
-
-      if (foundUser.status === 'PENDING') {
-        setFeedback({
-          type: 'error',
-          text: 'Seu cadastro ainda está PENDENTE de aprovação pelo instrutor.',
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      if (foundUser.status === 'REJECTED') {
-        setFeedback({
-          type: 'error',
-          text: 'Sua solicitação de acesso foi recusada. Entre em contato com o administrador.',
-        });
-        setIsLoading(false);
-        return;
-      }
-
+    if (result.success && result.user) {
       const sessionUser = {
-        name: foundUser.name,
-        role: foundUser.role,
-        username: foundUser.username,
+        name: result.user.name,
+        role: result.user.role,
+        username: result.user.username,
       };
 
       localStorage.setItem('cfw500_auth_user', JSON.stringify(sessionUser));
       onLoginSuccess(sessionUser);
-    }, 300);
+    } else {
+      setFeedback({
+        type: 'error',
+        text: result.message || 'Erro ao realizar login.',
+      });
+    }
   };
 
+  // Execução do Cadastro
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
@@ -84,7 +63,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     if (result.success) {
       setFeedback({
         type: 'success',
-        text: 'Solicitação cadastrada com sucesso! Aguarde a aprovação do instrutor.',
+        text: result.message,
       });
       setRegName('');
       setRegEmail('');
@@ -160,7 +139,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 cursor: isLoading ? 'not-allowed' : 'pointer',
               }}
             >
-              {isLoading ? 'Autenticando...' : 'Acessar Plataforma ➔'}
+              {isLoading ? 'Verificando Autorização...' : 'Acessar Plataforma ➔'}
             </button>
 
             <div style={{ textAlign: 'center', marginTop: '6px' }}>

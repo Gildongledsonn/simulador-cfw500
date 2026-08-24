@@ -1,43 +1,56 @@
-import React, { useState, useEffect } from 'react';
-import { getStoredUsers, updateUserStatus, deleteUser, adminAddUser, UserAccount } from '../services/authService';
+import React, { useState, useEffect, useCallback } from 'react';
+import { getStoredUsers, updateUserStatus, deleteUser, adminAddUser, fetchCloudUsers, UserAccount } from '../services/authService';
 
 export const AdminPanel: React.FC = () => {
   const [users, setUsers] = useState<UserAccount[]>(getStoredUsers());
-
-  // Estados para cadastro manual de alunos pelo Instrutor
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [formFeedback, setFormFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
-  const refreshList = () => {
-    setUsers(getStoredUsers());
-  };
-
-  useEffect(() => {
-    const handleUpdate = () => {
-      setUsers(getStoredUsers());
-    };
-    window.addEventListener('auth_users_updated', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
-    return () => {
-      window.removeEventListener('auth_users_updated', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
-    };
+  const loadData = useCallback(async () => {
+    setIsRefreshing(true);
+    const updated = await fetchCloudUsers();
+    setUsers(updated);
+    setIsRefreshing(false);
   }, []);
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  useEffect(() => {
+    loadData();
+
+    const handleLocalUpdate = () => {
+      setUsers(getStoredUsers());
+    };
+
+    window.addEventListener('auth_users_updated', handleLocalUpdate);
+    window.addEventListener('storage', handleLocalUpdate);
+
+    const interval = setInterval(loadData, 8000);
+
+    return () => {
+      window.removeEventListener('auth_users_updated', handleLocalUpdate);
+      window.removeEventListener('storage', handleLocalUpdate);
+      clearInterval(interval);
+    };
+  }, [loadData]);
+
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormFeedback(null);
+    setIsRefreshing(true);
 
-    const res = adminAddUser({
+    const res = await adminAddUser({
       name: newName,
       email: newEmail,
       username: newUsername,
       password: newPassword,
     });
+
+    setIsRefreshing(false);
 
     if (res.success) {
       setFormFeedback({ type: 'success', text: res.message });
@@ -45,7 +58,7 @@ export const AdminPanel: React.FC = () => {
       setNewEmail('');
       setNewUsername('');
       setNewPassword('');
-      refreshList();
+      setUsers(getStoredUsers());
       setTimeout(() => {
         setShowAddModal(false);
         setFormFeedback(null);
@@ -55,20 +68,26 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
-  const handleApprove = (userId: string) => {
-    updateUserStatus(userId, 'APPROVED');
-    refreshList();
+  const handleApprove = async (userId: string) => {
+    setIsRefreshing(true);
+    await updateUserStatus(userId, 'APPROVED');
+    setUsers(getStoredUsers());
+    setIsRefreshing(false);
   };
 
-  const handleReject = (userId: string) => {
-    updateUserStatus(userId, 'REJECTED');
-    refreshList();
+  const handleReject = async (userId: string) => {
+    setIsRefreshing(true);
+    await updateUserStatus(userId, 'REJECTED');
+    setUsers(getStoredUsers());
+    setIsRefreshing(false);
   };
 
-  const handleDelete = (userId: string) => {
+  const handleDelete = async (userId: string) => {
     if (window.confirm('Deseja realmente remover este cadastro?')) {
-      deleteUser(userId);
-      refreshList();
+      setIsRefreshing(true);
+      await deleteUser(userId);
+      setUsers(getStoredUsers());
+      setIsRefreshing(false);
     }
   };
 
@@ -76,7 +95,6 @@ export const AdminPanel: React.FC = () => {
 
   return (
     <div style={containerStyle}>
-      {/* CABEÇALHO */}
       <div style={headerStyle}>
         <div>
           <h3 style={{ fontSize: '15px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
@@ -95,22 +113,32 @@ export const AdminPanel: React.FC = () => {
           )}
 
           <button
+            onClick={loadData}
+            disabled={isRefreshing}
+            style={{
+              ...refreshBtnStyle,
+              opacity: isRefreshing ? 0.6 : 1,
+            }}
+          >
+            {isRefreshing ? '⏳ Sincronizando...' : '🔄 Atualizar'}
+          </button>
+
+          <button
             onClick={() => {
               setShowAddModal(!showAddModal);
               setFormFeedback(null);
             }}
             style={btnAddStyle}
           >
-            {showAddModal ? '✕ Fechar Cadastro' : '➕ Novo Aluno'}
+            {showAddModal ? '✕ Fechar' : '➕ Novo Aluno'}
           </button>
         </div>
       </div>
 
-      {/* FORMULÁRIO DE CADASTRO MANUAL DE ALUNO */}
       {showAddModal && (
         <div style={addCardStyle}>
           <strong style={{ fontSize: '12px', color: '#00e676', display: 'block', marginBottom: '8px' }}>
-            ➕ Cadastrar Aluno Manualmente (Acesso Direto Liberado)
+            ➕ Cadastrar Aluno Manualmente (Acesso Imediato Liberado)
           </strong>
 
           {formFeedback && (
@@ -179,15 +207,14 @@ export const AdminPanel: React.FC = () => {
             </div>
 
             <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
-              <button type="submit" style={btnSubmitAddStyle}>
-                💾 Salvar e Liberar Acesso
+              <button type="submit" disabled={isRefreshing} style={btnSubmitAddStyle}>
+                💾 Salvar e Liberar Acesso Online
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* TABELA DE USUÁRIOS */}
       <div style={{ overflowX: 'auto' }}>
         <table style={tableStyle}>
           <thead>
@@ -252,7 +279,6 @@ export const AdminPanel: React.FC = () => {
   );
 };
 
-// ESTILOS VISUAIS
 const containerStyle: React.CSSProperties = {
   background: '#14181f',
   borderRadius: '12px',
@@ -282,6 +308,17 @@ const pendingBadgeStyle: React.CSSProperties = {
   borderRadius: '6px',
   fontSize: '11px',
   fontWeight: 'bold',
+};
+
+const refreshBtnStyle: React.CSSProperties = {
+  background: '#0288d1',
+  color: '#fff',
+  border: 'none',
+  borderRadius: '6px',
+  padding: '6px 12px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
 };
 
 const btnAddStyle: React.CSSProperties = {
