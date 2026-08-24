@@ -1,11 +1,11 @@
 import { COURSE_MODULES } from '../constants/courseModules';
-import { CourseModule, Lesson } from '../types/tutorial';
+import { CourseModule } from '../types/tutorial';
 
 const PROGRESS_STORAGE_PREFIX = 'cfw500_course_progress_';
 
 export interface UserProgressData {
-  completedLessons: string[]; // IDs das lições concluídas
-  completedSteps: Record<string, string[]>; // lessonId -> stepIds concluídos
+  completedLessons: string[];
+  completedSteps: Record<string, string[]>;
 }
 
 const getActiveUsername = (): string => {
@@ -16,7 +16,7 @@ const getActiveUsername = (): string => {
       return user.username || 'default_user';
     }
   } catch {
-    // fallback
+    // fallback silencioso
   }
   return 'default_user';
 };
@@ -59,33 +59,29 @@ export const markStepCompleted = (lessonId: string, stepId: string) => {
   }
 };
 
-// Verifica se um módulo específico está 100% concluído
 export const isModuleCompleted = (module: CourseModule, progress: UserProgressData): boolean => {
   return module.lessons.every((lesson) => progress.completedLessons.includes(lesson.id));
 };
 
-// Calcula a porcentagem de conclusão de um módulo
 export const getModuleCompletionPercent = (module: CourseModule, progress: UserProgressData): number => {
   if (module.lessons.length === 0) return 0;
   const completed = module.lessons.filter((l) => progress.completedLessons.includes(l.id)).length;
   return Math.round((completed / module.lessons.length) * 100);
 };
 
-// Verifica se um módulo está desbloqueado para o aluno
 export const isModuleUnlocked = (moduleIndex: number, progress: UserProgressData): boolean => {
-  if (moduleIndex === 0) return true; // Módulo 1 sempre aberto
+  if (moduleIndex === 0) return true;
   const prevModule = COURSE_MODULES[moduleIndex - 1];
   return isModuleCompleted(prevModule, progress);
 };
 
-// Verifica se uma lição está desbloqueada
 export const isLessonUnlocked = (
   moduleIndex: number,
   lessonIndex: number,
   progress: UserProgressData
 ): boolean => {
   if (!isModuleUnlocked(moduleIndex, progress)) return false;
-  if (lessonIndex === 0) return true; // Primeira lição do módulo sempre liberada se o módulo estiver aberto
+  if (lessonIndex === 0) return true;
 
   const currentModule = COURSE_MODULES[moduleIndex];
   const prevLesson = currentModule.lessons[lessonIndex - 1];

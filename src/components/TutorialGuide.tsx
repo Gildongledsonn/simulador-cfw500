@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useInverter } from '../context/InverterContext';
 import { COURSE_MODULES } from '../constants/courseModules';
-import { Lesson, CourseModule } from '../types/tutorial';
+import { Lesson } from '../types/tutorial';
 import {
   getUserProgress,
   markLessonCompleted,
@@ -25,7 +25,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
   const { state } = useInverter();
   const [progress, setProgress] = useState<UserProgressData>(getUserProgress());
 
-  // Atualiza progresso sempre que houver evento ou mudança
   useEffect(() => {
     const handleProgressUpdate = () => {
       setProgress(getUserProgress());
@@ -34,7 +33,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     return () => window.removeEventListener('course_progress_updated', handleProgressUpdate);
   }, []);
 
-  // Monitora passos das lições práticas automaticamente em tempo real
   useEffect(() => {
     if (selectedLesson.type === 'PRACTICE' && selectedLesson.steps) {
       let allStepsDone = true;
@@ -58,7 +56,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     markLessonCompleted(selectedLesson.id);
   };
 
-  // Encontra a próxima lição liberada
   const handleNextLesson = () => {
     let foundCurrent = false;
     for (let mIdx = 0; mIdx < COURSE_MODULES.length; mIdx++) {
@@ -82,7 +79,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 
   return (
     <div style={containerStyle}>
-      {/* SELETOR DE MÓDULOS COM TRAVA PEDAGÓGICA */}
       <div style={moduleListHeaderStyle}>
         <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#90a4ae' }}>
           Trilha de Capacitação Técnica:
@@ -106,7 +102,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                 }}
                 onClick={() => {
                   if (unlocked) {
-                    // Seleciona a primeira lição disponível do módulo
                     const firstUnlocked = mod.lessons.find((_, lIdx) =>
                       isLessonUnlocked(mIdx, lIdx, progress)
                     ) || mod.lessons[0];
@@ -127,7 +122,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                   {mod.title}
                 </span>
 
-                {/* Mini barra de progresso do módulo */}
                 <div style={progressTrackStyle}>
                   <div
                     style={{
@@ -143,9 +137,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
         </div>
       </div>
 
-      {/* GRADE INTERNA: LISTA DE LIÇÕES & ÁREA DE CONTEÚDO */}
       <div style={contentGridStyle}>
-        {/* MENU LATERAL DE LIÇÕES DO MÓDULO ATIVO */}
         <div style={lessonSidebarStyle}>
           <strong style={{ fontSize: '11px', color: '#81d4fa', marginBottom: '8px', display: 'block' }}>
             Lições do Módulo:
@@ -184,7 +176,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
           </div>
         </div>
 
-        {/* ÁREA PRINCIPAL DA LIÇÃO SELECIONADA */}
         <div style={lessonMainAreaStyle}>
           <div style={lessonHeaderStyle}>
             <div>
@@ -205,7 +196,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             )}
           </div>
 
-          {/* CONTEÚDO TEÓRICO */}
           {selectedLesson.type === 'THEORY' && selectedLesson.theoryData && (
             <div style={theoryContainerStyle}>
               <h3 style={{ fontSize: '13px', color: '#81d4fa', marginBottom: '8px' }}>
@@ -235,7 +225,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                 </p>
               </div>
 
-              {/* BOTÃO DE CONFIRMAÇÃO DA LEITURA */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px', gap: '8px' }}>
                 {!isCurrentLessonCompleted ? (
                   <button onClick={handleCompleteTheory} style={btnOkTheoryStyle}>
@@ -250,7 +239,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             </div>
           )}
 
-          {/* CONTEÚDO PRÁTICO (CHECKLIST INTERATIVO) */}
           {selectedLesson.type === 'PRACTICE' && selectedLesson.steps && (
             <div style={practiceContainerStyle}>
               <strong style={{ fontSize: '12px', color: '#81d4fa', display: 'block', marginBottom: '8px' }}>
@@ -308,7 +296,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
   );
 };
 
-// ESTILOS VISUAIS
 const containerStyle: React.CSSProperties = {
   background: '#11151a',
   border: '1px solid #252e3b',
