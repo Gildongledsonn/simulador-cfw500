@@ -1,223 +1,308 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useInverter } from '../context/InverterContext';
 import { COURSE_MODULES } from '../constants/courseModules';
 import { Lesson, CourseModule } from '../types/tutorial';
+import {
+  getUserProgress,
+  markLessonCompleted,
+  markStepCompleted,
+  isModuleUnlocked,
+  isLessonUnlocked,
+  isModuleCompleted,
+  getModuleCompletionPercent,
+  UserProgressData,
+} from '../services/courseProgressService';
 
 interface TutorialGuideProps {
-  onSelectLesson?: (lesson: Lesson) => void;
   selectedLesson: Lesson;
   setSelectedLesson: (lesson: Lesson) => void;
 }
 
-export const TutorialGuide: React.FC<TutorialGuideProps> = ({ selectedLesson, setSelectedLesson }) => {
+export const TutorialGuide: React.FC<TutorialGuideProps> = ({
+  selectedLesson,
+  setSelectedLesson,
+}) => {
   const { state } = useInverter();
-  const [completedLessons, setCompletedLessons] = useState<string[]>([]);
+  const [progress, setProgress] = useState<UserProgressData>(getUserProgress());
 
-  const handleLessonChange = (lesson: Lesson) => {
-    setSelectedLesson(lesson);
+  // Atualiza progresso sempre que houver evento ou mudança
+  useEffect(() => {
+    const handleProgressUpdate = () => {
+      setProgress(getUserProgress());
+    };
+    window.addEventListener('course_progress_updated', handleProgressUpdate);
+    return () => window.removeEventListener('course_progress_updated', handleProgressUpdate);
+  }, []);
+
+  // Monitora passos das lições práticas automaticamente em tempo real
+  useEffect(() => {
+    if (selectedLesson.type === 'PRACTICE' && selectedLesson.steps) {
+      let allStepsDone = true;
+
+      selectedLesson.steps.forEach((step) => {
+        const isDone = step.isCompleted(state);
+        if (isDone) {
+          markStepCompleted(selectedLesson.id, step.id);
+        } else {
+          allStepsDone = false;
+        }
+      });
+
+      if (allStepsDone && !progress.completedLessons.includes(selectedLesson.id)) {
+        markLessonCompleted(selectedLesson.id);
+      }
+    }
+  }, [state, selectedLesson, progress.completedLessons]);
+
+  const handleCompleteTheory = () => {
+    markLessonCompleted(selectedLesson.id);
   };
 
-  const markLessonAsComplete = (lessonId: string) => {
-    if (!completedLessons.includes(lessonId)) {
-      setCompletedLessons([...completedLessons, lessonId]);
+  // Encontra a próxima lição liberada
+  const handleNextLesson = () => {
+    let foundCurrent = false;
+    for (let mIdx = 0; mIdx < COURSE_MODULES.length; mIdx++) {
+      const mod = COURSE_MODULES[mIdx];
+      for (let lIdx = 0; lIdx < mod.lessons.length; lIdx++) {
+        const les = mod.lessons[lIdx];
+        if (foundCurrent) {
+          if (isLessonUnlocked(mIdx, lIdx, progress)) {
+            setSelectedLesson(les);
+            return;
+          }
+        }
+        if (les.id === selectedLesson.id) {
+          foundCurrent = true;
+        }
+      }
     }
   };
 
-  // Calcula o progresso do aluno no curso
-  const totalLessonsCount = COURSE_MODULES.reduce((acc, m) => acc + m.lessons.length, 0);
-  const progressPercent = Math.round((completedLessons.length / totalLessonsCount) * 100);
+  const isCurrentLessonCompleted = progress.completedLessons.includes(selectedLesson.id);
 
   return (
     <div style={containerStyle}>
-      {/* CABEÇALHO DO CURSO E PROGRESSO */}
-      <div style={courseHeaderStyle}>
-        <div>
-          <h2 style={{ fontSize: '16px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>🎓</span> Trilha de Capacitação: Inversor WEG CFW500
-          </h2>
-          <p style={{ fontSize: '11px', color: '#90a4ae', marginTop: '2px' }}>
-            Siga os módulos sequencialmente. As aulas teóricas contêm o embasamento e as aulas práticas abrem a bancada de testes.
-          </p>
-        </div>
+      {/* SELETOR DE MÓDULOS COM TRAVA PEDAGÓGICA */}
+      <div style={moduleListHeaderStyle}>
+        <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#90a4ae' }}>
+          Trilha de Capacitação Técnica:
+        </span>
+        <div style={modulesTabsRowStyle}>
+          {COURSE_MODULES.map((mod, mIdx) => {
+            const unlocked = isModuleUnlocked(mIdx, progress);
+            const completed = isModuleCompleted(mod, progress);
+            const percent = getModuleCompletionPercent(mod, progress);
+            const isSelectedModule = mod.lessons.some((l) => l.id === selectedLesson.id);
 
-        <div style={progressBoxStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
-            <span style={{ color: '#b0bec5' }}>Progresso da Trilha:</span>
-            <strong style={{ color: '#00e676' }}>{progressPercent}%</strong>
-          </div>
-          <div style={progressBarTrackStyle}>
-            <div style={{ ...progressBarFillStyle, width: `${progressPercent}%` }} />
-          </div>
+            return (
+              <div
+                key={mod.id}
+                style={{
+                  ...moduleCardStyle,
+                  borderColor: isSelectedModule ? '#0288d1' : unlocked ? '#374151' : '#1f242c',
+                  background: isSelectedModule ? '#132337' : unlocked ? '#161b22' : '#0d1117',
+                  opacity: unlocked ? 1 : 0.5,
+                  cursor: unlocked ? 'pointer' : 'not-allowed',
+                }}
+                onClick={() => {
+                  if (unlocked) {
+                    // Seleciona a primeira lição disponível do módulo
+                    const firstUnlocked = mod.lessons.find((_, lIdx) =>
+                      isLessonUnlocked(mIdx, lIdx, progress)
+                    ) || mod.lessons[0];
+                    setSelectedLesson(firstUnlocked);
+                  }
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px' }}>{unlocked ? mod.icon : '🔒'}</span>
+                  <span style={{ fontSize: '10px', color: completed ? '#00e676' : '#81d4fa', fontWeight: 'bold' }}>
+                    {completed ? '✅ 100%' : `${percent}%`}
+                  </span>
+                </div>
+                <strong style={{ fontSize: '11px', color: unlocked ? '#fff' : '#6b7280', marginTop: '4px', display: 'block' }}>
+                  Módulo {mod.moduleNumber}
+                </strong>
+                <span style={{ fontSize: '9px', color: '#90a4ae', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  {mod.title}
+                </span>
+
+                {/* Mini barra de progresso do módulo */}
+                <div style={progressTrackStyle}>
+                  <div
+                    style={{
+                      ...progressBarFillStyle,
+                      width: `${percent}%`,
+                      background: completed ? '#00e676' : '#0288d1',
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* SELEÇÃO DE MÓDULOS E AULAS (MENU EM GRADE) */}
-      <div style={modulesListContainerStyle}>
-        {COURSE_MODULES.map((module: CourseModule) => (
-          <div key={module.id} style={moduleCardStyle}>
-            <div style={moduleCardHeaderStyle}>
-              <span style={{ fontSize: '16px' }}>{module.icon}</span>
-              <div>
-                <strong style={{ fontSize: '12px', color: '#eceff1' }}>
-                  Módulo {module.moduleNumber}: {module.title}
-                </strong>
-                <div style={{ fontSize: '10px', color: '#78909c' }}>{module.description}</div>
-              </div>
-            </div>
+      {/* GRADE INTERNA: LISTA DE LIÇÕES & ÁREA DE CONTEÚDO */}
+      <div style={contentGridStyle}>
+        {/* MENU LATERAL DE LIÇÕES DO MÓDULO ATIVO */}
+        <div style={lessonSidebarStyle}>
+          <strong style={{ fontSize: '11px', color: '#81d4fa', marginBottom: '8px', display: 'block' }}>
+            Lições do Módulo:
+          </strong>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {COURSE_MODULES.map((mod, mIdx) => {
+              const isModuleActive = mod.lessons.some((l) => l.id === selectedLesson.id);
+              if (!isModuleActive) return null;
 
-            <div style={lessonsListStyle}>
-              {module.lessons.map((lesson: Lesson) => {
-                const isSelected = selectedLesson.id === lesson.id;
-                const isDone = completedLessons.includes(lesson.id);
+              return mod.lessons.map((lesson, lIdx) => {
+                const isUnlocked = isLessonUnlocked(mIdx, lIdx, progress);
+                const isCompleted = progress.completedLessons.includes(lesson.id);
+                const isCurrent = lesson.id === selectedLesson.id;
 
                 return (
                   <button
                     key={lesson.id}
-                    onClick={() => handleLessonChange(lesson)}
+                    disabled={!isUnlocked}
+                    onClick={() => setSelectedLesson(lesson)}
                     style={{
-                      ...lessonBtnStyle,
-                      background: isSelected ? 'rgba(2, 136, 209, 0.25)' : '#101317',
-                      borderColor: isSelected ? '#0288d1' : isDone ? '#2e7d32' : '#222832',
-                      color: isSelected ? '#fff' : '#b0bec5',
+                      ...lessonItemBtnStyle,
+                      background: isCurrent ? '#0288d1' : isUnlocked ? '#1f2937' : '#111418',
+                      color: isCurrent ? '#fff' : isUnlocked ? '#e0e0e0' : '#4b5563',
+                      borderColor: isCurrent ? '#29b6f6' : '#374151',
+                      cursor: isUnlocked ? 'pointer' : 'not-allowed',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '12px' }}>
-                        {isDone ? '✅' : lesson.type === 'PRACTICE' ? '🛠️' : '📖'}
-                      </span>
-                      <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: '11px', fontWeight: isSelected ? 700 : 500 }}>{lesson.title}</div>
-                        <div style={{ fontSize: '9px', color: '#78909c' }}>
-                          {lesson.type === 'PRACTICE' ? 'Aula Prática na Bancada' : 'Aula Teórica'} • {lesson.durationMin} min
-                        </div>
-                      </div>
+                      <span>{isCompleted ? '✅' : isUnlocked ? (lesson.type === 'THEORY' ? '📖' : '🛠️') : '🔒'}</span>
+                      <span style={{ fontSize: '11px', textAlign: 'left', flex: 1 }}>{lesson.title}</span>
                     </div>
-                    <span
-                      style={{
-                        ...typeBadgeStyle,
-                        background: lesson.type === 'PRACTICE' ? '#004d40' : '#1a237e',
-                        color: lesson.type === 'PRACTICE' ? '#80cbc4' : '#9fa8da',
-                      }}
-                    >
-                      {lesson.type === 'PRACTICE' ? 'PRÁTICA' : 'TEORIA'}
-                    </span>
                   </button>
                 );
-              })}
-            </div>
+              });
+            })}
           </div>
-        ))}
-      </div>
-
-      {/* ÁREA DE EXIBIÇÃO DA AULA SELECIONADA */}
-      <div style={activeLessonContainerStyle}>
-        <div style={activeLessonHeaderStyle}>
-          <div>
-            <span style={{ fontSize: '10px', color: '#0091ea', fontWeight: 'bold', textTransform: 'uppercase' }}>
-              {selectedLesson.type === 'PRACTICE' ? '🛠️ Laboratório Prático' : '📖 Conteúdo Teórico'}
-            </span>
-            <h3 style={{ fontSize: '15px', color: '#fff', marginTop: '2px' }}>{selectedLesson.title}</h3>
-            <p style={{ fontSize: '11px', color: '#b0bec5' }}>{selectedLesson.description}</p>
-          </div>
-
-          <button
-            onClick={() => markLessonAsComplete(selectedLesson.id)}
-            style={{
-              ...completeBtnStyle,
-              background: completedLessons.includes(selectedLesson.id) ? '#2e7d32' : '#0277bd',
-            }}
-          >
-            {completedLessons.includes(selectedLesson.id) ? '✓ Concluído' : 'Marcar como Concluído'}
-          </button>
         </div>
 
-        {/* SE FOR AULA TEÓRICA: MOSTRA O MATERIAL DE ESTUDO */}
-        {selectedLesson.type === 'THEORY' && selectedLesson.theoryData && (
-          <div style={theoryViewContainerStyle}>
-            <div style={theoryContentBoxStyle}>
-              <h4 style={{ fontSize: '13px', color: '#64b5f6', marginBottom: '8px' }}>
+        {/* ÁREA PRINCIPAL DA LIÇÃO SELECIONADA */}
+        <div style={lessonMainAreaStyle}>
+          <div style={lessonHeaderStyle}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={typeBadgeStyle}>
+                  {selectedLesson.type === 'THEORY' ? '📖 TEORIA & CONCEITO' : '🛠️ PRÁTICA INTERATIVA'}
+                </span>
+                <span style={{ fontSize: '10px', color: '#90a4ae' }}>⏱️ {selectedLesson.durationMin} min</span>
+              </div>
+              <h2 style={{ fontSize: '16px', color: '#fff', margin: '6px 0 2px 0' }}>{selectedLesson.title}</h2>
+              <p style={{ fontSize: '11px', color: '#b0bec5', margin: 0 }}>{selectedLesson.description}</p>
+            </div>
+
+            {isCurrentLessonCompleted ? (
+              <span style={completedBadgeStyle}>✓ LIÇÃO CONCLUÍDA</span>
+            ) : (
+              <span style={inProgressBadgeStyle}>EM ANDAMENTO</span>
+            )}
+          </div>
+
+          {/* CONTEÚDO TEÓRICO */}
+          {selectedLesson.type === 'THEORY' && selectedLesson.theoryData && (
+            <div style={theoryContainerStyle}>
+              <h3 style={{ fontSize: '13px', color: '#81d4fa', marginBottom: '8px' }}>
                 {selectedLesson.theoryData.title}
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {selectedLesson.theoryData.content.map((paragraph, idx) => (
-                  <p key={idx} style={{ fontSize: '12px', color: '#cfd8dc', lineHeight: '1.5' }}>
-                    {paragraph}
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {selectedLesson.theoryData.content.map((par, i) => (
+                  <p key={i} style={{ fontSize: '12px', color: '#cfd8dc', lineHeight: '1.5', margin: 0 }}>
+                    {par}
                   </p>
                 ))}
               </div>
 
               {selectedLesson.theoryData.diagramInfo && (
                 <div style={diagramBoxStyle}>
-                  <strong style={{ fontSize: '11px', color: '#ffb74d' }}>📊 Fluxo do Sinal Elétrico:</strong>
-                  <div style={{ fontSize: '12px', color: '#ffe082', fontFamily: 'monospace', marginTop: '4px' }}>
+                  <strong style={{ fontSize: '10px', color: '#00e676' }}>Fluxo / Diagrama:</strong>
+                  <div style={{ fontSize: '11px', color: '#fff', marginTop: '2px', fontFamily: 'monospace' }}>
                     {selectedLesson.theoryData.diagramInfo}
                   </div>
                 </div>
               )}
 
               <div style={keyTakeawayBoxStyle}>
-                <span style={{ fontSize: '14px' }}>💡</span>
-                <span style={{ fontSize: '11px', color: '#80cbc4' }}>
-                  <strong>Ponto-Chave:</strong> {selectedLesson.theoryData.keyTakeaway}
-                </span>
+                <strong>💡 Ponto-Chave para o Eletricista:</strong>
+                <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#eceff1' }}>
+                  {selectedLesson.theoryData.keyTakeaway}
+                </p>
+              </div>
+
+              {/* BOTÃO DE CONFIRMAÇÃO DA LEITURA */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px', gap: '8px' }}>
+                {!isCurrentLessonCompleted ? (
+                  <button onClick={handleCompleteTheory} style={btnOkTheoryStyle}>
+                    ✓ Concluir Leitura & Validar Teoria (OK)
+                  </button>
+                ) : (
+                  <button onClick={handleNextLesson} style={btnNextLessonStyle}>
+                    Avançar para Próxima Lição ➔
+                  </button>
+                )}
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* SE FOR AULA PRÁTICA: MOSTRA OS PASSOS A SEREM EXECUTADOS NA BANCADA */}
-        {selectedLesson.type === 'PRACTICE' && selectedLesson.steps && (
-          <div style={practiceStepsContainerStyle}>
-            <div style={{ fontSize: '11px', color: '#ffca28', fontWeight: 'bold', marginBottom: '6px' }}>
-              🎯 Objetivos Práticos a Realizar na Bancada Abaixo:
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {selectedLesson.steps.map((step, sIdx) => {
-                const stepDone = step.isCompleted(state);
+          {/* CONTEÚDO PRÁTICO (CHECKLIST INTERATIVO) */}
+          {selectedLesson.type === 'PRACTICE' && selectedLesson.steps && (
+            <div style={practiceContainerStyle}>
+              <strong style={{ fontSize: '12px', color: '#81d4fa', display: 'block', marginBottom: '8px' }}>
+                Checklist Prático no Painel e IHM:
+              </strong>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {selectedLesson.steps.map((step, idx) => {
+                  const stepDone = step.isCompleted(state);
 
-                return (
-                  <div
-                    key={step.id}
-                    style={{
-                      ...stepCardStyle,
-                      borderColor: stepDone ? '#00e676' : '#37474f',
-                      background: stepDone ? 'rgba(0, 230, 118, 0.08)' : '#121519',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div
-                        style={{
-                          ...stepNumberBadgeStyle,
-                          background: stepDone ? '#00e676' : '#263238',
-                          color: stepDone ? '#0f2410' : '#fff',
-                        }}
-                      >
-                        {stepDone ? '✓' : sIdx + 1}
-                      </div>
-                      <div>
-                        <strong style={{ fontSize: '12px', color: stepDone ? '#00e676' : '#eceff1' }}>
-                          {step.title}
-                        </strong>
-                        <div style={{ fontSize: '11px', color: '#b0bec5', marginTop: '2px' }}>{step.instruction}</div>
-                        {step.tip && <div style={{ fontSize: '10px', color: '#90caf9', marginTop: '2px' }}>💡 Dica: {step.tip}</div>}
-                      </div>
-                    </div>
-                    <span
+                  return (
+                    <div
+                      key={step.id}
                       style={{
-                        fontSize: '10px',
-                        fontWeight: 'bold',
-                        color: stepDone ? '#00e676' : '#ff9800',
-                        flexShrink: 0,
+                        ...stepItemStyle,
+                        borderColor: stepDone ? '#00e676' : '#374151',
+                        background: stepDone ? 'rgba(0, 230, 118, 0.08)' : '#161b22',
                       }}
                     >
-                      {stepDone ? '✅ OK' : 'PENDENTE'}
-                    </span>
-                  </div>
-                );
-              })}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '14px' }}>{stepDone ? '✅' : '⭕'}</span>
+                          <strong style={{ fontSize: '12px', color: stepDone ? '#00e676' : '#fff' }}>
+                            {idx + 1}. {step.title}
+                          </strong>
+                        </div>
+                        <span style={{ fontSize: '10px', color: stepDone ? '#00e676' : '#ffb74d', fontWeight: 'bold' }}>
+                          {stepDone ? 'OK (Validado)' : 'Pendente'}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '11px', color: '#b0bec5', margin: '4px 0 0 24px' }}>
+                        {step.instruction}
+                      </p>
+                      {step.tip && (
+                        <div style={{ fontSize: '10px', color: '#81d4fa', margin: '4px 0 0 24px' }}>
+                          💡 <em>Dica: {step.tip}</em>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {isCurrentLessonCompleted && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+                  <button onClick={handleNextLesson} style={btnNextLessonStyle}>
+                    🎉 Tarefa 100% Concluída! Próxima Lição ➔
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -225,184 +310,174 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({ selectedLesson, se
 
 // ESTILOS VISUAIS
 const containerStyle: React.CSSProperties = {
-  background: '#16191d',
+  background: '#11151a',
+  border: '1px solid #252e3b',
   borderRadius: '12px',
   padding: '14px',
-  border: '1px solid #282f3a',
   display: 'flex',
   flexDirection: 'column',
-  gap: '14px',
+  gap: '12px',
   width: '100%',
   boxSizing: 'border-box',
 };
 
-const courseHeaderStyle: React.CSSProperties = {
+const moduleListHeaderStyle: React.CSSProperties = {
   display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  flexWrap: 'wrap',
-  gap: '12px',
-  borderBottom: '1px solid #232a35',
-  paddingBottom: '10px',
+  flexDirection: 'column',
+  gap: '6px',
 };
 
-const progressBoxStyle: React.CSSProperties = {
-  minWidth: '160px',
-  background: '#101215',
-  padding: '8px 12px',
+const modulesTabsRowStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+  gap: '8px',
+};
+
+const moduleCardStyle: React.CSSProperties = {
   borderRadius: '8px',
-  border: '1px solid #202630',
+  padding: '8px 10px',
+  border: '1px solid',
+  transition: 'all 0.2s ease',
 };
 
-const progressBarTrackStyle: React.CSSProperties = {
-  width: '100%',
-  height: '6px',
-  background: '#202630',
-  borderRadius: '3px',
+const progressTrackStyle: React.CSSProperties = {
+  height: '4px',
+  background: '#252d38',
+  borderRadius: '2px',
+  marginTop: '6px',
   overflow: 'hidden',
 };
 
 const progressBarFillStyle: React.CSSProperties = {
   height: '100%',
-  background: 'linear-gradient(90deg, #0288d1 0%, #00e676 100%)',
   transition: 'width 0.3s ease',
 };
 
-const modulesListContainerStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-  gap: '10px',
-};
-
-const moduleCardStyle: React.CSSProperties = {
-  background: '#101317',
-  borderRadius: '8px',
-  padding: '10px',
-  border: '1px solid #222832',
+const contentGridStyle: React.CSSProperties = {
   display: 'flex',
-  flexDirection: 'column',
-  gap: '8px',
-};
-
-const moduleCardHeaderStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  borderBottom: '1px solid #1a1f26',
-  paddingBottom: '6px',
-};
-
-const lessonsListStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '4px',
-};
-
-const lessonBtnStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: '6px 8px',
-  borderRadius: '6px',
-  border: '1px solid',
-  cursor: 'pointer',
-  transition: 'all 0.15s ease',
-};
-
-const typeBadgeStyle: React.CSSProperties = {
-  fontSize: '8px',
-  fontWeight: 'bold',
-  padding: '2px 5px',
-  borderRadius: '3px',
-  letterSpacing: '0.5px',
-};
-
-const activeLessonContainerStyle: React.CSSProperties = {
-  background: '#0e1013',
-  borderRadius: '10px',
-  padding: '14px',
-  border: '1px solid #232a35',
-  display: 'flex',
-  flexDirection: 'column',
+  flexWrap: 'wrap',
   gap: '12px',
 };
 
-const activeLessonHeaderStyle: React.CSSProperties = {
+const lessonSidebarStyle: React.CSSProperties = {
+  flex: '1 1 220px',
+  background: '#0d1117',
+  border: '1px solid #21262d',
+  borderRadius: '8px',
+  padding: '10px',
+  boxSizing: 'border-box',
+};
+
+const lessonItemBtnStyle: React.CSSProperties = {
+  padding: '8px 10px',
+  borderRadius: '6px',
+  border: '1px solid',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  transition: 'all 0.2s ease',
+  boxSizing: 'border-box',
+};
+
+const lessonMainAreaStyle: React.CSSProperties = {
+  flex: '3 1 380px',
+  background: '#161b22',
+  border: '1px solid #30363d',
+  borderRadius: '8px',
+  padding: '14px',
+  boxSizing: 'border-box',
+};
+
+const lessonHeaderStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'flex-start',
-  flexWrap: 'wrap',
-  gap: '10px',
-  borderBottom: '1px solid #1e242e',
+  borderBottom: '1px solid #21262d',
   paddingBottom: '10px',
+  marginBottom: '10px',
 };
 
-const completeBtnStyle: React.CSSProperties = {
-  padding: '6px 14px',
+const typeBadgeStyle: React.CSSProperties = {
+  background: '#0288d1',
   color: '#fff',
-  border: 'none',
-  borderRadius: '6px',
-  fontSize: '11px',
+  padding: '2px 6px',
+  borderRadius: '4px',
+  fontSize: '9px',
   fontWeight: 'bold',
-  cursor: 'pointer',
 };
 
-const theoryViewContainerStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '10px',
-};
-
-const theoryContentBoxStyle: React.CSSProperties = {
-  background: '#13171d',
-  borderRadius: '8px',
-  padding: '14px',
-  border: '1px solid #202632',
-};
-
-const diagramBoxStyle: React.CSSProperties = {
-  background: '#1a1811',
-  border: '1px dashed #ffb74d',
-  padding: '10px',
+const completedBadgeStyle: React.CSSProperties = {
+  background: 'rgba(0, 230, 118, 0.15)',
+  border: '1px solid #00e676',
+  color: '#00e676',
+  padding: '4px 8px',
   borderRadius: '6px',
-  margin: '12px 0',
+  fontSize: '10px',
+  fontWeight: 'bold',
 };
 
-const keyTakeawayBoxStyle: React.CSSProperties = {
-  background: '#0d1e1c',
-  border: '1px solid #00897b',
+const inProgressBadgeStyle: React.CSSProperties = {
+  background: 'rgba(255, 179, 0, 0.15)',
+  border: '1px solid #ffb300',
+  color: '#ffb300',
+  padding: '4px 8px',
   borderRadius: '6px',
-  padding: '10px',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '10px',
-  marginTop: '10px',
+  fontSize: '10px',
+  fontWeight: 'bold',
 };
 
-const practiceStepsContainerStyle: React.CSSProperties = {
+const theoryContainerStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '8px',
 };
 
-const stepCardStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: '10px 12px',
+const diagramBoxStyle: React.CSSProperties = {
+  background: '#0d1117',
+  border: '1px dashed #30363d',
   borderRadius: '6px',
-  border: '1px solid',
-  gap: '10px',
+  padding: '8px 10px',
+  marginTop: '4px',
 };
 
-const stepNumberBadgeStyle: React.CSSProperties = {
-  width: '24px',
-  height: '24px',
-  borderRadius: '50%',
+const keyTakeawayBoxStyle: React.CSSProperties = {
+  background: '#1f2937',
+  borderLeft: '4px solid #00e676',
+  padding: '8px 10px',
+  borderRadius: '0 6px 6px 0',
+  marginTop: '6px',
+};
+
+const practiceContainerStyle: React.CSSProperties = {
   display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
+  flexDirection: 'column',
+  gap: '8px',
+};
+
+const stepItemStyle: React.CSSProperties = {
+  padding: '8px 10px',
+  borderRadius: '6px',
+  border: '1px solid',
+  transition: 'all 0.2s ease',
+};
+
+const btnOkTheoryStyle: React.CSSProperties = {
+  background: '#00e676',
+  color: '#000',
+  border: 'none',
+  borderRadius: '6px',
+  padding: '8px 14px',
   fontSize: '11px',
   fontWeight: 'bold',
-  flexShrink: 0,
+  cursor: 'pointer',
+};
+
+const btnNextLessonStyle: React.CSSProperties = {
+  background: '#0288d1',
+  color: '#fff',
+  border: 'none',
+  borderRadius: '6px',
+  padding: '8px 14px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
 };
