@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getStoredUsers, updateUserStatus, deleteUser, adminAddUser, fetchCloudUsers, UserAccount } from '../services/authService';
+import {
+  getStoredUsers,
+  updateUserStatus,
+  deleteUser,
+  adminAddUser,
+  UserAccount,
+} from '../services/authService';
 
 export const AdminPanel: React.FC = () => {
-  const [users, setUsers] = useState<UserAccount[]>(getStoredUsers());
+  const [users, setUsers] = useState<UserAccount[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -14,28 +20,15 @@ export const AdminPanel: React.FC = () => {
 
   const loadData = useCallback(async () => {
     setIsRefreshing(true);
-    const updated = await fetchCloudUsers();
-    setUsers(updated);
+    const list = await getStoredUsers();
+    setUsers(list);
     setIsRefreshing(false);
   }, []);
 
   useEffect(() => {
     loadData();
-
-    const handleLocalUpdate = () => {
-      setUsers(getStoredUsers());
-    };
-
-    window.addEventListener('auth_users_updated', handleLocalUpdate);
-    window.addEventListener('storage', handleLocalUpdate);
-
     const interval = setInterval(loadData, 8000);
-
-    return () => {
-      window.removeEventListener('auth_users_updated', handleLocalUpdate);
-      window.removeEventListener('storage', handleLocalUpdate);
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [loadData]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -50,44 +43,40 @@ export const AdminPanel: React.FC = () => {
       password: newPassword,
     });
 
-    setIsRefreshing(false);
-
     if (res.success) {
       setFormFeedback({ type: 'success', text: res.message });
       setNewName('');
       setNewEmail('');
       setNewUsername('');
       setNewPassword('');
-      setUsers(getStoredUsers());
+      await loadData();
       setTimeout(() => {
         setShowAddModal(false);
         setFormFeedback(null);
       }, 1500);
     } else {
       setFormFeedback({ type: 'error', text: res.message });
+      setIsRefreshing(false);
     }
   };
 
   const handleApprove = async (userId: string) => {
     setIsRefreshing(true);
     await updateUserStatus(userId, 'APPROVED');
-    setUsers(getStoredUsers());
-    setIsRefreshing(false);
+    await loadData();
   };
 
   const handleReject = async (userId: string) => {
     setIsRefreshing(true);
     await updateUserStatus(userId, 'REJECTED');
-    setUsers(getStoredUsers());
-    setIsRefreshing(false);
+    await loadData();
   };
 
   const handleDelete = async (userId: string) => {
     if (window.confirm('Deseja realmente remover este cadastro?')) {
       setIsRefreshing(true);
       await deleteUser(userId);
-      setUsers(getStoredUsers());
-      setIsRefreshing(false);
+      await loadData();
     }
   };
 
@@ -101,7 +90,7 @@ export const AdminPanel: React.FC = () => {
             <span>🛡️</span> Painel de Gestão & Aprovação de Alunos
           </h3>
           <span style={{ fontSize: '11px', color: '#90a4ae' }}>
-            Notificações vinculadas a: <strong style={{ color: '#81d4fa' }}>gildongledson@gmail.com</strong>
+            Servidor Próprio UOLHost • <strong style={{ color: '#81d4fa' }}>gildongledson@gmail.com</strong>
           </span>
         </div>
 
@@ -138,7 +127,7 @@ export const AdminPanel: React.FC = () => {
       {showAddModal && (
         <div style={addCardStyle}>
           <strong style={{ fontSize: '12px', color: '#00e676', display: 'block', marginBottom: '8px' }}>
-            ➕ Cadastrar Aluno Manualmente (Acesso Imediato Liberado)
+            ➕ Cadastrar Aluno Manualmente (Salvo no UOLHost com Acesso Imediato)
           </strong>
 
           {formFeedback && (
@@ -165,7 +154,7 @@ export const AdminPanel: React.FC = () => {
                 required
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Ex: João da Silva"
+                placeholder="Ex: Carlos Silva"
                 style={inputStyle}
               />
             </div>
@@ -177,7 +166,7 @@ export const AdminPanel: React.FC = () => {
                 required
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="joao@gmail.com"
+                placeholder="carlos@gmail.com"
                 style={inputStyle}
               />
             </div>
@@ -189,7 +178,7 @@ export const AdminPanel: React.FC = () => {
                 required
                 value={newUsername}
                 onChange={(e) => setNewUsername(e.target.value)}
-                placeholder="joao.silva"
+                placeholder="carlos.silva"
                 style={inputStyle}
               />
             </div>
@@ -208,7 +197,7 @@ export const AdminPanel: React.FC = () => {
 
             <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
               <button type="submit" disabled={isRefreshing} style={btnSubmitAddStyle}>
-                💾 Salvar e Liberar Acesso Online
+                💾 Salvar e Liberar Acesso no UOLHost
               </button>
             </div>
           </form>
@@ -221,8 +210,7 @@ export const AdminPanel: React.FC = () => {
             <tr style={{ color: '#90a4ae', borderBottom: '1px solid #2a313d', textAlign: 'left', fontSize: '11px' }}>
               <th style={{ padding: '8px' }}>NOME</th>
               <th style={{ padding: '8px' }}>USUÁRIO</th>
-              <th style={{ padding: '8px' }}>E-MAIL</th>
-              <th style={{ padding: '8px' }}>DATA</th>
+              <th style={{ padding: '8px' }}>SENHA</th>
               <th style={{ padding: '8px' }}>STATUS</th>
               <th style={{ padding: '8px', textAlign: 'center' }}>AÇÕES DE CONTROLE</th>
             </tr>
@@ -232,8 +220,7 @@ export const AdminPanel: React.FC = () => {
               <tr key={u.id} style={{ borderBottom: '1px solid #1a1f26', fontSize: '11px' }}>
                 <td style={{ padding: '8px', color: '#fff', fontWeight: 'bold' }}>{u.name}</td>
                 <td style={{ padding: '8px', color: '#81d4fa', fontFamily: 'monospace' }}>@{u.username}</td>
-                <td style={{ padding: '8px', color: '#cfd8dc' }}>{u.email}</td>
-                <td style={{ padding: '8px', color: '#90a4ae' }}>{u.requestedAt}</td>
+                <td style={{ padding: '8px', color: '#ffd54f', fontFamily: 'monospace' }}>{u.password}</td>
                 <td style={{ padding: '8px' }}>
                   <span
                     style={{
@@ -251,7 +238,7 @@ export const AdminPanel: React.FC = () => {
                 </td>
                 <td style={{ padding: '8px', textAlign: 'center' }}>
                   {u.role !== 'ADMIN' ? (
-                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
                       {u.status !== 'APPROVED' && (
                         <button onClick={() => handleApprove(u.id)} style={{ ...actionBtnStyle, background: '#2e7d32' }} title="Liberar Acesso">
                           ✅ Aprovar
