@@ -33,24 +33,29 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     return () => window.removeEventListener('course_progress_updated', handleProgressUpdate);
   }, []);
 
+  // Monitora e grava cada passo concluído permanentemente sem perder o OK
   useEffect(() => {
     if (selectedLesson.type === 'PRACTICE' && selectedLesson.steps) {
-      let allStepsDone = true;
+      const currentSavedSteps = progress.completedSteps[selectedLesson.id] || [];
 
       selectedLesson.steps.forEach((step) => {
-        const isDone = step.isCompleted(state);
-        if (isDone) {
-          markStepCompleted(selectedLesson.id, step.id);
-        } else {
-          allStepsDone = false;
+        if (!currentSavedSteps.includes(step.id)) {
+          const isDoneNow = step.isCompleted(state);
+          if (isDoneNow) {
+            markStepCompleted(selectedLesson.id, step.id);
+          }
         }
       });
 
-      if (allStepsDone && !progress.completedLessons.includes(selectedLesson.id)) {
+      // Se todos os passos estiverem gravados como concluídos
+      const updatedSavedSteps = getUserProgress().completedSteps[selectedLesson.id] || [];
+      const allStepsFinished = selectedLesson.steps.every((s) => updatedSavedSteps.includes(s.id));
+
+      if (allStepsFinished && !progress.completedLessons.includes(selectedLesson.id)) {
         markLessonCompleted(selectedLesson.id);
       }
     }
-  }, [state, selectedLesson, progress.completedLessons]);
+  }, [state, selectedLesson, progress.completedSteps, progress.completedLessons]);
 
   const handleCompleteTheory = () => {
     markLessonCompleted(selectedLesson.id);
@@ -76,6 +81,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
   };
 
   const isCurrentLessonCompleted = progress.completedLessons.includes(selectedLesson.id);
+  const currentSavedSteps = progress.completedSteps[selectedLesson.id] || [];
 
   return (
     <div style={containerStyle}>
@@ -246,7 +252,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
               </strong>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {selectedLesson.steps.map((step, idx) => {
-                  const stepDone = step.isCompleted(state);
+                  const stepDone = currentSavedSteps.includes(step.id) || step.isCompleted(state);
 
                   return (
                     <div

@@ -16,7 +16,7 @@ const getActiveUsername = (): string => {
       return user.username || 'default_user';
     }
   } catch {
-    // fallback silencioso
+    // fallback
   }
   return 'default_user';
 };
