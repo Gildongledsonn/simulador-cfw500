@@ -222,14 +222,14 @@ export const COURSE_MODULES: CourseModule[] = [
   },
 
   // =========================================================================
-  // MÓDULO 4: VELOCIDADES PRÉ-PROGRAMADAS (MULTISPEED VIA DI2)
+  // MÓDULO 4: VELOCIDADES PRÉ-PROGRAMADAS (MULTISPEED VIA DI3)
   // =========================================================================
   {
     id: 'mod-4',
     moduleNumber: 4,
     title: 'Velocidades Fixas Pré-Programadas (Multispeed)',
     icon: '📊',
-    description: 'Seleção digital de frequências pré-programadas através da comutação da entrada digital DI2.',
+    description: 'Seleção digital de frequências pré-programadas através da comutação da entrada digital DI3.',
     lessons: [
       {
         id: 'l4-1',
@@ -241,20 +241,20 @@ export const COURSE_MODULES: CourseModule[] = [
           title: 'Controle de Velocidade em Etapas',
           content: [
             'A função Multispeed permite selecionar velocidades fixas sem precisar de potenciômetro analógico.',
-            '• DI2 = OFF ➔ Frequência P0124 (Velocidade 1 / Aproximação: Ex: 15.0 Hz)',
-            '• DI2 = ON  ➔ Frequência P0125 (Velocidade 2 / Rápida: Ex: 35.0 Hz)',
-            'Ao comutar a chave DI2, o inversor aplica a rampa suavemente até a nova frequência alvo.'
+            '• DI3 = OFF ➔ Frequência P0124 (Velocidade 1 / Padrão: 15.0 Hz)',
+            '• DI3 = ON  ➔ Frequência P0125 (Velocidade 2 / Rápida: 35.0 Hz)',
+            'Ao comutar a chave DI3, o inversor aplica a rampa suavemente até a nova frequência alvo.'
           ],
-          diagramInfo: '[DI2: OFF] = P0124 (15.0 Hz) ➔ [DI2: ON] = P0125 (35.0 Hz)',
+          diagramInfo: '[DI3: OFF] = P0124 (15.0 Hz) ➔ [DI3: ON] = P0125 (35.0 Hz)',
           keyTakeaway: 'Ideal para esteiras industriais com velocidade lenta para carregamento e rápida para transporte.'
         }
       },
       {
         id: 'l4-2',
-        title: 'Prática: Programar e Selecionar Velocidades por DI2',
+        title: 'Prática: Programar e Selecionar Velocidades por DI3',
         durationMin: 12,
         type: 'PRACTICE',
-        description: 'Configure P0124=15Hz, P0125=35Hz e alterne a velocidade pela chave digital DI2.',
+        description: 'Configure P0124=15Hz, P0125=35Hz e alterne a velocidade pela chave digital DI3.',
         steps: [
           {
             id: 's4-1',
@@ -284,7 +284,7 @@ export const COURSE_MODULES: CourseModule[] = [
             isCompleted: (state: any) =>
               (state.controlSource === 'REM' || state.isLocal === false) &&
               getDI(state, 1) &&
-              getDI(state, 2)
+              getDI(state, 3)
           }
         ]
       }
@@ -492,7 +492,7 @@ export const COURSE_MODULES: CourseModule[] = [
             '• F070: Sobrecorrente / Curto-circuito na saída do inversor.',
             '• F072: Sobrecarga térmica no motor (Ixt).',
             '• F021: Sobretensão no barramento CC.',
-            'O parâmetro P0014 armazena o histórico da última falha ocorrida.'
+            'O parâmetro P0050 armazena o histórico da última falha ocorrida.'
           ],
           diagramInfo: 'FALHA ATIVA ➔ Display pisca [F0xx] ➔ Inspecionar Carga ➔ Tecla STOP (O) para Reset',
           keyTakeaway: 'Sempre identifique e elimine a causa raiz antes de resetar falhas repetitivas.'
@@ -547,7 +547,7 @@ export const COURSE_MODULES: CourseModule[] = [
             '• P0308: Endereço do inversor na rede (1 a 247).',
             '• P0310: Taxa de transmissão serial (1 = 19200 bps).',
             '• P0311: Configuração de paridade da rede serial.',
-            'Via rede, o PLC escreve na Word de Controle (Registrador 683) para comandar o motor.'
+            'Via rede, o PLC escreve na Word de Controle para comandar o motor.'
           ],
           diagramInfo: 'CLP Mestre (RS485) ➔ Inversor Escravo 1 (P0308=1) ➔ Inversor Escravo 2 (P0308=2)',
           keyTakeaway: 'Utilize sempre cabo blindado de par trançado com resistor de terminação de 120 ohms nas pontas.'
@@ -573,6 +573,191 @@ export const COURSE_MODULES: CourseModule[] = [
             instruction: 'Acesse P0310 e certifique-se de que está ajustado em 1 (19200 bps).',
             tip: 'Velocidade padrão com excelente imunidade a ruídos eletromagnéticos.',
             isCompleted: (state: any) => getParam(state, 'P0310') === 1
+          }
+        ]
+      }
+    ]
+  },
+
+  // =========================================================================
+  // MÓDULO 10: DESAFIOS DE DIAGNÓSTICO E DEFEITOS OCULTOS (TROUBLESHOOTING)
+  // =========================================================================
+  {
+    id: 'mod-10',
+    moduleNumber: 10,
+    title: 'Desafios de Diagnóstico e Defeitos Ocultos',
+    icon: '🔍',
+    description: 'Casos reais de máquinas paradas em campo. Descubra a causa raiz e recupere a operação.',
+    lessons: [
+      {
+        id: 'l10-1',
+        title: 'Desafio 1: O Motor Não Liga em Modo Remoto',
+        durationMin: 10,
+        type: 'PRACTICE',
+        description: 'O operador fechou a chave externa DI1, o inversor está em REM, mas o motor permanece inerte.',
+        steps: [
+          {
+            id: 's10-1',
+            title: 'Diagnosticar e Liberar Origem de Comando Gira/Para',
+            instruction: 'Descubra por que o inversor ignora as chaves dos bornes e ajuste o parâmetro de comando remoto para aceitar os bornes DI.',
+            tip: 'Verifique no manual qual parâmetro define a origem de partida em Modo Remoto (P0227).',
+            isCompleted: (state: any) => getParam(state, 'P0227') === 1
+          },
+          {
+            id: 's10-2',
+            title: 'Diagnosticar a Função da Chave DI1',
+            instruction: 'Verifique a função atribuída à entrada DI1 e garanta que ela esteja parametrizada como Gira/Para.',
+            tip: 'Analise o parâmetro P0263 (Função da entrada DI1).',
+            isCompleted: (state: any) => getParam(state, 'P0263') === 1
+          },
+          {
+            id: 's10-3',
+            title: 'Partir a Máquina com Sucesso',
+            instruction: 'Comute para REM e acione a chave DI1 no painel para validar o funcionamento do motor.',
+            tip: 'O display deve sair de rdy e começar a acelerar.',
+            isCompleted: (state: any) =>
+              (state.controlSource === 'REM' || state.isLocal === false) &&
+              getDI(state, 1) &&
+              (state.motorStatus === 'RUNNING' || (state.outputFrequency ?? 0) > 0.5)
+          }
+        ]
+      },
+      {
+        id: 'l10-2',
+        title: 'Desafio 2: Falha Térmica e Rotação Abaixo do Limite em Bomba',
+        durationMin: 12,
+        type: 'PRACTICE',
+        description: 'Uma bomba centrífuga não pode operar abaixo de 20 Hz por risco de cavitação e queima por falta de fluxo.',
+        steps: [
+          {
+            id: 's10-4',
+            title: 'Definir o Piso de Proteção de Frequência Mínima',
+            instruction: 'Configure a frequência mínima do sistema para que nunca desça de 20.0 Hz mesmo com o potenciômetro no zero.',
+            tip: 'Ajuste o parâmetro P0133.',
+            isCompleted: (state: any) => {
+              const fMin = getParam(state, 'P0133');
+              return fMin >= 19.5 && fMin <= 20.5;
+            }
+          },
+          {
+            id: 's10-5',
+            title: 'Ajustar o Limite Térmico de Corrente do Motor',
+            instruction: 'A placa da bomba indica corrente máxima contínua de 4.8 A. Ajuste a corrente de sobrecarga térmica para 4.8 A.',
+            tip: 'Localize o parâmetro de limite de sobrecarga (P0156).',
+            isCompleted: (state: any) => {
+              const iLim = getParam(state, 'P0156');
+              return iLim >= 4.7 && iLim <= 4.9;
+            }
+          },
+          {
+            id: 's10-6',
+            title: 'Testar com Potenciômetro no Mínimo',
+            instruction: 'Ligue o motor em REM (DI1=ON) e gire o potenciômetro AI1 todo para a esquerda (0V). O motor deve se manter estável a 20.0 Hz.',
+            tip: 'Verifique se a frequência de saída não cai para 0 Hz.',
+            isCompleted: (state: any) =>
+              (state.controlSource === 'REM' || state.isLocal === false) &&
+              getDI(state, 1) &&
+              (state.outputFrequency ?? 0) >= 19.0 &&
+              (state.outputFrequency ?? 0) <= 21.0
+          }
+        ]
+      }
+    ]
+  },
+
+  // =========================================================================
+  // MÓDULO 11: COMISSIONAMENTO DE MÁQUINAS ESPECÍFICAS
+  // =========================================================================
+  {
+    id: 'mod-11',
+    moduleNumber: 11,
+    title: 'Comissionamento de Aplicações e Máquinas Industriais',
+    icon: '🏭',
+    description: 'Parametrização completa conforme a folha de dados mecânica da máquina do cliente.',
+    lessons: [
+      {
+        id: 'l11-1',
+        title: 'Máquina 1: Esteira Transportadora de Embalagens Frágeis',
+        durationMin: 15,
+        type: 'PRACTICE',
+        description: 'Requisitos do projeto: rampa de partida ultra suave em curva S (8s) para evitar queda de frascos e parada rápida por frenagem CC (1.5s).',
+        steps: [
+          {
+            id: 's11-1',
+            title: 'Parametrizar Rampa em Curva S',
+            instruction: 'Modifique o tipo de aceleração de linear para Curva S para evitar solavancos na partida dos frascos.',
+            tip: 'Verifique o parâmetro P0104.',
+            isCompleted: (state: any) => getParam(state, 'P0104') === 1
+          },
+          {
+            id: 's11-2',
+            title: 'Ajustar Tempo de Aceleração para 8.0 s',
+            instruction: 'Ajuste a rampa de subida da esteira para exatamente 8.0 segundos.',
+            tip: 'Altere o parâmetro P0100.',
+            isCompleted: (state: any) => {
+              const acc = getParam(state, 'P0100');
+              return acc >= 7.8 && acc <= 8.2;
+            }
+          },
+          {
+            id: 's11-3',
+            title: 'Configurar Duração da Frenagem CC na Parada',
+            instruction: 'Configure o tempo de injeção de corrente contínua na parada para travar a esteira em 1.5 s.',
+            tip: 'Ajuste o parâmetro P0150.',
+            isCompleted: (state: any) => {
+              const tBrake = getParam(state, 'P0150');
+              return tBrake >= 1.4 && tBrake <= 1.6;
+            }
+          },
+          {
+            id: 's11-4',
+            title: 'Acionar e Validar o Ciclo Operacional',
+            instruction: 'Em modo Local, pressione a tecla I (RUN), eleve a velocidade para 30.0 Hz e confira a parametrização.',
+            tip: 'Veja o ciclo completo da esteira no display.',
+            isCompleted: (state: any) =>
+              getParam(state, 'P0104') === 1 &&
+              getParam(state, 'P0100') >= 7.8 &&
+              getParam(state, 'P0150') >= 1.4
+          }
+        ]
+      },
+      {
+        id: 'l11-2',
+        title: 'Máquina 2: Exaustor Industrial com Zona de Ressonância Crítica',
+        durationMin: 15,
+        type: 'PRACTICE',
+        description: 'Um exaustor industrial possui vibração destrutiva aos 25.0 Hz na carcaça. O inversor deve saltar essa faixa mecânica.',
+        steps: [
+          {
+            id: 's11-5',
+            title: 'Inserir Frequência de Salto / Bypass Mecânico',
+            instruction: 'Parametrize o ponto de ressonância do exaustor para 25.0 Hz para proteger a estrutura contra vibração destrutiva.',
+            tip: 'Verifique o parâmetro P0169.',
+            isCompleted: (state: any) => {
+              const fSkip = getParam(state, 'P0169');
+              return fSkip >= 24.5 && fSkip <= 25.5;
+            }
+          },
+          {
+            id: 's11-6',
+            title: 'Programar Modo Sleep para Economia Noturna',
+            instruction: 'Quando o duto fechar e a frequência cair para 18.0 Hz, o inversor deve entrar em modo dormir após 6.0 segundos.',
+            tip: 'Ajuste P0217 para 18.0 Hz e P0218 para 6.0 s.',
+            isCompleted: (state: any) => {
+              const p217 = getParam(state, 'P0217');
+              const p218 = getParam(state, 'P0218');
+              return p217 >= 17.5 && p217 <= 18.5 && p218 >= 5.5 && p218 <= 6.5;
+            }
+          },
+          {
+            id: 's11-7',
+            title: 'Validar Parametrização Final do Exaustor',
+            instruction: 'Garanta que P0000 esteja desbloqueado com senha 5 e todos os limites de segurança preenchidos.',
+            tip: 'Verifique o painel do simulador.',
+            isCompleted: (state: any) =>
+              getParam(state, 'P0169') >= 24.5 &&
+              getParam(state, 'P0217') >= 17.5 &&
+              getParam(state, 'P0218') >= 5.5
           }
         ]
       }
