@@ -1,4 +1,4 @@
-import { Module } from '../types/tutorial';
+import { CourseModule } from '../types/tutorial';
 import { InverterState, ParameterKey } from '../types/cfw500';
 
 // Helpers de validação de estado e parâmetros
@@ -11,13 +11,13 @@ const getDI = (state: InverterState, inputNum: 1 | 2 | 3 | 4): boolean => {
   return Boolean(state.digitalInputs[key]);
 };
 
-export const CHALLENGE_MODULES: Module[] = [
+export const CHALLENGE_MODULES: CourseModule[] = [
   // =========================================================================
-  // MÓDULO DESAFIO 1: DIAGNÓSTICO DE FALHAS E DEFEITOS EM CAMPO (TROUBLESHOOTING)
+  // MÓDULO 10: DIAGNÓSTICO DE FALHAS E DEFEITOS EM CAMPO (TROUBLESHOOTING)
   // =========================================================================
   {
     id: 'mod-challenge-1',
-    moduleNumber: 7,
+    moduleNumber: 10,
     title: 'Desafios de Diagnóstico e Defeitos Ocultos',
     icon: '🔍',
     description: 'Casos reais de máquinas paradas em campo. Descubra a causa raiz e recupere a operação.',
@@ -49,7 +49,7 @@ export const CHALLENGE_MODULES: Module[] = [
             instruction: 'Comute para REM e acione a chave DI1 no painel para validar o funcionamento do motor.',
             tip: 'O display deve sair de rdy e começar a acelerar.',
             isCompleted: (state: InverterState) =>
-              state.controlSource === 'REM' &&
+              (state.controlSource === 'REM' || (state as any).isLocal === false) &&
               getDI(state, 1) &&
               (state.motorStatus === 'RUNNING' || state.outputFrequency > 0.5)
           }
@@ -88,7 +88,7 @@ export const CHALLENGE_MODULES: Module[] = [
             instruction: 'Ligue o motor em REM (DI1=ON) e gire o potenciômetro AI1 todo para a esquerda (0V). O motor deve se manter estável a 20.0 Hz.',
             tip: 'Verifique se a frequência de saída não cai para 0 Hz.',
             isCompleted: (state: InverterState) =>
-              state.controlSource === 'REM' &&
+              (state.controlSource === 'REM' || (state as any).isLocal === false) &&
               getDI(state, 1) &&
               state.outputFrequency >= 19.0 &&
               state.outputFrequency <= 21.0
@@ -99,11 +99,11 @@ export const CHALLENGE_MODULES: Module[] = [
   },
 
   // =========================================================================
-  // MÓDULO DESAFIO 2: COMISSIONAMENTO DE MÁQUINAS ESPECÍFICAS
+  // MÓDULO 11: COMISSIONAMENTO DE MÁQUINAS ESPECÍFICAS
   // =========================================================================
   {
     id: 'mod-challenge-2',
-    moduleNumber: 8,
+    moduleNumber: 11,
     title: 'Comissionamento de Aplicações e Máquinas Industriais',
     icon: '🏭',
     description: 'Parametrização completa conforme a folha de dados mecânica da máquina do cliente.',
@@ -145,7 +145,7 @@ export const CHALLENGE_MODULES: Module[] = [
           {
             id: 'cs3-4',
             title: 'Acionar e Validar o Ciclo Operacional',
-            instruction: 'Em modo Local, pressione a tecla I (RUN), eleve a velocidade para 30.0 Hz e pressione STOP para conferir a parada rápida.',
+            instruction: 'Em modo Local, pressione a tecla I (RUN), eleve a velocidade para 30.0 Hz e confira a parametrização.',
             tip: 'Veja o ciclo completo da esteira no display.',
             isCompleted: (state: InverterState) =>
               getParam(state, 'P0104') === 1 &&
