@@ -55,9 +55,8 @@ export const INITIAL_PARAMETERS: ParameterMap = {
   // === CONTROLE & FUNÇÕES ESPECIAIS (SLEEP MODE P0217 / P0218) ===
   P0202: { code: 'P0202', description: 'Tipo de Controle (0=V/F linear, 1=V/F quadrático, 2=Vetorial)', min: 0, max: 2, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
   P0204: { code: 'P0204', description: 'Carregar Padrão de Fábrica (5=Reset)', min: 0, max: 5, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
-  P0217: { code: 'P0217', description: 'Frequência de Sleep / Desativação Automática', min: 0.0, max: 300.0, step: 0.1, defaultValue: 0.0, currentValue: 0.0, unit: 'Hz' },
-  P0218: { code: 'P0218', description: 'Tempo de Sleep / Inatividade da Esteira (2 min = 120s)', min: 0, max: 999, step: 1, defaultValue: 120, currentValue: 120, unit: 's' },
-  P0219: { code: 'P0219', description: 'Frequência de Wake-Up (Reativação da Esteira)', min: 0.0, max: 300.0, step: 0.1, defaultValue: 5.0, currentValue: 5.0, unit: 'Hz' },
+  P0217: { code: 'P0217', description: 'Frequência de Sleep / Dormir', min: 0.0, max: 300.0, step: 0.1, defaultValue: 20.0, currentValue: 20.0, unit: 'Hz', },
+  P0218: { code: 'P0218',    description: 'Tempo de Atraso do Modo Sleep', min: 0.0, max: 999.0, step: 0.1, defaultValue: 5.0, currentValue: 5.0, unit: 's',},  P0219: { code: 'P0219', description: 'Frequência de Wake-Up (Reativação da Esteira)', min: 0.0, max: 300.0, step: 0.1, defaultValue: 5.0, currentValue: 5.0, unit: 'Hz' },
   P0220: { code: 'P0220', description: 'Seleção Fonte Local/Remoto (0=Sempre LOC, 1=Sempre REM, 2=IHM, 3=DI)', min: 0, max: 3, step: 1, defaultValue: 2, currentValue: 2, unit: '' },
   P0221: { code: 'P0221', description: 'Seleção Referência Modo Local (0=IHM, 1=AI1, 2=Multispeed)', min: 0, max: 2, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
   P0222: { code: 'P0222', description: 'Seleção Referência Modo Remoto (0=IHM, 1=AI1, 6=Multispeed, 7=Modbus)', min: 0, max: 8, step: 1, defaultValue: 1, currentValue: 1, unit: '' },

@@ -60,6 +60,65 @@ export const INITIAL_PARAMETERS: ParameterMap = {
   P0143: { code: 'P0143', description: 'Tempo Frenagem CC', min: 0.0, max: 15.0, step: 0.1, defaultValue: 0.0, currentValue: 0.0, unit: 's' },
   P0145: { code: 'P0145', description: 'Freq Início Frenagem CC', min: 0.0, max: 15.0, step: 0.1, defaultValue: 2.0, currentValue: 2.0, unit: 'Hz' },
 
+// ==========================================
+  // GRUPO DE FRENAGEM CC (P0150 - P0159)
+  // ==========================================
+  P0150: {
+    code: 'P0150',
+    description: 'Tempo de Duração da Frenagem CC na Parada',
+    min: 0.0,
+    max: 15.0,
+    step: 0.1,
+    defaultValue: 1.0,
+    currentValue: 1.0,
+    unit: 's',
+  },
+  P0151: {
+    code: 'P0151',
+    description: 'Frequência de Início da Frenagem CC',
+    min: 0.0,
+    max: 15.0,
+    step: 0.1,
+    defaultValue: 1.0,
+    currentValue: 1.0,
+    unit: 'Hz',
+  },
+  P0152: {
+    code: 'P0152',
+    description: 'Corrente de Injeção de Frenagem CC',
+    min: 0.0,
+    max: 100.0,
+    step: 0.1,
+    defaultValue: 20.0,
+    currentValue: 20.0,
+    unit: '%',
+  },
+
+  // ==========================================
+  // COMPLEMENTOS DE CONTROLE E PROTEÇÃO
+  // ==========================================
+  P0156: {
+    code: 'P0156',
+    description: 'Corrente de Sobrecarga do Motor (Limite Térmico)',
+    min: 0.1,
+    max: 30.0,
+    step: 0.1,
+    defaultValue: 5.0,
+    currentValue: 5.0,
+    unit: 'A',
+  },
+  P0169: {
+    code: 'P0169',
+    description: 'Frequência de Ressonância (Bypass Mecânico 1)',
+    min: 0.0,
+    max: 300.0,
+    step: 0.1,
+    defaultValue: 0.0,
+    currentValue: 0.0,
+    unit: 'Hz',
+  },
+
+
   // ==========================================
   // GRUPO 3: MODOS DE CONTROLE (P0200 - P0229)
   // ==========================================
@@ -68,7 +127,7 @@ export const INITIAL_PARAMETERS: ParameterMap = {
   P0205: { code: 'P0205', description: 'Parâmetro Inicial Display', min: 1, max: 9, step: 1, defaultValue: 2, currentValue: 2, unit: '' },
   P0206: { code: 'P0206', description: 'Auto-Reset de Falhas', min: 0, max: 1, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
   P0208: { code: 'P0208', description: 'Tensão Nominal Rede CA', min: 200, max: 480, step: 10, defaultValue: 220, currentValue: 220, unit: 'V' },
-  P0217: { code: 'P0217', description: 'Função Sleep / Dormir', min: 0, max: 1, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
+  P0217: { code: 'P0217', description: 'Função Sleep / Dormir', min: 0, max: 300, step: 1, defaultValue: 15, currentValue: 15, unit: 'Hz' },
   P0218: { code: 'P0218', description: 'Tempo Inatividade Sleep', min: 0, max: 999, step: 1, defaultValue: 120, currentValue: 120, unit: 's' },
   P0219: { code: 'P0219', description: 'Frequência Despertar Sleep', min: 0.0, max: 300.0, step: 0.1, defaultValue: 10.0, currentValue: 10.0, unit: 'Hz' },
   P0220: { code: 'P0220', description: 'Seleção Modo Local/Remoto', min: 0, max: 3, step: 1, defaultValue: 2, currentValue: 2, unit: '' },
@@ -111,7 +170,7 @@ export const INITIAL_PARAMETERS: ParameterMap = {
   // GRUPO 5: COMUNICAÇÃO & IHM (P0300 - P0399)
   // ==========================================
   P0308: { code: 'P0308', description: 'Endereço Modbus RTU', min: 1, max: 247, step: 1, defaultValue: 1, currentValue: 1, unit: '' },
-  P0310: { code: 'P0310', description: 'Baud Rate (1=19200)', min: 0, max: 3, step: 1, defaultValue: 1, currentValue: 1, unit: '' },
+  P0310: { code: 'P0310', description: 'Baud Rate (1=19200)', min: 0, max: 3, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
   P0311: { code: 'P0311', description: 'Paridade Serial (1=Par 1Stop)', min: 0, max: 2, step: 1, defaultValue: 1, currentValue: 1, unit: '' },
   P0312: { code: 'P0312', description: 'Protocolo Comunicação', min: 0, max: 2, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
   P0313: { code: 'P0313', description: 'Ação Timeout Comunicação', min: 0, max: 3, step: 1, defaultValue: 0, currentValue: 0, unit: '' },
@@ -196,15 +255,18 @@ export const InverterProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const paramKeys = Object.keys(state.parameters) as ParameterKey[];
   const selectedParameter = state.parameters[paramKeys[state.selectedParamIndex]] || INITIAL_PARAMETERS.P0000;
 
-  let currentDisplayValue = 'rdy';
+ let currentDisplayValue = 'rdy';
   if (state.activeFault) {
-    currentDisplayValue = state.activeFault.code;
+    currentDisplayValue = typeof state.activeFault === 'object' ? state.activeFault.code : state.activeFault;
   } else if (state.ihmMode === 'MONIT') {
-    currentDisplayValue = state.motorStatus === 'RUNNING' ? state.outputFrequency.toFixed(1) : 'rdy';
+    const freq = state.outputFrequency ?? 0;
+    currentDisplayValue = (state.motorStatus === 'RUNNING' || freq > 0) ? freq.toFixed(1) : 'rdy';
   } else if (state.ihmMode === 'PARAM_SELECT') {
     currentDisplayValue = selectedParameter ? selectedParameter.code : 'P0000';
   } else if (state.ihmMode === 'PARAM_EDIT') {
-    currentDisplayValue = selectedParameter ? state.editBuffer.toFixed(selectedParameter.step < 1 ? 1 : 0) : '0';
+    const step = selectedParameter?.step ?? 1;
+    const decimals = step < 1 ? 1 : 0;
+    currentDisplayValue = selectedParameter ? Number(state.editBuffer ?? 0).toFixed(decimals) : '0';
   }
 
   return (

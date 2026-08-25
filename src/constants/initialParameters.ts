@@ -519,7 +519,61 @@ export const INITIAL_PARAMETERS: ParameterMap = {
   },
 
   // ==========================================
-  // GRUPO 3: MODOS DE CONTROLE (P0200 - P0229)
+  // GRUPO 2B: FRENAGEM CC & PROTEÇÃO TÉRMICA (P0150 - P0169)
+  // ==========================================
+  P0150: {
+    code: 'P0150',
+    description: 'Tempo de Duração da Frenagem CC na Parada',
+    min: 0.0,
+    max: 15.0,
+    step: 0.1,
+    defaultValue: 2.0,
+    currentValue: 2.0,
+    unit: 's',
+  },
+  P0151: {
+    code: 'P0151',
+    description: 'Frequência de Início da Frenagem CC',
+    min: 0.0,
+    max: 15.0,
+    step: 0.1,
+    defaultValue: 5.0,
+    currentValue: 5.0,
+    unit: 'Hz',
+  },
+  P0152: {
+    code: 'P0152',
+    description: 'Corrente de Injeção de Frenagem CC',
+    min: 0.0,
+    max: 100.0,
+    step: 0.1,
+    defaultValue: 20.0,
+    currentValue: 20.0,
+    unit: '%',
+  },
+  P0156: {
+    code: 'P0156',
+    description: 'Corrente de Sobrecarga do Motor (Limite Térmico)',
+    min: 0.1,
+    max: 30.0,
+    step: 0.1,
+    defaultValue: 5.0,
+    currentValue: 5.0,
+    unit: 'A',
+  },
+  P0169: {
+    code: 'P0169',
+    description: 'Frequência de Ressonância (Bypass Mecânico 1)',
+    min: 0.0,
+    max: 300.0,
+    step: 0.1,
+    defaultValue: 0.0,
+    currentValue: 0.0,
+    unit: 'Hz',
+  },
+
+  // ==========================================
+  // GRUPO 3: MODOS DE CONTROLE & SLEEP (P0200 - P0229)
   // ==========================================
   P0202: {
     code: 'P0202',
@@ -573,22 +627,22 @@ export const INITIAL_PARAMETERS: ParameterMap = {
   },
   P0217: {
     code: 'P0217',
-    description: 'Habilitação da Função Sleep / Dormir (Economia de Energia)',
-    min: 0,
-    max: 1,
-    step: 1,
-    defaultValue: 0,
-    currentValue: 0,
-    unit: '',
+    description: 'Frequência de Desligamento Automático (Sleep)',
+    min: 0.0,
+    max: 300.0,
+    step: 0.1,
+    defaultValue: 20.0,
+    currentValue: 20.0,
+    unit: 'Hz',
   },
   P0218: {
     code: 'P0218',
     description: 'Tempo de Inatividade para Acionar o Modo Sleep',
-    min: 0,
-    max: 999,
-    step: 1,
-    defaultValue: 120,
-    currentValue: 120,
+    min: 0.0,
+    max: 999.0,
+    step: 0.1,
+    defaultValue: 5.0,
+    currentValue: 5.0,
     unit: 's',
   },
   P0219: {

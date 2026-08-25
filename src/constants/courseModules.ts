@@ -1,293 +1,581 @@
 import { CourseModule } from '../types/tutorial';
 
+// Helper seguro de leitura compatível com qualquer estrutura interna do state
+const getParam = (state: any, code: string): number => {
+  if (!state || !state.parameters) return 0;
+  const item = state.parameters[code];
+  if (item === undefined || item === null) return 0;
+  if (typeof item === 'object' && 'currentValue' in item) {
+    return Number(item.currentValue ?? 0);
+  }
+  return Number(item ?? 0);
+};
+
+// Helper seguro para ler entradas digitais (DI1 a DI4)
+const getDI = (state: any, index: number): boolean => {
+  if (!state) return false;
+  if (Array.isArray(state.digitalInputs)) {
+    return Boolean(state.digitalInputs[index - 1]);
+  }
+  if (state.digitalInputs && typeof state.digitalInputs === 'object') {
+    return Boolean(
+      state.digitalInputs[`DI${index}`] ??
+      state.digitalInputs[`di${index}`] ??
+      state.digitalInputs[String(index)]
+    );
+  }
+  return false;
+};
+
 export const COURSE_MODULES: CourseModule[] = [
+  // =========================================================================
+  // MÓDULO 1: FUNDAMENTOS, IHM E PRIMEIRO ACIONAMENTO
+  // =========================================================================
   {
-    id: 'module_1',
+    id: 'mod-1',
     moduleNumber: 1,
-    title: 'Fundamentos & Parametrização Básica',
-    description: 'Princípios do chaveamento PWM, dados de placa do motor e parametrização inicial pela IHM.',
+    title: 'Fundamentos da IHM e Primeiro Acionamento',
     icon: '⚡',
+    description: 'Navegação pelas teclas da IHM, liberação de acesso aos parâmetros e partida local.',
     lessons: [
       {
-        id: 'lesson_1_1',
-        title: '1.1 O que é um Inversor de Frequência?',
-        type: 'THEORY',
+        id: 'l1-1',
+        title: 'Estrutura da IHM e Senha de Acesso (P0000)',
         durationMin: 5,
-        description: 'Entenda os 3 estágios internos do CFW500: Retificador, Barramento CC e Ponte Inversora IGBT.',
-        theoryData: {
-          title: 'Arquitetura Interna do WEG CFW500',
-          content: [
-            '1. Ponte Retificadora: Converte a tensão alternada da rede (AC 220V/380V) em corrente contínua pulsante.',
-            '2. Link CC (Barramento DC): Capacitores de alta capacidade filtram e estabilizam a tensão contínua em torno de 310Vcc (monofásico 220V) ou 540Vcc (trifásico 380V). Monitorado no parâmetro P0004.',
-            '3. Ponte Inversora IGBT: Seis transistores IGBT chaveiam em alta frequência (modulação PWM) para recriar ondas senoidais com frequência (Hz) e amplitude de tensão (V) controladas.',
-          ],
-          keyTakeaway: 'A rotação síncrona do motor é dada por: Ns = (120 x f) / P. Variando a frequência (f), controlamos diretamente a velocidade do rotor.',
-          diagramInfo: 'Rede AC ➔ [Ponte Retificadora] ➔ [Link CC / P0004] ➔ [Ponte IGBT PWM] ➔ Motor Trifásico',
-        },
-      },
-      {
-        id: 'lesson_1_2',
-        title: '1.2 Dados de Catálogo do Motor (P0400 a P0403)',
         type: 'THEORY',
-        durationMin: 7,
-        description: 'A importância de inserir os dados corretos da placa do motor para a proteção térmica e controle V/F.',
+        description: 'Aprenda como a IHM WEG opera e como desbloquear a edição de parâmetros.',
         theoryData: {
-          title: 'Parametrização do Motor no Inversor',
+          title: 'Proteção por Senha e Modos da IHM',
           content: [
-            'Para que o inversor proteja o motor contra queima e aplique a curva de torque adequada, é obrigatório preencher o grupo de parâmetros do motor:',
-            '• P0400: Tensão Nominal (Ex: 220 V)',
-            '• P0401: Frequência Nominal (Padrão Brasil: 60.0 Hz)',
-            '• P0402: Rotação Nominal (Ex: 1750 RPM para 4 polos)',
-            '• P0403: Corrente Nominal de Placa (Ex: 4.5 A) - Base para a proteção de sobrecarga Ixt.',
+            'A IHM do WEG CFW500 possui 3 modos de operação no display: Modo Monitor (leitura de Hz, A, V), Modo Seleção de Parâmetro (Pxxxx) e Modo Edição (valor piscando).',
+            'Por segurança de fábrica, para alterar qualquer parâmetro de controle é necessário inserir a senha mestra no parâmetro P0000 (valor padrão: 5).',
+            'Pressione PROG para entrar no modo de edição, ajuste com as setas ▲ e ▼ e confirme com PROG.'
           ],
-          keyTakeaway: 'Nunca ligue um motor em carga sem antes conferir se P0403 corresponde exatamente à corrente de placa para a ligação realizada (Estrela/Triângulo).',
-        },
+          diagramInfo: '[DISPLAY MONIT: 0.0Hz] ➔ (PROG) ➔ [P0000] ➔ (PROG) ➔ [EDITAR: 5] ➔ (PROG) ➔ [ACESSO LIBERADO]',
+          keyTakeaway: 'Sempre defina P0000 = 5 antes de tentar alterar qualquer parâmetro operacional.'
+        }
       },
       {
-        id: 'lesson_1_3',
-        title: '1.3 Prática: Senha, Rampas e Partida Local',
-        type: 'PRACTICE',
-        durationMin: 10,
-        description: 'Desbloqueie o acesso a parâmetros (P0000=5), reduza a rampa de aceleração (P0100=2.0s) e dê partida na IHM.',
-        steps: [
-          {
-            id: 'p1_unlock',
-            title: 'Desbloquear Acesso (P0000 = 5)',
-            instruction: 'Acesse o parâmetro P0000 na IHM e altere o valor para 5 para permitir edição.',
-            tip: 'Pressione PROG, confirme em P0000, coloque 5 com a tecla ▲ e pressione PROG para salvar.',
-            isCompleted: (state) => state.parameters.P0000?.currentValue === 5,
-          },
-          {
-            id: 'p1_accel',
-            title: 'Configurar Rampa de Aceleração (P0100 = 2.0 s)',
-            instruction: 'Navegue até o parâmetro P0100 e ajuste o tempo de aceleração para 2.0 s.',
-            tip: 'Com ▲ vá até P0100, pressione PROG, ajuste para 2.0 com ▼ e salve com PROG.',
-            isCompleted: (state) => {
-              const val = state.parameters.P0100?.currentValue;
-              return val !== undefined && val <= 2.1 && val >= 0.1;
-            },
-          },
-          {
-            id: 'p1_run',
-            title: 'Partida em Modo Local pela IHM',
-            instruction: 'Pressione a tecla vermelha "O" para voltar à tela principal e depois clique na tecla verde "I".',
-            tip: 'O status passará para RUN e o motor acelerará suavemente.',
-            isCompleted: (state) => state.motorStatus === 'RUNNING' && state.controlSource === 'LOC',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'module_2',
-    moduleNumber: 2,
-    title: 'Acionamento Remoto por Bornes I/O',
-    description: 'Comando por botoeiras externas a 2 fios, entradas digitais e variação de velocidade por potenciômetro.',
-    icon: '🔌',
-    lessons: [
-      {
-        id: 'lesson_2_1',
-        title: '2.1 Entradas Digitais e Analógicas',
-        type: 'THEORY',
-        durationMin: 6,
-        description: 'Conheça o funcionamento das entradas digitais PNP/NPN (DI1-DI4) e entrada analógica 0-10V (AI1).',
-        theoryData: {
-          title: 'Sinais de Comando na Régua de Bornes',
-          content: [
-            '• Entradas Digitais (DI1 a DI4): Operam com nível lógico alto (+24Vcc). A entrada DI1 vem de fábrica programada para Gira/Para.',
-            '• Entrada Analógica (AI1): Recebe sinal de tensão de 0 a 10 Vcc proporcional à frequência (0V = P0133 Freq. Mínima, 10V = P0134 Freq. Máxima).',
-            '• Seleção Local/Remoto: O parâmetro P0220 define a origem do comando, e P0222 define a fonte de velocidade no modo Remoto (1 = AI1).',
-          ],
-          keyTakeaway: 'Em aplicações industriais, o comando remoto via bornes garante a operação do inversor através de botões no painel da máquina ou saídas a relé do CLP.',
-        },
-      },
-      {
-        id: 'lesson_2_2',
-        title: '2.2 Prática: Parametrização e Controle por Potenciômetro',
-        type: 'PRACTICE',
-        durationMin: 12,
-        description: 'Comande o motor remotamente utilizando a chave DI1 e varie a rotação pelo potenciômetro analógico.',
-        steps: [
-          {
-            id: 'p2_locrem',
-            title: 'Alternar Inversor para Modo Remoto (REM)',
-            instruction: 'Pressione a tecla LOC/REM na IHM para comutar o controle para a régua de bornes.',
-            tip: 'Verifique no display a indicação superior mudar de LOC para REM.',
-            isCompleted: (state) => state.controlSource === 'REM',
-          },
-          {
-            id: 'p2_ref_pot',
-            title: 'Configurar Referência Remota por AI1 (P0222 = 1)',
-            instruction: 'Ajuste o parâmetro P0222 para o valor 1.',
-            tip: 'Acesse P0222 na IHM, pressione PROG, coloque 1 e salve com PROG.',
-            isCompleted: (state) => state.parameters.P0222?.currentValue === 1,
-          },
-          {
-            id: 'p2_start_di1',
-            title: 'Ligar o Motor pela Chave DI1',
-            instruction: 'Na régua de bornes, clique na chave DI1 para comutá-la para a posição ON.',
-            tip: 'O inversor entrará em RUN e iniciará a rotação comandado pelo borne externo.',
-            isCompleted: (state) => state.digitalInputs.di1 === true && state.motorStatus === 'RUNNING',
-          },
-          {
-            id: 'p2_speed_ai1',
-            title: 'Ajustar Potenciômetro AI1 acima de 5V',
-            instruction: 'Arraste o slider da entrada analógica AI1 para uma tensão superior a 5.0 V.',
-            tip: 'Observe a frequência e a velocidade em RPM subirem proporcionalmente à tensão.',
-            isCompleted: (state) => state.ai1Voltage >= 4.8 && state.outputFrequency >= 20.0,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'module_3',
-    moduleNumber: 3,
-    title: 'Multispeed & Diagnóstico de Falhas',
-    description: 'Programação de velocidades pré-fixadas por combinações digitais e procedimento de rearme após falhas.',
-    icon: '🛠️',
-    lessons: [
-      {
-        id: 'lesson_3_1',
-        title: '3.1 Como Funciona a Função Multispeed?',
-        type: 'THEORY',
-        durationMin: 6,
-        description: 'Aprenda a criar até 8 velocidades fixas selecionáveis por combinação binária de entradas digitais.',
-        theoryData: {
-          title: 'Tabela Verdade do Multispeed WEG (P0222 = 6)',
-          content: [
-            'A função Multispeed permite selecionar frequências pré-programadas através das chaves DI2, DI3 e DI4 sem precisar de sinal analógico:',
-            '• DI4=0, DI3=0, DI2=0 ➔ Referência P0124 (Ex: 5.0 Hz)',
-            '• DI4=0, DI3=0, DI2=1 ➔ Referência P0125 (Ex: 10.0 Hz)',
-            '• DI4=0, DI3=1, DI2=0 ➔ Referência P0126 (Ex: 20.0 Hz)',
-            '• DI4=0, DI3=1, DI2=1 ➔ Referência P0127 (Ex: 30.0 Hz)',
-          ],
-          keyTakeaway: 'Muito utilizado em pontes rolantes, esteiras de embalagem com velocidades pré-definidas e prensas.',
-        },
-      },
-      {
-        id: 'lesson_3_2',
-        title: '3.2 Prática: Diagnóstico de Falha e Reset de Fábrica',
-        type: 'PRACTICE',
-        durationMin: 10,
-        description: 'Simule uma falha de sobrecorrente (F006), execute o rearme e teste o reset de fábrica (P0204 = 5).',
-        steps: [
-          {
-            id: 'p3_fault_f006',
-            title: 'Induzir Sobrecarga de Corrente (F006)',
-            instruction: 'No painel de injeção de falhas, clique para simular a falha F006.',
-            tip: 'Observe o inversor desarmar, o relé RL2 acender e o LCD exibir F006 piscante.',
-            isCompleted: (state) => state.activeFault?.code === 'F006',
-          },
-          {
-            id: 'p3_reset_fault',
-            title: 'Efetuar Reset de Falha na IHM',
-            instruction: 'Pressione a tecla vermelha "O" para limpar o código de alarme.',
-            tip: 'O display sairá de F006 e voltará a mostrar rdy.',
-            isCompleted: (state) => state.activeFault === null && state.motorStatus === 'READY',
-          },
-          {
-            id: 'p3_factory_reset',
-            title: 'Carregar Padrão de Fábrica (P0204 = 5)',
-            instruction: 'Acesse o parâmetro P0204, ajuste o valor para 5 e confirme pressionando a tecla PROG.',
-            tip: 'Navegue até P0204, aperte PROG, use ▲ para colocar 5 e confirme no PROG.',
-            isCompleted: (state) => {
-              const wasResetTriggered = !!state.lastFactoryResetTimestamp;
-              const isDefaultParams = state.parameters.P0100?.currentValue === 5.0 && state.parameters.P0101?.currentValue === 5.0;
-              return wasResetTriggered || (state.parameters.P0204?.currentValue === 0 && isDefaultParams);
-            },
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'module_4',
-    moduleNumber: 4,
-    title: 'Automação Industrial: Esteira com Sensores & Sleep Mode',
-    description: 'Projeto completo de controle de velocidade por sensores (15Hz / 50Hz) e desligamento automático por temporização (2 min).',
-    icon: '📦',
-    lessons: [
-      {
-        id: 'lesson_4_1',
-        title: '4.1 Manual do Projeto da Esteira Automatizada',
-        type: 'THEORY',
+        id: 'l1-2',
+        title: 'Prática: Desbloqueio e Partida em Modo Local',
         durationMin: 8,
-        description: 'Diagrama de funcionamento, mapa de entradas digitais e temporizador de economia de energia (Sleep Mode).',
-        theoryData: {
-          title: 'Manual de Engenharia: Automação de Esteira Transportadora',
-          content: [
-            '1. Estado Inicial (DI1 = ON): A esteira liga em velocidade de espera/inspeção a 15.0 Hz (Parâmetro P0124).',
-            '2. Detecção de Produto (Sensor Óptico DI2): Quando uma peça é detectada, o inversor comuta para 50.0 Hz (Parâmetro P0125) para transporte rápido.',
-            '3. Fim de Curso / Descarte (Sensor DI3): Quando a peça atinge o fim de curso, DI2 é liberado e o inversor desacelera de volta para 15.0 Hz.',
-            '4. Função Sleep / Desligamento Automático (2 minutos): O temporizador interno do SoftPLC (P0217/P0218) monitora a inatividade. Se nenhum produto passar por 120s, o inversor desliga a esteira (DI1=OFF) para evitar aquecimento do motor e consumo elétrico desnecessário.',
-          ],
-          keyTakeaway: 'Mapa I/O: DI1 = Liga Esteira | DI2 = Sensor de Entrada (Peça Detectada) | DI3 = Fim de Curso | P0124 = 15Hz | P0125 = 50Hz.',
-          diagramInfo: '[DI1 ON: 15Hz] ➔ [Sensor DI2: Acelera 50Hz] ➔ [Fim de Curso DI3: Retorna 15Hz] ➔ [Timer 120s Inativo: Stop]',
-        },
-      },
-      {
-        id: 'lesson_4_2',
-        title: '4.2 Prática: Parametrização e Teste da Esteira',
         type: 'PRACTICE',
-        durationMin: 15,
-        description: 'Configure P0222=6 (Multispeed), P0124=15Hz, P0125=50Hz e teste a passagem de produtos pelos sensores.',
+        description: 'Desbloqueie o inversor no P0000, garanta o modo Local e acione o motor.',
         steps: [
           {
-            id: 'step_m4_multispeed',
-            title: '1. Selecionar Referência Remota por Multispeed (P0222 = 6)',
-            instruction: 'Acesse o parâmetro P0222 e altere para 6 para ativar a seleção de frequências pré-programadas.',
-            tip: 'Vá em P0222 com ▲, tecle PROG, ajuste para 6 e salve com PROG.',
-            isCompleted: (state) => state.parameters.P0222?.currentValue === 6,
+            id: 's1-1',
+            title: 'Desbloquear Acesso no P0000 (Definir como 5)',
+            instruction: 'Na IHM, aperte PROG em P0000, ajuste o valor para 5 com a seta ▲ e aperte PROG para salvar.',
+            tip: 'O inversor precisa estar com a senha 5 para liberar a parametrização.',
+            isCompleted: (state: any) => getParam(state, 'P0000') === 5 || state.isUnlocked === true
           },
           {
-            id: 'step_m4_speed1',
-            title: '2. Configurar Velocidade Base da Esteira (P0124 = 15.0 Hz)',
-            instruction: 'Ajuste o parâmetro P0124 (Velocidade 1) para 15.0 Hz.',
-            tip: 'Selecione P0124, tecle PROG, coloque 15.0 e salve com PROG.',
-            isCompleted: (state) => Math.abs((state.parameters.P0124?.currentValue ?? 0) - 15.0) <= 0.5,
+            id: 's1-2',
+            title: 'Garantir Modo Local (LOC)',
+            instruction: 'Pressione a tecla LOC/REM se necessário até o LED verde LOC acender no topo da IHM.',
+            tip: 'O inversor só aceita o comando RUN do teclado se estiver em modo LOC.',
+            isCompleted: (state: any) => state.controlSource === 'LOC' || state.isLocal === true
           },
           {
-            id: 'step_m4_speed2',
-            title: '3. Configurar Velocidade Rápida de Transporte (P0125 = 50.0 Hz)',
-            instruction: 'Ajuste o parâmetro P0125 (Velocidade 2) para 50.0 Hz.',
-            tip: 'Selecione P0125, tecle PROG, coloque 50.0 e salve com PROG.',
-            isCompleted: (state) => Math.abs((state.parameters.P0125?.currentValue ?? 0) - 50.0) <= 0.5,
-          },
-          {
-            id: 'step_m4_start',
-            title: '4. Ligar a Esteira em Modo Remoto (DI1 = ON)',
-            instruction: 'Certifique-se de que o inversor está em REM e ligue a chave DI1. O motor deve acelerar até 15 Hz.',
-            tip: 'Pressione LOC/REM se necessário e acione a chave DI1.',
-            isCompleted: (state) =>
-              state.controlSource === 'REM' &&
-              state.digitalInputs.di1 &&
-              state.outputFrequency >= 14.0 &&
-              state.outputFrequency <= 16.0,
-          },
-          {
-            id: 'step_m4_sensor',
-            title: '5. Simular Peça no Sensor de Entrada (DI2 = ON ➔ 50 Hz)',
-            instruction: 'Com DI1 ligado, acione a chave DI2 (Sensor Óptico). A esteira deve acelerar até 50.0 Hz.',
-            tip: 'Clique em DI2 na régua de bornes e observe a aceleração rápida.',
-            isCompleted: (state) =>
-              state.digitalInputs.di1 &&
-              state.digitalInputs.di2 &&
-              state.outputFrequency >= 48.0,
-          },
-          {
-            id: 'step_m4_endstop',
-            title: '6. Fim de Curso: Peça Saiu do Sensor (DI2 = OFF ➔ 15 Hz)',
-            instruction: 'Desative a chave DI2 para simular o produto saindo do sensor. A esteira deve retornar suavemente para 15.0 Hz.',
-            tip: 'Clique em DI2 para desligar e veja a desaceleração para 15 Hz.',
-            isCompleted: (state) =>
-              state.digitalInputs.di1 &&
-              !state.digitalInputs.di2 &&
-              state.outputFrequency >= 14.0 &&
-              state.outputFrequency <= 16.0,
-          },
-        ],
-      },
-    ],
+            id: 's1-3',
+            title: 'Ligar o Motor e Elevar Frequência',
+            instruction: 'Aperte a tecla verde I (RUN) e use a seta ▲ para acelerar o motor acima de 15.0 Hz.',
+            tip: 'Observe o visualizador do motor girando e a frequência de saída subir.',
+            isCompleted: (state: any) => {
+              const freq = state.outputFrequency ?? 0;
+              const target = state.targetFrequency ?? 0;
+              const p121 = getParam(state, 'P0121');
+              const isRunning = state.motorStatus === 'RUNNING' || freq > 0.1 || target > 0.1;
+              return isRunning && (freq >= 15.0 || target >= 15.0 || p121 >= 15.0);
+            }
+          }
+        ]
+      }
+    ]
   },
+
+  // =========================================================================
+  // MÓDULO 2: DADOS DE PLACA DO MOTOR E RAMPAS
+  // =========================================================================
+  {
+    id: 'mod-2',
+    moduleNumber: 2,
+    title: 'Dados do Motor e Rampas de Aceleração/Desaceleração',
+    icon: '⚙️',
+    description: 'Configuração da curva V/F, corrente nominal e tempos de rampa (P0100 e P0101).',
+    lessons: [
+      {
+        id: 'l2-1',
+        title: 'Rampas Lineares de Aceleração e Parada',
+        durationMin: 6,
+        type: 'THEORY',
+        description: 'Compreenda a relação entre inércia da carga, tempo de rampa e corrente de pico.',
+        theoryData: {
+          title: 'Ajuste de Rampas: P0100 (Aceleração) e P0101 (Desaceleração)',
+          content: [
+            'O parâmetro P0100 define o tempo em segundos que o inversor leva para acelerar da frequência zero até 60Hz.',
+            'O parâmetro P0101 define o tempo para desacelerar de 60Hz até a parada completa.',
+            'Rampas muito curtas em cargas pesadas causam sobrecorrente (F070) na aceleração ou sobretensão (F022) na desaceleração.'
+          ],
+          diagramInfo: 'P0100 (0 a 60Hz em T seg) | P0101 (60Hz a 0 em T seg)',
+          keyTakeaway: 'Ajuste P0100 e P0101 de acordo com o peso da carga para evitar disparos térmicos.'
+        }
+      },
+      {
+        id: 'l2-2',
+        title: 'Prática: Parametrizar Rampa Rápida e Rampa Suave',
+        durationMin: 10,
+        type: 'PRACTICE',
+        description: 'Configure P0100 para 3.0s e P0101 para 2.0s e teste o comportamento dinâmico.',
+        steps: [
+          {
+            id: 's2-1',
+            title: 'Ajustar Rampa de Aceleração (P0100 = 3.0s)',
+            instruction: 'Acesse o parâmetro P0100 na IHM, pressione PROG, ajuste para 3.0 segundos e pressione PROG.',
+            tip: 'Pressione PROG em P0100, ajuste para 3.0 com as setas e salve com PROG.',
+            isCompleted: (state: any) => {
+              const val = getParam(state, 'P0100');
+              return val >= 2.8 && val <= 3.2;
+            }
+          },
+          {
+            id: 's2-2',
+            title: 'Ajustar Rampa de Desaceleração (P0101 = 2.0s)',
+            instruction: 'Acesse o parâmetro P0101 na IHM, pressione PROG, configure para 2.0 segundos e pressione PROG.',
+            tip: 'Isso garantirá uma frenagem controlada rápida de 2 segundos.',
+            isCompleted: (state: any) => {
+              const val = getParam(state, 'P0101');
+              return val >= 1.8 && val <= 2.2;
+            }
+          },
+          {
+            id: 's2-3',
+            title: 'Testar Resposta Dinâmica (Ligar e Parar)',
+            instruction: 'Ligue o motor pela tecla I (RUN), aguarde acelerar e em seguida pressione a tecla O (STOP) para validar a frenagem.',
+            tip: 'O inversor desacelerará até 0 Hz em 2 segundos.',
+            isCompleted: (state: any) => (state.motorStatus === 'READY' || state.motorStatus === 'STOPPED') && state.outputFrequency <= 0.5
+          }
+        ]
+      }
+    ]
+  },
+
+  // =========================================================================
+  // MÓDULO 3: ENTRADAS DIGITAIS E MODO REMOTO
+  // =========================================================================
+  {
+    id: 'mod-3',
+    moduleNumber: 3,
+    title: 'Entradas Digitais (DI1 a DI4) e Modo Remoto',
+    icon: '🔌',
+    description: 'Comando por chaves externas de borne com controle de partida e reversão de rotação.',
+    lessons: [
+      {
+        id: 'l3-1',
+        title: 'Comando a 2 Fios (Gira/Para) e Sentido de Giro',
+        durationMin: 6,
+        type: 'THEORY',
+        description: 'Como configurar as funções das entradas digitais P0263 a P0266 e a comutação REMOTO.',
+        theoryData: {
+          title: 'Configuração dos Bornes da Régua de Controle',
+          content: [
+            'O WEG CFW500 possui entradas digitais DI1 a DI4 configuráveis para comandos externos.',
+            'O parâmetro P0263 define a função da entrada digital DI1 (Padrão: 1 = Gira/Para a 2 fios). Quando DI1 recebe 24V (chave fechada), o motor parte; quando abre, o motor desacelera até parar.',
+            'O parâmetro P0264 define a função da entrada digital DI2 (Padrão: 1 = Sentido de Giro Horário/Anti-horário). Com DI2 fechada o motor inverte para REV.',
+            'Para que o inversor responda às chaves DI1 e DI2, o modo de controle deve estar comutado para REMOTO (LED REM aceso).'
+          ],
+          diagramInfo: '[P0000=5] ➔ [LED REM ACESO] ➔ [DI1: ON = PARTIDA] ➔ [DI2: ON = SENTIDO REV]',
+          keyTakeaway: 'Em modo Remoto, os botões I (RUN) e ▲/▼ da IHM ficam inativos para comando, transferindo o controle total para os bornes DI1 e DI2.'
+        }
+      },
+      {
+        id: 'l3-2',
+        title: 'Prática: Ligar e Inverter Rotação pelos Bornes Externos',
+        durationMin: 10,
+        type: 'PRACTICE',
+        description: 'Comute para modo Remoto, acione a partida pela chave DI1 e execute a inversão de giro pela chave DI2.',
+        steps: [
+          {
+            id: 's3-1',
+            title: 'Comutar para Modo Remoto (LED REM Aceso)',
+            instruction: 'Pressione o botão LOC/REM na IHM até o LED verde REM acender no topo da IHM.',
+            tip: 'Isso habilita o circuito a aceitar os comandos vindos das chaves de borne DI1 a DI4.',
+            isCompleted: (state: any) => state.controlSource === 'REM' || state.isLocal === false
+          },
+          {
+            id: 's3-2',
+            title: 'Ligar o Motor pela Chave Externa DI1',
+            instruction: 'Com o inversor em REM, clique na chave DI1 no painel de bornes para fechar o contato (posição ON).',
+            tip: 'Observe o motor acelerar em sentido horário (FWD) até a velocidade de referência.',
+            isCompleted: (state: any) => (state.controlSource === 'REM' || state.isLocal === false) && getDI(state, 1)
+          },
+          {
+            id: 's3-3',
+            title: 'Inverter Sentido de Giro pela Chave Externa DI2',
+            instruction: 'Com a chave DI1 ligada, clique na chave DI2 para fechar o contato e acionar a reversão.',
+            tip: 'O inversor desacelerará até 0 Hz e reacelerará em sentido anti-horário (REV).',
+            isCompleted: (state: any) => (state.controlSource === 'REM' || state.isLocal === false) && getDI(state, 1) && getDI(state, 2)
+          }
+        ]
+      }
+    ]
+  },
+
+  // =========================================================================
+  // MÓDULO 4: VELOCIDADES PRÉ-PROGRAMADAS (MULTISPEED VIA DI2)
+  // =========================================================================
+  {
+    id: 'mod-4',
+    moduleNumber: 4,
+    title: 'Velocidades Fixas Pré-Programadas (Multispeed)',
+    icon: '📊',
+    description: 'Seleção digital de frequências pré-programadas através da comutação da entrada digital DI2.',
+    lessons: [
+      {
+        id: 'l4-1',
+        title: 'Tabela Lógica de Multispeed no CFW500',
+        durationMin: 7,
+        type: 'THEORY',
+        description: 'Entenda como os parâmetros P0124 e P0125 trabalham na seleção de velocidades.',
+        theoryData: {
+          title: 'Controle de Velocidade em Etapas',
+          content: [
+            'A função Multispeed permite selecionar velocidades fixas sem precisar de potenciômetro analógico.',
+            '• DI2 = OFF ➔ Frequência P0124 (Velocidade 1 / Aproximação: Ex: 15.0 Hz)',
+            '• DI2 = ON  ➔ Frequência P0125 (Velocidade 2 / Rápida: Ex: 35.0 Hz)',
+            'Ao comutar a chave DI2, o inversor aplica a rampa suavemente até a nova frequência alvo.'
+          ],
+          diagramInfo: '[DI2: OFF] = P0124 (15.0 Hz) ➔ [DI2: ON] = P0125 (35.0 Hz)',
+          keyTakeaway: 'Ideal para esteiras industriais com velocidade lenta para carregamento e rápida para transporte.'
+        }
+      },
+      {
+        id: 'l4-2',
+        title: 'Prática: Programar e Selecionar Velocidades por DI2',
+        durationMin: 12,
+        type: 'PRACTICE',
+        description: 'Configure P0124=15Hz, P0125=35Hz e alterne a velocidade pela chave digital DI2.',
+        steps: [
+          {
+            id: 's4-1',
+            title: 'Ajustar Frequência Multispeed 1 (P0124 = 15Hz)',
+            instruction: 'Acesse o parâmetro P0124 na IHM e configure o valor para 15.0 Hz.',
+            tip: 'Esta será a primeira velocidade padrão do motor.',
+            isCompleted: (state: any) => {
+              const val = getParam(state, 'P0124');
+              return val >= 14.0 && val <= 16.0;
+            }
+          },
+          {
+            id: 's4-2',
+            title: 'Ajustar Frequência Multispeed 2 (P0125 = 35Hz)',
+            instruction: 'Acesse o parâmetro P0125 na IHM e configure o valor para 35.0 Hz.',
+            tip: 'Esta será a segunda velocidade (mais rápida).',
+            isCompleted: (state: any) => {
+              const val = getParam(state, 'P0125');
+              return val >= 34.0 && val <= 36.0;
+            }
+          },
+          {
+            id: 's4-3',
+            title: 'Ligar em Modo Remoto e Acionar DI3',
+            instruction: 'Comute para REM, ligue a chave DI1 para partir e acione a chave DI3 para comutar a rotação para 35.0 Hz.',
+            tip: 'Observe no display e no motor a velocidade subir suavemente pela rampa.',
+            isCompleted: (state: any) =>
+              (state.controlSource === 'REM' || state.isLocal === false) &&
+              getDI(state, 1) &&
+              getDI(state, 2)
+          }
+        ]
+      }
+    ]
+  },
+
+  // =========================================================================
+  // MÓDULO 5: ENTRADA ANALÓGICA E RAMPAS EM S
+  // =========================================================================
+  {
+    id: 'mod-5',
+    moduleNumber: 5,
+    title: 'Entrada Analógica (0-10V) e Rampa em "S"',
+    icon: '🎛️',
+    description: 'Controle contínuo de rotação via sinal analógico e curvas suaves de aceleração sem trancos.',
+    lessons: [
+      {
+        id: 'l5-1',
+        title: 'Entrada Analógica AI1 e Rampa em S',
+        durationMin: 6,
+        type: 'THEORY',
+        description: 'Dimensionamento do sinal analógico e suavização de esforços mecânicos.',
+        theoryData: {
+          title: 'Potenciômetro e Suavização de Cargas Críticas',
+          content: [
+            'A entrada analógica AI1 lê um sinal de 0 a 10V (ou 4 a 20mA).',
+            '0V corresponde a 0.0 Hz e 10V corresponde à frequência máxima programada (P0134).',
+            'A rampa em "S" insere uma curvatura suave no início e fim das acelerações, evitando trancos em esteiras com garrafas e elevadores de carga.'
+          ],
+          diagramInfo: '0V (0 Hz) ➔ 5V (30 Hz) ➔ 10V (60 Hz) com curva amortecida em "S"',
+          keyTakeaway: 'A rampa em S protege correntes, correias e caixas redutoras contra choque mecânico.'
+        }
+      },
+      {
+        id: 'l5-2',
+        title: 'Prática: Variar Velocidade pelo Potenciômetro Analógico',
+        durationMin: 8,
+        type: 'PRACTICE',
+        description: 'Defina a referência remota para analógica (P0222 = 1) e acelere o motor via potenciômetro.',
+        steps: [
+          {
+            id: 's5-1',
+            title: 'Configurar Referência Remota via AI1 (P0222 = 1)',
+            instruction: 'Acesse o parâmetro P0222 e ajuste para 1 (Referência Remota via Entrada Analógica AI1).',
+            tip: 'Padrão WEG para controle por potenciômetro externo.',
+            isCompleted: (state: any) => getParam(state, 'P0222') === 1 || getParam(state, 'P0222') === 0
+          },
+          {
+            id: 's5-2',
+            title: 'Ligar em Modo Remoto (DI1=ON)',
+            instruction: 'Comute para REM e feche a chave DI1 para habilitar o acionamento do motor.',
+            tip: 'O motor começará a responder proporcionalmente ao potenciômetro.',
+            isCompleted: (state: any) => getDI(state, 1) && (state.motorStatus === 'RUNNING' || state.outputFrequency > 0.5)
+          },
+          {
+            id: 's5-3',
+            title: 'Ajustar Potenciômetro para mais de 40 Hz',
+            instruction: 'Mova o cursor analógico para cima até atingir mais de 40.0 Hz de rotação.',
+            tip: 'Veja o tacômetro e a rotação do motor aumentarem em tempo real.',
+            isCompleted: (state: any) => state.outputFrequency >= 40.0
+          }
+        ]
+      }
+    ]
+  },
+
+  // =========================================================================
+  // MÓDULO 6: FUNÇÃO SLEEP (MODO DORMIR)
+  // =========================================================================
+  {
+    id: 'mod-6',
+    moduleNumber: 6,
+    title: 'Função Sleep / Modo Dormir (P0217 e P0218)',
+    icon: '💤',
+    description: 'Desligamento automático inteligente para sistemas de bombeamento e economia de energia.',
+    lessons: [
+      {
+        id: 'l6-1',
+        title: 'Princípio do Modo Sleep para Economia de Energia',
+        durationMin: 6,
+        type: 'THEORY',
+        description: 'Entenda como o inversor suspende o motor quando a demanda cai abaixo do limite.',
+        theoryData: {
+          title: 'Automação de Bombas de Pressurização',
+          content: [
+            'Em sistemas de bombeamento predial ou industrial com válvulas fechadas, o motor não precisa continuar girando em velocidade mínima.',
+            'O parâmetro P0217 define a frequência de dormir (Sleep Threshold). Se a rotação cair abaixo de P0217 por um tempo maior que P0218 (Sleep Delay), o inversor suspende o motor.',
+            'Assim que a demanda volta a subir, o inversor acorda automaticamente (Wake-up).'
+          ],
+          diagramInfo: 'Referência < P0217 durante P0218 seg ➔ Desliga Motor (0Hz) ➔ Demanda sobe ➔ Religa',
+          keyTakeaway: 'Economiza eletricidade e evita o superaquecimento do fluido no interior da bomba.'
+        }
+      },
+      {
+        id: 'l6-2',
+        title: 'Prática: Parametrizar Limiar de Dormir (P0217 = 20Hz)',
+        durationMin: 8,
+        type: 'PRACTICE',
+        description: 'Configure P0217 para 20 Hz e o atraso P0218 para 5 segundos na IHM.',
+        steps: [
+          {
+            id: 's6-1',
+            title: 'Ajustar Frequência de Sleep (P0217 = 20Hz)',
+            instruction: 'Acesse o parâmetro P0217 na IHM e configure o valor para 20.0 Hz.',
+            tip: 'Abaixo de 20 Hz, o inversor iniciará a contagem regressiva para repouso.',
+            isCompleted: (state: any) => {
+              const val = getParam(state, 'P0217');
+              return val >= 18.0 && val <= 22.0;
+            }
+          },
+          {
+            id: 's6-2',
+            title: 'Definir Tempo de Atraso de Sleep (P0218 = 5.0s)',
+            instruction: 'Acesse o parâmetro P0218 e configure para 5.0 segundos.',
+            tip: 'Tempo de filtro para evitar desligamentos falsos por oscilações rápidas de pressão.',
+            isCompleted: (state: any) => {
+              const val = getParam(state, 'P0218');
+              return val >= 4.0 && val <= 6.0;
+            }
+          }
+        ]
+      }
+    ]
+  },
+
+  // =========================================================================
+  // MÓDULO 7: FRENAGEM E PARADA
+  // =========================================================================
+  {
+    id: 'mod-7',
+    moduleNumber: 7,
+    title: 'Frenagem por Injeção de Corrente Contínua (CC)',
+    icon: '🛑',
+    description: 'Parada ultrarrápida e travamento de eixo magnético em máquinas de alta inércia.',
+    lessons: [
+      {
+        id: 'l7-1',
+        title: 'Teoria da Frenagem CC (P0150 e P0151)',
+        durationMin: 5,
+        type: 'THEORY',
+        description: 'Como a corrente contínua cria um torque de travamento no estator.',
+        theoryData: {
+          title: 'Frenagem Elétrica sem Resistores Externos',
+          content: [
+            'O inversor injeta corrente contínua nas bobinas do estator para criar um campo magnético estático que trava o rotor.',
+            'O parâmetro P0150 define o tempo de duração da injeção CC na parada.',
+            'O parâmetro P0151 define a frequência na qual a frenagem CC começa a atuar (normalmente abaixo de 5 Hz).'
+          ],
+          diagramInfo: 'Desacelera normal ➔ Atinge P0151 (5Hz) ➔ Injeta CC por P0150 seg ➔ Eixo Travado',
+          keyTakeaway: 'Ideal para serras, exaustores e centrífugas industriais que precisam parar sem rodar soltas.'
+        }
+      },
+      {
+        id: 'l7-2',
+        title: 'Prática: Programar Injeção CC na Parada',
+        durationMin: 8,
+        type: 'PRACTICE',
+        description: 'Configure P0150 para 2.0s e P0151 para 5.0Hz na IHM.',
+        steps: [
+          {
+            id: 's7-1',
+            title: 'Ajustar Duração da Frenagem CC (P0150 = 2.0s)',
+            instruction: 'Acesse o parâmetro P0150 e defina o tempo em 2.0 segundos.',
+            tip: 'Tempo em que o campo magnético de parada atuará.',
+            isCompleted: (state: any) => {
+              const val = getParam(state, 'P0150');
+              return val >= 1.5 && val <= 2.5;
+            }
+          },
+          {
+            id: 's7-2',
+            title: 'Ajustar Frequência de Início CC (P0151 = 5.0Hz)',
+            instruction: 'Acesse o parâmetro P0151 e configure para 5.0 Hz.',
+            tip: 'Abaixo de 5 Hz, a rampa cessa e o freio CC atua.',
+            isCompleted: (state: any) => {
+              const val = getParam(state, 'P0151');
+              return val >= 4.0 && val <= 6.0;
+            }
+          }
+        ]
+      }
+    ]
+  },
+
+  // =========================================================================
+  // MÓDULO 8: DIAGNÓSTICO DE FALHAS E RESET
+  // =========================================================================
+  {
+    id: 'mod-8',
+    moduleNumber: 8,
+    title: 'Diagnóstico de Falhas (F070) e Reset Operacional',
+    icon: '🚨',
+    description: 'Identificação de falha de sobrecorrente e procedimento seguro de rearme.',
+    lessons: [
+      {
+        id: 'l8-1',
+        title: 'Principais Códigos de Falha do CFW500',
+        durationMin: 7,
+        type: 'THEORY',
+        description: 'Tabela de códigos de alarme e falhas do inversor.',
+        theoryData: {
+          title: 'Guia de Diagnóstico de Campo',
+          content: [
+            '• F006: Subtensão no Link CC (tensão da rede caiu).',
+            '• F070: Sobrecorrente / Curto-circuito na saída do inversor.',
+            '• F072: Sobrecarga térmica no motor (Ixt).',
+            '• F021: Sobretensão no barramento CC.',
+            'O parâmetro P0014 armazena o histórico da última falha ocorrida.'
+          ],
+          diagramInfo: 'FALHA ATIVA ➔ Display pisca [F0xx] ➔ Inspecionar Carga ➔ Tecla STOP (O) para Reset',
+          keyTakeaway: 'Sempre identifique e elimine a causa raiz antes de resetar falhas repetitivas.'
+        }
+      },
+      {
+        id: 'l8-2',
+        title: 'Prática: Simular Falha F070 e Efetuar Reset',
+        durationMin: 10,
+        type: 'PRACTICE',
+        description: 'Injete a falha F070 pelo painel de testes e efetue o rearme pela tecla STOP/RESET.',
+        steps: [
+          {
+            id: 's8-1',
+            title: 'Verificar Disparo de Falha (F070)',
+            instruction: 'No painel de Falhas / Injeção, clique em "Injetar F070 (Sobrecorrente)".',
+            tip: 'O LED FLT acenderá e o display começará a piscar o código F070.',
+            isCompleted: (state: any) => state.motorStatus === 'FAULT' || Boolean(state.activeFault)
+          },
+          {
+            id: 's8-2',
+            title: 'Executar Reset Seguro pela IHM',
+            instruction: 'Pressione a tecla vermelha O (STOP/RESET) na IHM para rearmar o inversor.',
+            tip: 'O inversor voltará ao estado PRONTO (READY) com 0.0 Hz.',
+            isCompleted: (state: any) => (state.motorStatus === 'READY' || state.motorStatus === 'STOPPED') && !state.activeFault
+          }
+        ]
+      }
+    ]
+  },
+
+  // =========================================================================
+  // MÓDULO 9: COMUNICAÇÃO INDUSTRIAL MODBUS RTU
+  // =========================================================================
+  {
+    id: 'mod-9',
+    moduleNumber: 9,
+    title: 'Rede e Comunicação Industrial (Modbus RTU / RS485)',
+    icon: '🌐',
+    description: 'Integração do CFW500 com PLCs, CLPs industriais e sistemas SCADA.',
+    lessons: [
+      {
+        id: 'l9-1',
+        title: 'Arquitetura de Comunicação Serial RS485',
+        durationMin: 6,
+        type: 'THEORY',
+        description: 'Endereçamento de rede, baud rate e registradores Modbus.',
+        theoryData: {
+          title: 'Parâmetros de Rede: P0308 e P0310',
+          content: [
+            'O WEG CFW500 possui porta serial RS485 nativa com protocolo Modbus RTU.',
+            '• P0308: Endereço do inversor na rede (1 a 247).',
+            '• P0310: Taxa de transmissão serial (1 = 19200 bps).',
+            '• P0311: Configuração de paridade da rede serial.',
+            'Via rede, o PLC escreve na Word de Controle (Registrador 683) para comandar o motor.'
+          ],
+          diagramInfo: 'CLP Mestre (RS485) ➔ Inversor Escravo 1 (P0308=1) ➔ Inversor Escravo 2 (P0308=2)',
+          keyTakeaway: 'Utilize sempre cabo blindado de par trançado com resistor de terminação de 120 ohms nas pontas.'
+        }
+      },
+      {
+        id: 'l9-2',
+        title: 'Prática: Configurar Endereço de Rede Modbus (P0308 = 2)',
+        durationMin: 8,
+        type: 'PRACTICE',
+        description: 'Parametrize o endereço do inversor na rede RS485 para controle remoto via CLP.',
+        steps: [
+          {
+            id: 's9-1',
+            title: 'Definir Endereço de Rede (P0308 = 2)',
+            instruction: 'Acesse o parâmetro P0308 na IHM e configure o endereço para 2.',
+            tip: 'Isso identifica este inversor na rede de automação.',
+            isCompleted: (state: any) => getParam(state, 'P0308') === 2
+          },
+          {
+            id: 's9-2',
+            title: 'Verificar Taxa de Transmissão (P0310 = 1)',
+            instruction: 'Acesse P0310 e certifique-se de que está ajustado em 1 (19200 bps).',
+            tip: 'Velocidade padrão com excelente imunidade a ruídos eletromagnéticos.',
+            isCompleted: (state: any) => getParam(state, 'P0310') === 1
+          }
+        ]
+      }
+    ]
+  }
 ];

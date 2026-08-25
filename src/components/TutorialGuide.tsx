@@ -22,8 +22,27 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
   selectedLesson,
   setSelectedLesson,
 }) => {
-  const { state } = useInverter();
-  const [progress, setProgress] = useState<UserProgressData>(getUserProgress());
+  const { state, dispatch } = useInverter();
+  const [progress, setProgress] = useState<UserProgressData>(() => getUserProgress());
+
+  // Função centralizada e segura de Reset de Fábrica
+  const triggerFactoryReset = () => {
+    if (!dispatch) return;
+    try {
+      dispatch({ type: 'RESET_FACTORY_DEFAULTS' } as any);
+    } catch {
+      try {
+        dispatch({ type: 'RESET_DEFAULTS' } as any);
+      } catch {
+        // Fallback silencioso sem interromper o fluxo
+      }
+    }
+  };
+
+  // 1. Reseta o inversor SEMPRE que o aluno mudar de lição ou módulo
+  useEffect(() => {
+    triggerFactoryReset();
+  }, [selectedLesson.id]);
 
   useEffect(() => {
     const handleProgressUpdate = () => {
@@ -33,35 +52,39 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     return () => window.removeEventListener('course_progress_updated', handleProgressUpdate);
   }, []);
 
-  // Monitora e grava cada passo concluído permanentemente sem perder o OK
+  // Monitora a conclusão dos passos práticos
   useEffect(() => {
     if (selectedLesson.type === 'PRACTICE' && selectedLesson.steps) {
       const currentSavedSteps = progress.completedSteps[selectedLesson.id] || [];
 
       selectedLesson.steps.forEach((step) => {
         if (!currentSavedSteps.includes(step.id)) {
-          const isDoneNow = step.isCompleted(state);
-          if (isDoneNow) {
+          if (step.isCompleted(state)) {
             markStepCompleted(selectedLesson.id, step.id);
           }
         }
       });
 
-      // Se todos os passos estiverem gravados como concluídos
-      const updatedSavedSteps = getUserProgress().completedSteps[selectedLesson.id] || [];
-      const allStepsFinished = selectedLesson.steps.every((s) => updatedSavedSteps.includes(s.id));
+      const updatedProgress = getUserProgress();
+      const updatedSteps = updatedProgress.completedSteps[selectedLesson.id] || [];
+      const allDone = selectedLesson.steps.every((s) => updatedSteps.includes(s.id));
 
-      if (allStepsFinished && !progress.completedLessons.includes(selectedLesson.id)) {
+      if (allDone && !updatedProgress.completedLessons.includes(selectedLesson.id)) {
         markLessonCompleted(selectedLesson.id);
       }
     }
   }, [state, selectedLesson, progress.completedSteps, progress.completedLessons]);
 
+  // 2. Conclui a teoria e limpa o inversor
   const handleCompleteTheory = () => {
     markLessonCompleted(selectedLesson.id);
+    triggerFactoryReset();
   };
 
+  // 3. Avança para a próxima lição garantindo que a bancada inicie limpa
   const handleNextLesson = () => {
+    triggerFactoryReset();
+
     let foundCurrent = false;
     for (let mIdx = 0; mIdx < COURSE_MODULES.length; mIdx++) {
       const mod = COURSE_MODULES[mIdx];
@@ -85,6 +108,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 
   return (
     <div style={containerStyle}>
+      {/* SELETOR DE MÓDULOS */}
       <div style={moduleListHeaderStyle}>
         <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#90a4ae' }}>
           Trilha de Capacitação Técnica:
@@ -108,9 +132,10 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                 }}
                 onClick={() => {
                   if (unlocked) {
-                    const firstUnlocked = mod.lessons.find((_, lIdx) =>
-                      isLessonUnlocked(mIdx, lIdx, progress)
-                    ) || mod.lessons[0];
+                    triggerFactoryReset();
+                    const firstUnlocked =
+                      mod.lessons.find((_, lIdx) => isLessonUnlocked(mIdx, lIdx, progress)) ||
+                      mod.lessons[0];
                     setSelectedLesson(firstUnlocked);
                   }
                 }}
@@ -144,6 +169,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
       </div>
 
       <div style={contentGridStyle}>
+        {/* LISTA DE LIÇÕES DO MÓDULO ATIVO */}
         <div style={lessonSidebarStyle}>
           <strong style={{ fontSize: '11px', color: '#81d4fa', marginBottom: '8px', display: 'block' }}>
             Lições do Módulo:
@@ -162,7 +188,10 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                   <button
                     key={lesson.id}
                     disabled={!isUnlocked}
-                    onClick={() => setSelectedLesson(lesson)}
+                    onClick={() => {
+                      triggerFactoryReset();
+                      setSelectedLesson(lesson);
+                    }}
                     style={{
                       ...lessonItemBtnStyle,
                       background: isCurrent ? '#0288d1' : isUnlocked ? '#1f2937' : '#111418',
@@ -182,6 +211,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
           </div>
         </div>
 
+        {/* ÁREA PRINCIPAL DA LIÇÃO */}
         <div style={lessonMainAreaStyle}>
           <div style={lessonHeaderStyle}>
             <div>
@@ -191,17 +221,30 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                 </span>
                 <span style={{ fontSize: '10px', color: '#90a4ae' }}>⏱️ {selectedLesson.durationMin} min</span>
               </div>
-              <h2 style={{ fontSize: '16px', color: '#fff', margin: '6px 0 2px 0' }}>{selectedLesson.title}</h2>
+              <h2 style={{ fontSize: '15px', color: '#fff', margin: '6px 0 2px 0' }}>{selectedLesson.title}</h2>
               <p style={{ fontSize: '11px', color: '#b0bec5', margin: 0 }}>{selectedLesson.description}</p>
             </div>
 
-            {isCurrentLessonCompleted ? (
-              <span style={completedBadgeStyle}>✓ LIÇÃO CONCLUÍDA</span>
-            ) : (
-              <span style={inProgressBadgeStyle}>EM ANDAMENTO</span>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {selectedLesson.type === 'PRACTICE' && (
+                <button
+                  onClick={triggerFactoryReset}
+                  style={btnResetFactoryStyle}
+                  title="Restaura os parâmetros do inversor para o padrão de fábrica"
+                >
+                  🔄 Resetar Inversor
+                </button>
+              )}
+
+              {isCurrentLessonCompleted ? (
+                <span style={completedBadgeStyle}>✓ CONCLUÍDA</span>
+              ) : (
+                <span style={inProgressBadgeStyle}>EM ANDAMENTO</span>
+              )}
+            </div>
           </div>
 
+          {/* CONTEÚDO TEÓRICO */}
           {selectedLesson.type === 'THEORY' && selectedLesson.theoryData && (
             <div style={theoryContainerStyle}>
               <h3 style={{ fontSize: '13px', color: '#81d4fa', marginBottom: '8px' }}>
@@ -209,7 +252,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {selectedLesson.theoryData.content.map((par, i) => (
-                  <p key={i} style={{ fontSize: '12px', color: '#cfd8dc', lineHeight: '1.5', margin: 0 }}>
+                  <p key={i} style={{ fontSize: '11px', color: '#cfd8dc', lineHeight: '1.5', margin: 0 }}>
                     {par}
                   </p>
                 ))}
@@ -234,23 +277,24 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px', gap: '8px' }}>
                 {!isCurrentLessonCompleted ? (
                   <button onClick={handleCompleteTheory} style={btnOkTheoryStyle}>
-                    ✓ Concluir Leitura & Validar Teoria (OK)
+                    ✓ Concluir Leitura (OK)
                   </button>
                 ) : (
                   <button onClick={handleNextLesson} style={btnNextLessonStyle}>
-                    Avançar para Próxima Lição ➔
+                    Próxima Lição ➔
                   </button>
                 )}
               </div>
             </div>
           )}
 
+          {/* CONTEÚDO PRÁTICO */}
           {selectedLesson.type === 'PRACTICE' && selectedLesson.steps && (
             <div style={practiceContainerStyle}>
-              <strong style={{ fontSize: '12px', color: '#81d4fa', display: 'block', marginBottom: '8px' }}>
-                Checklist Prático no Painel e IHM:
+              <strong style={{ fontSize: '11px', color: '#81d4fa', display: 'block', marginBottom: '6px' }}>
+                Checklist Prático no Painel e IHM ao lado:
               </strong>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {selectedLesson.steps.map((step, idx) => {
                   const stepDone = currentSavedSteps.includes(step.id) || step.isCompleted(state);
 
@@ -265,32 +309,27 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '14px' }}>{stepDone ? '✅' : '⭕'}</span>
-                          <strong style={{ fontSize: '12px', color: stepDone ? '#00e676' : '#fff' }}>
+                          <span style={{ fontSize: '13px' }}>{stepDone ? '✅' : '⭕'}</span>
+                          <strong style={{ fontSize: '11px', color: stepDone ? '#00e676' : '#fff' }}>
                             {idx + 1}. {step.title}
                           </strong>
                         </div>
-                        <span style={{ fontSize: '10px', color: stepDone ? '#00e676' : '#ffb74d', fontWeight: 'bold' }}>
-                          {stepDone ? 'OK (Validado)' : 'Pendente'}
+                        <span style={{ fontSize: '9px', color: stepDone ? '#00e676' : '#ffb74d', fontWeight: 'bold' }}>
+                          {stepDone ? 'OK' : 'Pendente'}
                         </span>
                       </div>
-                      <p style={{ fontSize: '11px', color: '#b0bec5', margin: '4px 0 0 24px' }}>
+                      <p style={{ fontSize: '10px', color: '#b0bec5', margin: '3px 0 0 22px' }}>
                         {step.instruction}
                       </p>
-                      {step.tip && (
-                        <div style={{ fontSize: '10px', color: '#81d4fa', margin: '4px 0 0 24px' }}>
-                          💡 <em>Dica: {step.tip}</em>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
               </div>
 
               {isCurrentLessonCompleted && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
                   <button onClick={handleNextLesson} style={btnNextLessonStyle}>
-                    🎉 Tarefa 100% Concluída! Próxima Lição ➔
+                    🎉 Tarefa Concluída! Próxima Lição ➔
                   </button>
                 </div>
               )}
@@ -306,10 +345,10 @@ const containerStyle: React.CSSProperties = {
   background: '#11151a',
   border: '1px solid #252e3b',
   borderRadius: '12px',
-  padding: '14px',
+  padding: '12px',
   display: 'flex',
   flexDirection: 'column',
-  gap: '12px',
+  gap: '10px',
   width: '100%',
   boxSizing: 'border-box',
 };
@@ -322,22 +361,22 @@ const moduleListHeaderStyle: React.CSSProperties = {
 
 const modulesTabsRowStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-  gap: '8px',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+  gap: '6px',
 };
 
 const moduleCardStyle: React.CSSProperties = {
   borderRadius: '8px',
-  padding: '8px 10px',
+  padding: '6px 8px',
   border: '1px solid',
   transition: 'all 0.2s ease',
 };
 
 const progressTrackStyle: React.CSSProperties = {
-  height: '4px',
+  height: '3px',
   background: '#252d38',
   borderRadius: '2px',
-  marginTop: '6px',
+  marginTop: '4px',
   overflow: 'hidden',
 };
 
@@ -348,35 +387,35 @@ const progressBarFillStyle: React.CSSProperties = {
 
 const contentGridStyle: React.CSSProperties = {
   display: 'flex',
-  flexWrap: 'wrap',
-  gap: '12px',
+  flexDirection: 'column',
+  gap: '10px',
 };
 
 const lessonSidebarStyle: React.CSSProperties = {
-  flex: '1 1 220px',
   background: '#0d1117',
   border: '1px solid #21262d',
   borderRadius: '8px',
-  padding: '10px',
+  padding: '8px',
   boxSizing: 'border-box',
 };
 
 const lessonItemBtnStyle: React.CSSProperties = {
-  padding: '8px 10px',
+  padding: '6px 8px',
   borderRadius: '6px',
   border: '1px solid',
   fontSize: '11px',
   fontWeight: 'bold',
   transition: 'all 0.2s ease',
   boxSizing: 'border-box',
+  width: '100%',
+  textAlign: 'left',
 };
 
 const lessonMainAreaStyle: React.CSSProperties = {
-  flex: '3 1 380px',
   background: '#161b22',
   border: '1px solid #30363d',
   borderRadius: '8px',
-  padding: '14px',
+  padding: '12px',
   boxSizing: 'border-box',
 };
 
@@ -385,8 +424,8 @@ const lessonHeaderStyle: React.CSSProperties = {
   justifyContent: 'space-between',
   alignItems: 'flex-start',
   borderBottom: '1px solid #21262d',
-  paddingBottom: '10px',
-  marginBottom: '10px',
+  paddingBottom: '8px',
+  marginBottom: '8px',
 };
 
 const typeBadgeStyle: React.CSSProperties = {
@@ -398,13 +437,24 @@ const typeBadgeStyle: React.CSSProperties = {
   fontWeight: 'bold',
 };
 
+const btnResetFactoryStyle: React.CSSProperties = {
+  background: '#263238',
+  border: '1px solid #455a64',
+  color: '#81d4fa',
+  borderRadius: '6px',
+  padding: '3px 8px',
+  fontSize: '10px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+};
+
 const completedBadgeStyle: React.CSSProperties = {
   background: 'rgba(0, 230, 118, 0.15)',
   border: '1px solid #00e676',
   color: '#00e676',
-  padding: '4px 8px',
-  borderRadius: '6px',
-  fontSize: '10px',
+  padding: '3px 6px',
+  borderRadius: '4px',
+  fontSize: '9px',
   fontWeight: 'bold',
 };
 
@@ -412,42 +462,42 @@ const inProgressBadgeStyle: React.CSSProperties = {
   background: 'rgba(255, 179, 0, 0.15)',
   border: '1px solid #ffb300',
   color: '#ffb300',
-  padding: '4px 8px',
-  borderRadius: '6px',
-  fontSize: '10px',
+  padding: '3px 6px',
+  borderRadius: '4px',
+  fontSize: '9px',
   fontWeight: 'bold',
 };
 
 const theoryContainerStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: '8px',
+  gap: '6px',
 };
 
 const diagramBoxStyle: React.CSSProperties = {
   background: '#0d1117',
   border: '1px dashed #30363d',
   borderRadius: '6px',
-  padding: '8px 10px',
+  padding: '6px 8px',
   marginTop: '4px',
 };
 
 const keyTakeawayBoxStyle: React.CSSProperties = {
   background: '#1f2937',
-  borderLeft: '4px solid #00e676',
-  padding: '8px 10px',
-  borderRadius: '0 6px 6px 0',
-  marginTop: '6px',
+  borderLeft: '3px solid #00e676',
+  padding: '6px 8px',
+  borderRadius: '0 4px 4px 0',
+  marginTop: '4px',
 };
 
 const practiceContainerStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: '8px',
+  gap: '6px',
 };
 
 const stepItemStyle: React.CSSProperties = {
-  padding: '8px 10px',
+  padding: '6px 8px',
   borderRadius: '6px',
   border: '1px solid',
   transition: 'all 0.2s ease',
@@ -458,7 +508,7 @@ const btnOkTheoryStyle: React.CSSProperties = {
   color: '#000',
   border: 'none',
   borderRadius: '6px',
-  padding: '8px 14px',
+  padding: '6px 12px',
   fontSize: '11px',
   fontWeight: 'bold',
   cursor: 'pointer',
@@ -469,7 +519,7 @@ const btnNextLessonStyle: React.CSSProperties = {
   color: '#fff',
   border: 'none',
   borderRadius: '6px',
-  padding: '8px 14px',
+  padding: '6px 12px',
   fontSize: '11px',
   fontWeight: 'bold',
   cursor: 'pointer',

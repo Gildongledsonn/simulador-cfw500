@@ -42,12 +42,12 @@ export const inverterReducer = (state: InverterState, action: InverterAction): I
     case 'PRESS_PROG': {
       if (state.activeFault) return state;
 
-      // 1. Se estiver no modo de monitoramento (MONIT), vai para a seleção de parâmetros
+      // 1. Modo de monitoramento (MONIT) -> vai para seleção de parâmetros
       if (state.ihmMode === 'MONIT') {
         return { ...state, ihmMode: 'PARAM_SELECT' };
       }
 
-      // 2. Se estiver selecionando o parâmetro, abre para edição do valor
+      // 2. Modo Seleção de Parâmetros -> abre edição de valor
       if (state.ihmMode === 'PARAM_SELECT') {
         if (!currentParam || currentParam.readOnly) return state;
         return {
@@ -57,9 +57,9 @@ export const inverterReducer = (state: InverterState, action: InverterAction): I
         };
       }
 
-      // 3. Se estiver editando, grava na memória
+      // 3. Modo Edição -> grava na memória
       if (state.ihmMode === 'PARAM_EDIT') {
-        // Reset de Fábrica: P0204 configurado para 5
+        // Reset de Fábrica: P0204 = 5
         if (currentKey === 'P0204' && Math.round(state.editBuffer) === 5) {
           const resetParams = executeFactoryReset(state.parameters);
           return {
@@ -96,26 +96,86 @@ export const inverterReducer = (state: InverterState, action: InverterAction): I
     }
 
     case 'PRESS_UP': {
+      // 1. MODO MONITOR: incrementa a velocidade P0121 em modo Local
+      if (state.ihmMode === 'MONIT') {
+        if (state.controlSource === 'LOC' && !state.activeFault) {
+          const currentHz = state.parameters.P0121?.currentValue ?? state.outputFrequency ?? 0;
+          const maxHz = state.parameters.P0134?.currentValue ?? 60.0;
+          const nextHz = Math.min(maxHz, Number((currentHz + 5.0).toFixed(1)));
+
+          return {
+            ...state,
+            parameters: {
+              ...state.parameters,
+              P0121: {
+                ...state.parameters.P0121,
+                currentValue: nextHz,
+              },
+            },
+          };
+        }
+        return state;
+      }
+
+      // 2. MODO SELEÇÃO: navega para o próximo Pxxxx
       if (state.ihmMode === 'PARAM_SELECT') {
         const nextIndex = (state.selectedParamIndex + 1) % paramKeys.length;
         return { ...state, selectedParamIndex: nextIndex };
       }
-      if (state.ihmMode === 'PARAM_EDIT' && currentParam) {
-        const nextVal = Math.min(currentParam.max, +(state.editBuffer + currentParam.step).toFixed(1));
-        return { ...state, editBuffer: nextVal };
+
+      // 3. MODO EDIÇÃO: incrementa o valor
+      if (state.ihmMode === 'PARAM_EDIT') {
+        const step = currentParam?.step ?? 1;
+        const max = currentParam?.max ?? 9999;
+        const nextVal = Math.min(max, Number((state.editBuffer + step).toFixed(step < 1 ? 1 : 0)));
+        return {
+          ...state,
+          editBuffer: nextVal,
+        };
       }
+
       return state;
     }
 
     case 'PRESS_DOWN': {
+      // 1. MODO MONITOR: decrementa a velocidade P0121 em modo Local
+      if (state.ihmMode === 'MONIT') {
+        if (state.controlSource === 'LOC' && !state.activeFault) {
+          const currentHz = state.parameters.P0121?.currentValue ?? state.outputFrequency ?? 0;
+          const minHz = 0.0;
+          const nextHz = Math.max(minHz, Number((currentHz - 5.0).toFixed(1)));
+
+          return {
+            ...state,
+            parameters: {
+              ...state.parameters,
+              P0121: {
+                ...state.parameters.P0121,
+                currentValue: nextHz,
+              },
+            },
+          };
+        }
+        return state;
+      }
+
+      // 2. MODO SELEÇÃO: navega para o Pxxxx anterior
       if (state.ihmMode === 'PARAM_SELECT') {
         const prevIndex = (state.selectedParamIndex - 1 + paramKeys.length) % paramKeys.length;
         return { ...state, selectedParamIndex: prevIndex };
       }
-      if (state.ihmMode === 'PARAM_EDIT' && currentParam) {
-        const prevVal = Math.max(currentParam.min, +(state.editBuffer - currentParam.step).toFixed(1));
-        return { ...state, editBuffer: prevVal };
+
+      // 3. MODO EDIÇÃO: decrementa o valor
+      if (state.ihmMode === 'PARAM_EDIT') {
+        const step = currentParam?.step ?? 1;
+        const min = currentParam?.min ?? 0;
+        const nextVal = Math.max(min, Number((state.editBuffer - step).toFixed(step < 1 ? 1 : 0)));
+        return {
+          ...state,
+          editBuffer: nextVal,
+        };
       }
+
       return state;
     }
 
@@ -126,8 +186,26 @@ export const inverterReducer = (state: InverterState, action: InverterAction): I
     }
 
     case 'PRESS_RUN': {
-      if (state.activeFault || state.controlSource !== 'LOC') return state;
-      return { ...state, motorStatus: 'RUNNING' };
+      if (state.activeFault) return state;
+
+      if (state.controlSource === 'LOC') {
+        const currentRef = state.parameters.P0121?.currentValue ?? 0;
+        const startRef = currentRef > 0 ? currentRef : 30.0;
+
+        return {
+          ...state,
+          motorStatus: 'RUNNING',
+          parameters: {
+            ...state.parameters,
+            P0121: {
+              ...state.parameters.P0121,
+              currentValue: startRef,
+            },
+          },
+        };
+      }
+
+      return state;
     }
 
     case 'PRESS_STOP': {
@@ -166,18 +244,30 @@ export const inverterReducer = (state: InverterState, action: InverterAction): I
       let targetSpeed = state.parameters.P0121?.currentValue ?? 60.0;
 
       if (state.controlSource === 'REM' && !state.activeFault) {
-        // DI1 = Comando de Partida Remoto (Gira/Para)
-        nextStatus = nextInputs.di1 ? 'RUNNING' : 'READY';
+        const isDi1 = Boolean(nextInputs.di1 ?? (nextInputs as any).DI1);
+        const isDi2 = Boolean(nextInputs.di2 ?? (nextInputs as any).DI2);
+        const isDi3 = Boolean(nextInputs.di3 ?? (nextInputs as any).DI3);
+        const isDi4 = Boolean(nextInputs.di4 ?? (nextInputs as any).DI4);
 
-        // LÓGICA DE MULTISPEED (P0222 = 6) - Automação da Esteira e Aplicações Industriais
-        if (state.parameters.P0222?.currentValue === 6) {
-          if (nextInputs.di2) {
-            // Sensor de Entrada Ativo -> Comuta para Velocidade 2 (P0125 = 50.0 Hz)
-            targetSpeed = state.parameters.P0125?.currentValue ?? 50.0;
-          } else {
-            // Esteira em Operação Padrão -> Velocidade 1 (P0124 = 15.0 Hz)
-            targetSpeed = state.parameters.P0124?.currentValue ?? 15.0;
-          }
+        // 1. DI1 = Gira/Para (Partida do motor)
+        nextStatus = isDi1 ? 'RUNNING' : 'READY';
+
+        // 2. DI2 = Sentido de Giro (P0264 = 1): Aberto = Horário (FWD), Fechado = Anti-horário (REV)
+        nextForward = !isDi2;
+
+        // 3. MULTISPEED (DI3 e DI4): Seleção de frequências pré-programadas
+        // DI3=OFF, DI4=OFF -> P0124 (Multispeed 1)
+        // DI3=ON,  DI4=OFF -> P0125 (Multispeed 2)
+        // DI3=OFF, DI4=ON  -> P0126 (Multispeed 3)
+        // DI3=ON,  DI4=ON  -> P0127 (Multispeed 4)
+        if (isDi3 && !isDi4) {
+          targetSpeed = state.parameters.P0125?.currentValue ?? 35.0;
+        } else if (!isDi3 && isDi4) {
+          targetSpeed = state.parameters.P0126?.currentValue ?? 50.0;
+        } else if (isDi3 && isDi4) {
+          targetSpeed = state.parameters.P0127?.currentValue ?? 60.0;
+        } else if (state.parameters.P0222?.currentValue === 6 || isDi1) {
+          targetSpeed = state.parameters.P0124?.currentValue ?? 15.0;
         }
       }
 
