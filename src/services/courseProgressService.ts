@@ -185,18 +185,22 @@ export const resetStudentProgress = (studentId?: string) => {
 };
 
 /**
- * 10. Helpers de Bloqueio/Desbloqueio Sequencial
+ * 10. Helpers de Bloqueio/Desbloqueio Sequencial Dinâmicos (Compatíveis com CFW500 e CFW300)
  */
 export const isModuleCompleted = (module: any, progress: UserProgressData): boolean => {
   if (!module || !module.lessons || !module.lessons.length) return false;
   return module.lessons.every((l: any) => progress.completedLessons.includes(l.id));
 };
 
-export const isModuleUnlocked = (moduleIndex: number, progress: UserProgressData): boolean => {
+export const isModuleUnlocked = (
+  moduleIndex: number,
+  progress: UserProgressData,
+  modulesList: any[] = COURSE_MODULES
+): boolean => {
   if (isAdminUnlockAllActive()) return true;
   if (moduleIndex === 0) return true;
 
-  const previousModule = COURSE_MODULES[moduleIndex - 1];
+  const previousModule = modulesList[moduleIndex - 1];
   if (!previousModule) return false;
 
   return isModuleCompleted(previousModule, progress);
@@ -205,13 +209,14 @@ export const isModuleUnlocked = (moduleIndex: number, progress: UserProgressData
 export const isLessonUnlocked = (
   moduleIndex: number,
   lessonIndex: number,
-  progress: UserProgressData
+  progress: UserProgressData,
+  modulesList: any[] = COURSE_MODULES
 ): boolean => {
   if (isAdminUnlockAllActive()) return true;
-  if (!isModuleUnlocked(moduleIndex, progress)) return false;
+  if (!isModuleUnlocked(moduleIndex, progress, modulesList)) return false;
   if (lessonIndex === 0) return true;
 
-  const currentModule = COURSE_MODULES[moduleIndex];
+  const currentModule = modulesList[moduleIndex];
   if (!currentModule || !currentModule.lessons) return false;
 
   const previousLesson = currentModule.lessons[lessonIndex - 1];

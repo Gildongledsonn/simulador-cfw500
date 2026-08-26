@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useInverter } from '../context/InverterContext';
 import { COURSE_MODULES } from '../constants/courseModules';
+import { COURSE_MODULES_CFW300 } from '../constants/courseModulesCFW300';
 import { Lesson } from '../types/tutorial';
 import {
   getUserProgress,
@@ -26,13 +27,13 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
   setSelectedLesson,
 }) => {
   const { state, dispatch } = useInverter();
+  const [activeInverterType, setActiveInverterType] = useState<'CFW500' | 'CFW300'>('CFW500');
   const [progress, setProgress] = useState<UserProgressData>(() => getUserProgress());
   const [adminMode, setAdminMode] = useState<boolean>(() => isAdminUnlockAllActive());
 
-  // Referência para identificar mudança de lição/módulo
+  const activeCourseModules = activeInverterType === 'CFW500' ? COURSE_MODULES : COURSE_MODULES_CFW300;
   const previousLessonIdRef = useRef<string>(selectedLesson.id);
 
-  // Função centralizada e segura de Reset de Fábrica da bancada
   const triggerFactoryReset = () => {
     if (!dispatch) return;
     try {
@@ -40,13 +41,10 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     } catch {
       try {
         dispatch({ type: 'RESET_DEFAULTS' } as any);
-      } catch {
-        // Fallback silencioso
-      }
+      } catch {}
     }
   };
 
-  // 1. AUTONOMIA TOTAL: Reseta os parâmetros do inversor para o padrão de fábrica sempre que mudar de lição/módulo
   useEffect(() => {
     if (previousLessonIdRef.current !== selectedLesson.id) {
       triggerFactoryReset();
@@ -63,7 +61,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     return () => window.removeEventListener('course_progress_updated', handleProgressUpdate);
   }, []);
 
-  // Monitora e valida a conclusão dos passos práticos no estado atual da bancada
   useEffect(() => {
     if (selectedLesson.type === 'PRACTICE' && selectedLesson.steps) {
       const currentSavedSteps = progress.completedSteps[selectedLesson.id] || [];
@@ -83,8 +80,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
       if (allDone && !updatedProgress.completedLessons.includes(selectedLesson.id)) {
         markLessonCompleted(selectedLesson.id);
 
-        // 2. RESET AUTOMÁTICO AO CONCLUIR O MÓDULO
-        const currentMod = COURSE_MODULES.find((m) =>
+        const currentMod = activeCourseModules.find((m) =>
           m.lessons.some((l) => l.id === selectedLesson.id)
         );
         if (currentMod) {
@@ -97,43 +93,50 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
         }
       }
     }
-  }, [state, selectedLesson, progress.completedSteps, progress.completedLessons]);
+  }, [state, selectedLesson, progress.completedSteps, progress.completedLessons, activeCourseModules]);
 
-  // Alterna modo de testes do instrutor/administrador
+  const handleSelectInverterType = (type: 'CFW500' | 'CFW300') => {
+    if (type === activeInverterType) return;
+    setActiveInverterType(type);
+    triggerFactoryReset();
+    const targetModules = type === 'CFW500' ? COURSE_MODULES : COURSE_MODULES_CFW300;
+    if (targetModules[0]?.lessons[0]) {
+      setSelectedLesson(targetModules[0].lessons[0]);
+    }
+  };
+
   const handleToggleAdminMode = () => {
     const next = !adminMode;
     setAdminUnlockAll(next);
     setAdminMode(next);
   };
 
-  // Reseta todo o progresso do aluno para reiniciar o treinamento
   const handleFullReset = () => {
     if (window.confirm('Deseja resetar todo o progresso do aluno para reiniciar os testes da lição 1?')) {
       resetStudentProgress();
       triggerFactoryReset();
-      if (COURSE_MODULES[0]?.lessons[0]) {
-        setSelectedLesson(COURSE_MODULES[0].lessons[0]);
+      if (activeCourseModules[0]?.lessons[0]) {
+        setSelectedLesson(activeCourseModules[0].lessons[0]);
       }
     }
   };
 
-  // Conclui a teoria e limpa o inversor
   const handleCompleteTheory = () => {
     markLessonCompleted(selectedLesson.id);
     triggerFactoryReset();
   };
 
-  // Avança para a próxima lição garantindo que a bancada inicie no padrão de fábrica
+  // Avança dinamicamente para a próxima lição da lista ativa
   const handleNextLesson = () => {
     triggerFactoryReset();
 
     let foundCurrent = false;
-    for (let mIdx = 0; mIdx < COURSE_MODULES.length; mIdx++) {
-      const mod = COURSE_MODULES[mIdx];
+    for (let mIdx = 0; mIdx < activeCourseModules.length; mIdx++) {
+      const mod = activeCourseModules[mIdx];
       for (let lIdx = 0; lIdx < mod.lessons.length; lIdx++) {
         const les = mod.lessons[lIdx];
         if (foundCurrent) {
-          if (isLessonUnlocked(mIdx, lIdx, progress)) {
+          if (isLessonUnlocked(mIdx, lIdx, progress, activeCourseModules)) {
             setSelectedLesson(les);
             return;
           }
@@ -150,7 +153,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 
   return (
     <div style={containerStyle}>
-      {/* BARRA DE CONTROLE ADMINISTRATIVO / INSTRUTOR */}
+      {/* BARRA DE CONTROLE ADMINISTRATIVO */}
       <div style={adminControlBarStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#ffb74d' }}>⚙️ Painel ADM:</span>
@@ -161,7 +164,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
               background: adminMode ? '#00e676' : '#374151',
               color: adminMode ? '#000' : '#fff',
             }}
-            title="Libera o acesso imediato a todos os 20 módulos sem exigir conclusão prévia"
+            title="Libera o acesso imediato a todos os módulos"
           >
             {adminMode ? '🔓 Todos Módulos Liberados' : '🔒 Trava Sequencial Ativa'}
           </button>
@@ -176,14 +179,37 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
         </button>
       </div>
 
-      {/* SELETOR DE MÓDULOS */}
+      {/* SELEÇÃO DO MODELO DE INVERSOR */}
       <div style={moduleListHeaderStyle}>
-        <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#90a4ae' }}>
-          Trilha de Capacitação Técnica:
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+          <button
+            onClick={() => handleSelectInverterType('CFW500')}
+            style={{
+              ...inverterTabBtnStyle,
+              background: activeInverterType === 'CFW500' ? '#0288d1' : '#161b22',
+              borderColor: activeInverterType === 'CFW500' ? '#29b6f6' : '#30363d',
+              color: activeInverterType === 'CFW500' ? '#fff' : '#90a4ae',
+            }}
+          >
+            ⚡ Inversor CFW500 (20 Módulos)
+          </button>
+          <button
+            onClick={() => handleSelectInverterType('CFW300')}
+            style={{
+              ...inverterTabBtnStyle,
+              background: activeInverterType === 'CFW300' ? '#0288d1' : '#161b22',
+              borderColor: activeInverterType === 'CFW300' ? '#29b6f6' : '#30363d',
+              color: activeInverterType === 'CFW300' ? '#fff' : '#90a4ae',
+            }}
+          >
+            ⚙️ Inversor CFW300 (Aulas e Desafios)
+          </button>
+        </div>
+
+        {/* GRADE DE MÓDULOS */}
         <div style={modulesTabsRowStyle}>
-          {COURSE_MODULES.map((mod, mIdx) => {
-            const unlocked = isModuleUnlocked(mIdx, progress);
+          {activeCourseModules.map((mod, mIdx) => {
+            const unlocked = isModuleUnlocked(mIdx, progress, activeCourseModules);
             const completed = isModuleCompleted(mod, progress);
             const percent = getModuleCompletionPercent(mod, progress);
             const isSelectedModule = mod.lessons.some((l) => l.id === selectedLesson.id);
@@ -202,7 +228,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                   if (unlocked) {
                     triggerFactoryReset();
                     const firstUnlocked =
-                      mod.lessons.find((_, lIdx) => isLessonUnlocked(mIdx, lIdx, progress)) ||
+                      mod.lessons.find((_, lIdx) => isLessonUnlocked(mIdx, lIdx, progress, activeCourseModules)) ||
                       mod.lessons[0];
                     setSelectedLesson(firstUnlocked);
                   }
@@ -240,15 +266,15 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
         {/* LISTA DE LIÇÕES DO MÓDULO ATIVO */}
         <div style={lessonSidebarStyle}>
           <strong style={{ fontSize: '11px', color: '#81d4fa', marginBottom: '8px', display: 'block' }}>
-            Lições do Módulo:
+            Lições do Módulo ({activeInverterType}):
           </strong>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {COURSE_MODULES.map((mod, mIdx) => {
+            {activeCourseModules.map((mod, mIdx) => {
               const isModuleActive = mod.lessons.some((l) => l.id === selectedLesson.id);
               if (!isModuleActive) return null;
 
               return mod.lessons.map((lesson, lIdx) => {
-                const isUnlocked = isLessonUnlocked(mIdx, lIdx, progress);
+                const isUnlocked = isLessonUnlocked(mIdx, lIdx, progress, activeCourseModules);
                 const isCompleted = progress.completedLessons.includes(lesson.id);
                 const isCurrent = lesson.id === selectedLesson.id;
 
@@ -437,6 +463,16 @@ const adminBtnStyle: React.CSSProperties = {
   borderRadius: '4px',
   padding: '4px 8px',
   fontSize: '10px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+};
+
+const inverterTabBtnStyle: React.CSSProperties = {
+  border: '1px solid',
+  borderRadius: '6px',
+  padding: '5px 12px',
+  fontSize: '11px',
   fontWeight: 'bold',
   cursor: 'pointer',
   transition: 'all 0.2s ease',
