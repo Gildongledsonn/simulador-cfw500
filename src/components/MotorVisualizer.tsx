@@ -10,11 +10,9 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
   const { state } = useInverter();
   const mountRef = useRef<HTMLDivElement | null>(null);
 
-  // Referência sempre atualizada do state para o loop de física e animação
+  // Referência atômica e atualizada do estado
   const stateRef = useRef(state);
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
+  stateRef.current = state;
 
   // Referências do Three.js
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -31,30 +29,55 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
     radius: 4.2,
   });
 
-  // Leitura precisa de direção (FWD / REV)
-  const isReverse = (): boolean => {
-    const s = state as any;
-    if (s.rotationDirection === 'REV' || s.direction === 'REV' || s.isReverse === true) {
+  // Leitura universal e precisa de Sentido de Giro
+  const isMotorReverse = (s: any): boolean => {
+    if (!s) return false;
+
+    // 1. Verificação oficial do InverterContext (isForwardDirection: false = REV)
+    if (s.isForwardDirection === false) {
       return true;
     }
-    if ((s.outputFrequency ?? 0) < 0) {
+
+    // 2. Flags diretas de reversão
+    if (
+      s.rotationDirection === 'REV' ||
+      s.direction === 'REV' ||
+      s.motorDirection === 'REV' ||
+      s.localDirection === 'REV' ||
+      s.isReverse === true
+    ) {
       return true;
     }
-    // Verificação por bornes remotos: se DI2 estiver acionado em modo REM
+
+    // 3. Parâmetro WEG oficial P0223 (Sentido de Giro Local: 1 = Anti-horário / REV)
+    const p223 = s.parameters?.P0223;
+    const p223Val =
+      typeof p223 === 'object' ? Number(p223?.currentValue ?? p223?.value ?? 0) : Number(p223 ?? 0);
+    if (p223Val === 1) return true;
+
+    // 4. Frequência com sinal negativo
+    if (typeof s.outputFrequency === 'number' && s.outputFrequency < 0) return true;
+    if (typeof s.targetFrequency === 'number' && s.targetFrequency < 0) return true;
+
+    // 5. Modo Remoto (Chave de Borne DI2 ativada)
     const isRem = s.controlSource === 'REM' || s.isLocal === false;
     const di2 = Boolean(
       s.digitalInputs?.[1] ||
       s.digitalInputs?.DI2 ||
-      s.digitalInputs?.di2
+      s.digitalInputs?.di2 ||
+      s.digitalInputs?.['2']
     );
-    return isRem && di2;
+    if (isRem && di2) return true;
+
+    return false;
   };
 
   const rawFreq = Math.abs(Number(state.outputFrequency ?? 0));
-  const isRev = isReverse();
+  const isRev = isMotorReverse(state);
   const isRunning = (state.motorStatus === 'RUNNING' || rawFreq > 0.1) && state.motorStatus !== 'FAULT';
   const targetRpm = Math.round((rawFreq / 60) * 1750);
-  const currentAmps = state.outputCurrent ?? (isRunning ? (1.2 + (rawFreq / 60) * 3.3).toFixed(1) : '0.0');
+  const currentAmps =
+    state.outputCurrent ?? (isRunning ? (1.2 + (rawFreq / 60) * 3.3).toFixed(1) : '0.0');
 
   const updateCameraPosition = () => {
     if (!cameraRef.current) return;
@@ -184,7 +207,7 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
     const statorMesh = new THREE.Mesh(statorGeo, wegBlueMaterial);
     motorGroup.add(statorMesh);
 
-    // Aletas de ventilação
+    // Aletas
     for (let i = -0.7; i <= 0.7; i += 0.14) {
       const finGeo = new THREE.CylinderGeometry(0.92, 0.92, 0.04, 32);
       finGeo.rotateZ(Math.PI / 2);
@@ -269,14 +292,9 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
       const isMotorRunning = (s?.motorStatus === 'RUNNING' || curFreq > 0.1) && s?.motorStatus !== 'FAULT';
 
       if (shaftGroupRef.current && isMotorRunning) {
-        const isCurrentlyRev =
-          s?.rotationDirection === 'REV' ||
-          s?.direction === 'REV' ||
-          s?.isReverse === true ||
-          (s?.outputFrequency ?? 0) < 0 ||
-          (s?.controlSource === 'REM' && Boolean(s?.digitalInputs?.[1] || s?.digitalInputs?.DI2 || s?.digitalInputs?.di2));
-
-        const dirFactor = isCurrentlyRev ? -1 : 1;
+        // Leitura dinâmica do sentido no frame de renderização
+        const currentlyRev = isMotorReverse(s);
+        const dirFactor = currentlyRev ? -1 : 1;
         const currentRpm = (curFreq / 60) * 1750;
         const visualSpeedFactor = 0.35;
         const radPerSec = ((2 * Math.PI * currentRpm) / 60) * visualSpeedFactor;
