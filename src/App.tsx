@@ -224,6 +224,7 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
           <TutorialGuide
             selectedLesson={currentLesson}
             setSelectedLesson={setCurrentLesson}
+            userRole={user.role}
           />
 
           {currentLesson.type === 'PRACTICE' && (

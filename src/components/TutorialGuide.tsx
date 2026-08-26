@@ -20,11 +20,13 @@ import {
 interface TutorialGuideProps {
   selectedLesson: Lesson;
   setSelectedLesson: (lesson: Lesson) => void;
+  userRole?: string; // Cargo do usuário conectado ('ADMIN' ou 'USER')
 }
 
 export const TutorialGuide: React.FC<TutorialGuideProps> = ({
   selectedLesson,
   setSelectedLesson,
+  userRole,
 }) => {
   const { state, dispatch } = useInverter();
   const [activeInverterType, setActiveInverterType] = useState<'CFW500' | 'CFW300'>('CFW500');
@@ -126,7 +128,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     triggerFactoryReset();
   };
 
-  // Avança dinamicamente para a próxima lição da lista ativa
   const handleNextLesson = () => {
     triggerFactoryReset();
 
@@ -153,31 +154,33 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 
   return (
     <div style={containerStyle}>
-      {/* BARRA DE CONTROLE ADMINISTRATIVO */}
-      <div style={adminControlBarStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#ffb74d' }}>⚙️ Painel ADM:</span>
+      {/* BARRA DE CONTROLE EXCLUSIVA PARA ADMINISTRADORES / INSTRUTORES */}
+      {userRole === 'ADMIN' && (
+        <div style={adminControlBarStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#ffb74d' }}>⚙️ Painel ADM:</span>
+            <button
+              onClick={handleToggleAdminMode}
+              style={{
+                ...adminBtnStyle,
+                background: adminMode ? '#00e676' : '#374151',
+                color: adminMode ? '#000' : '#fff',
+              }}
+              title="Libera o acesso imediato a todos os módulos"
+            >
+              {adminMode ? '🔓 Todos Módulos Liberados' : '🔒 Trava Sequencial Ativa'}
+            </button>
+          </div>
+
           <button
-            onClick={handleToggleAdminMode}
-            style={{
-              ...adminBtnStyle,
-              background: adminMode ? '#00e676' : '#374151',
-              color: adminMode ? '#000' : '#fff',
-            }}
-            title="Libera o acesso imediato a todos os módulos"
+            onClick={handleFullReset}
+            style={{ ...adminBtnStyle, background: '#d32f2f', color: '#fff' }}
+            title="Zera o progresso do aluno para testar o fluxo desde o início"
           >
-            {adminMode ? '🔓 Todos Módulos Liberados' : '🔒 Trava Sequencial Ativa'}
+            🗑️ Resetar Progresso
           </button>
         </div>
-
-        <button
-          onClick={handleFullReset}
-          style={{ ...adminBtnStyle, background: '#d32f2f', color: '#fff' }}
-          title="Zera o progresso do aluno para testar o fluxo desde o início"
-        >
-          🗑️ Resetar Progresso
-        </button>
-      </div>
+      )}
 
       {/* SELEÇÃO DO MODELO DE INVERSOR */}
       <div style={moduleListHeaderStyle}>
@@ -356,7 +359,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
               {selectedLesson.id === 'l0-1' && (
                 <div style={manualDownloadCardStyle}>
                   <a
-                    href="https://static.weg.net/medias/downloadcenter/h96/h7c/WEG-CFW500-programming-manual-10001469555-pt.pdf"
+                    href="/WEG-CFW500-programming-manual-10001469555-pt.pdf"
                     target="_blank"
                     rel="noopener noreferrer"
                     style={btnDownloadManualStyle}
