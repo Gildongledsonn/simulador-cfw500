@@ -4,15 +4,13 @@ import { useInverter } from '../context/InverterContext';
 export const CFW300Workbench: React.FC = () => {
   const { state, dispatch } = useInverter();
 
-  const faultCode = state.activeFault ? (typeof state.activeFault === 'object' ? state.activeFault.code : String(state.activeFault)) : 'F070';
-
   const handleKeyClick = (key: string) => {
     dispatch({ type: 'KEY_PRESS', payload: key } as any);
   };
 
   const handleToggleDI = (inputIndex: number) => {
     const key = `di${inputIndex}` as keyof typeof state.digitalInputs;
-    const currentVal = Boolean(state.digitalInputs[key]);
+    const currentVal = Boolean(state.digitalInputs?.[key]);
     dispatch({
       type: 'SET_DIGITAL_INPUT',
       payload: { input: `DI${inputIndex}`, value: !currentVal },
@@ -23,6 +21,31 @@ export const CFW300Workbench: React.FC = () => {
     const val = parseFloat(e.target.value);
     dispatch({ type: 'SET_ANALOG_INPUT', payload: { input: 'AI1', value: val } } as any);
   };
+
+  // Helper seguro para obter o código da falha ativa
+  const getFaultCode = (): string => {
+    if (!state.activeFault) return 'F070';
+    if (typeof state.activeFault === 'string') return state.activeFault;
+    if (typeof state.activeFault === 'object') {
+      return (state.activeFault as any).code || (state.activeFault as any).id || 'F070';
+    }
+    return 'F070';
+  };
+
+  // Helper seguro para obter o valor analógico de 0 a 10V
+  const getAnalogValue = (): number => {
+    const s = state as any;
+    if (s.analogInputs) {
+      const val = s.analogInputs.AI1 ?? s.analogInputs.ai1 ?? 0;
+      return typeof val === 'number' ? val : 0;
+    }
+    if (typeof s.potentiometerValue === 'number') {
+      return s.potentiometerValue / 100;
+    }
+    return 0;
+  };
+
+  const analogVal = getAnalogValue();
 
   return (
     <div style={workbenchContainerStyle}>
@@ -52,7 +75,7 @@ export const CFW300Workbench: React.FC = () => {
             </div>
             <div style={sevenSegmentTextStyle}>
               {state.motorStatus === 'FAULT'
-                ? faultCode
+                ? getFaultCode()
                 : (state.outputFrequency ?? 0).toFixed(1)}
             </div>
           </div>
@@ -99,14 +122,14 @@ export const CFW300Workbench: React.FC = () => {
           <div style={{ marginTop: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#b0bec5', marginBottom: '4px' }}>
               <span>Entrada Analógica AI1 (0-10V):</span>
-              <strong style={{ color: '#00e676' }}>{((state.ai1Voltage ?? 0) * 10).toFixed(1)} V</strong>
+              <strong style={{ color: '#00e676' }}>{(analogVal * 10).toFixed(1)} V</strong>
             </div>
             <input
               type="range"
               min="0"
-              max="10"
-              step="0.1"
-              value={state.ai1Voltage ?? 0}
+              max="1"
+              step="0.01"
+              value={analogVal}
               onChange={handlePotChange}
               style={{ width: '100%', accentColor: '#0288d1' }}
             />
