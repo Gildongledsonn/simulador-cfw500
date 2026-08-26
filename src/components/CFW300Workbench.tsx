@@ -2,27 +2,52 @@ import React from 'react';
 import { useInverter } from '../context/InverterContext';
 
 export const CFW300Workbench: React.FC = () => {
-  const { state, dispatch } = useInverter();
+  const { state, dispatch, currentDisplayValue } = useInverter();
 
+  // Tratamento idêntico ao IHM.tsx para acionamento das teclas
   const handleKeyClick = (key: string) => {
-    dispatch({ type: 'KEY_PRESS', payload: key } as any);
+    if (!dispatch) return;
+
+    switch (key) {
+      case 'RUN':
+        dispatch({ type: 'PRESS_RUN' });
+        break;
+      case 'STOP':
+        dispatch({ type: 'PRESS_STOP' });
+        break;
+      case 'LOC_REM':
+        dispatch({ type: 'PRESS_LOCREM' });
+        break;
+      case 'UP':
+        dispatch({ type: 'PRESS_UP' });
+        break;
+      case 'DOWN':
+        dispatch({ type: 'PRESS_DOWN' });
+        break;
+      case 'PROG':
+        dispatch({ type: 'PRESS_PROG' });
+        break;
+      case 'DIRECTION':
+        dispatch({ type: 'PRESS_DIRECTION' });
+        break;
+      default:
+        break;
+    }
   };
 
+  // Alterna as entradas digitais DI1 a DI4
   const handleToggleDI = (inputIndex: number) => {
-    const key = `di${inputIndex}` as keyof typeof state.digitalInputs;
-    const currentVal = Boolean(state.digitalInputs?.[key]);
-    dispatch({
-      type: 'SET_DIGITAL_INPUT',
-      payload: { input: `DI${inputIndex}`, value: !currentVal },
-    } as any);
+    if (!dispatch) return;
+    dispatch({ type: 'TOGGLE_DI', payload: inputIndex } as any);
   };
 
+  // Potenciômetro Analógico AI1 (0 a 10V)
   const handlePotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
-    dispatch({ type: 'SET_ANALOG_INPUT', payload: { input: 'AI1', value: val } } as any);
+    const voltage = val * 10;
+    dispatch({ type: 'SET_AI1_VOLTAGE', payload: voltage } as any);
   };
 
-  // Helper seguro para obter o código da falha ativa
   const getFaultCode = (): string => {
     if (!state.activeFault) return 'F070';
     if (typeof state.activeFault === 'string') return state.activeFault;
@@ -32,24 +57,14 @@ export const CFW300Workbench: React.FC = () => {
     return 'F070';
   };
 
-  // Helper seguro para obter o valor analógico de 0 a 10V
-  const getAnalogValue = (): number => {
-    const s = state as any;
-    if (s.analogInputs) {
-      const val = s.analogInputs.AI1 ?? s.analogInputs.ai1 ?? 0;
-      return typeof val === 'number' ? val : 0;
-    }
-    if (typeof s.potentiometerValue === 'number') {
-      return s.potentiometerValue / 100;
-    }
-    return 0;
-  };
-
-  const analogVal = getAnalogValue();
+  const freq = Math.abs(Number(state.outputFrequency ?? 0));
+  const isRunning = state.motorStatus === 'RUNNING' || freq > 0.1;
+  const isLoc = state.controlSource === 'LOC' || (state as any).isLocal === true;
+  const currentVolt = typeof state.ai1Voltage === 'number' ? state.ai1Voltage : 0;
 
   return (
     <div style={workbenchContainerStyle}>
-      {/* CABEÇALHO DA BANCADA CFW300 */}
+      {/* CABEÇALHO */}
       <div style={headerStyle}>
         <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#00e676' }}>
           WEG CFW300 • MICRO DRIVE COMPACTO
@@ -58,49 +73,89 @@ export const CFW300Workbench: React.FC = () => {
       </div>
 
       <div style={mainLayoutRowStyle}>
-        {/* CARCAÇA DO INVERSOR CFW300 */}
+        {/* GABINETE DO MICRO INVERSOR CFW300 */}
         <div style={inverterBodyStyle}>
           <div style={inverterTopBrandStyle}>
             <strong style={{ color: '#0288d1', fontSize: '12px' }}>WEG</strong>
             <span style={{ fontSize: '10px', color: '#fff', fontWeight: 'bold' }}>CFW300</span>
           </div>
 
-          {/* DISPLAY LED 4 DÍGITOS */}
+          {/* DISPLAY LED VERMELHO */}
           <div style={displayBoxStyle}>
             <div style={ledStatusRowStyle}>
-              <span style={{ color: state.controlSource === 'LOC' ? '#00e676' : '#374151', fontSize: '9px', fontWeight: 'bold' }}>● LOC</span>
-              <span style={{ color: state.controlSource === 'REM' ? '#00e676' : '#374151', fontSize: '9px', fontWeight: 'bold' }}>● REM</span>
-              <span style={{ color: state.motorStatus === 'RUNNING' ? '#00e676' : '#374151', fontSize: '9px', fontWeight: 'bold' }}>● RUN</span>
-              <span style={{ color: state.motorStatus === 'FAULT' ? '#ff1744' : '#374151', fontSize: '9px', fontWeight: 'bold' }}>● FLT</span>
+              <span style={{ color: isLoc ? '#00e676' : '#374151', fontSize: '9px', fontWeight: 'bold' }}>● LOC</span>
+              <span style={{ color: !isLoc ? '#00e676' : '#374151', fontSize: '9px', fontWeight: 'bold' }}>● REM</span>
+              <span style={{ color: isRunning ? '#00e676' : '#374151', fontSize: '9px', fontWeight: 'bold' }}>● RUN</span>
+              <span style={{ color: state.activeFault ? '#ff1744' : '#374151', fontSize: '9px', fontWeight: 'bold' }}>● FLT</span>
             </div>
             <div style={sevenSegmentTextStyle}>
-              {state.motorStatus === 'FAULT'
-                ? getFaultCode()
-                : (state.outputFrequency ?? 0).toFixed(1)}
+              {state.activeFault ? getFaultCode() : currentDisplayValue}
             </div>
           </div>
 
-          {/* TECLADO COMPACTO CFW300 */}
+          {/* TECLADO DE MEMBRANA DO CFW300 */}
           <div style={keypadGridStyle}>
-            <button onClick={() => handleKeyClick('UP')} style={btnKeyStyle}>▲</button>
-            <button onClick={() => handleKeyClick('PROG')} style={{ ...btnKeyStyle, background: '#0288d1', color: '#fff' }}>PROG</button>
-            <button onClick={() => handleKeyClick('DOWN')} style={btnKeyStyle}>▼</button>
-            <button onClick={() => handleKeyClick('RUN')} style={{ ...btnKeyStyle, background: '#2e7d32', color: '#fff' }}>I (RUN)</button>
-            <button onClick={() => handleKeyClick('LOC_REM')} style={btnKeyStyle}>LOC/REM</button>
-            <button onClick={() => handleKeyClick('STOP')} style={{ ...btnKeyStyle, background: '#c62828', color: '#fff' }}>O (STOP)</button>
+            <button
+              onClick={() => handleKeyClick('UP')}
+              style={btnKeyStyle}
+              title="Incrementar (▲)"
+            >
+              ▲
+            </button>
+
+            <button
+              onClick={() => handleKeyClick('PROG')}
+              style={{ ...btnKeyStyle, background: '#0288d1', color: '#fff' }}
+              title="Menu / Programação (PROG)"
+            >
+              PROG
+            </button>
+
+            <button
+              onClick={() => handleKeyClick('DOWN')}
+              style={btnKeyStyle}
+              title="Decrementar (▼)"
+            >
+              ▼
+            </button>
+
+            <button
+              onClick={() => handleKeyClick('RUN')}
+              style={{ ...btnKeyStyle, background: '#2e7d32', color: '#fff' }}
+              title="Ligar Motor (I)"
+            >
+              I
+            </button>
+
+            <button
+              onClick={() => handleKeyClick('LOC_REM')}
+              style={btnKeyStyle}
+              title="Alternar Local / Remoto"
+            >
+              LOC/REM
+            </button>
+
+            <button
+              onClick={() => handleKeyClick('STOP')}
+              style={{ ...btnKeyStyle, background: '#c62828', color: '#fff' }}
+              title="Parar / Reset Motor (O)"
+            >
+              O
+            </button>
           </div>
         </div>
 
-        {/* PAINEL DE BORNES & POTENCIÔMETRO (PLUG-IN CFW300) */}
+        {/* PAINEL DE BORNES PLUG-IN CFW300 */}
         <div style={ioPanelStyle}>
           <strong style={{ fontSize: '11px', color: '#81d4fa', marginBottom: '8px', display: 'block' }}>
             Bornes de Comando (CFW300-IOAR):
           </strong>
 
-          {/* CHAVES DIGITAIS DI1 A DI4 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
             {[1, 2, 3, 4].map((i) => {
-              const active = Boolean(state.digitalInputs?.[`di${i}` as keyof typeof state.digitalInputs]);
+              const active = Boolean(
+                state.digitalInputs?.[`di${i}` as keyof typeof state.digitalInputs]
+              );
               return (
                 <button
                   key={i}
@@ -118,20 +173,19 @@ export const CFW300Workbench: React.FC = () => {
             })}
           </div>
 
-          {/* POTENCIÔMETRO ANALÓGICO (0-10V) */}
           <div style={{ marginTop: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#b0bec5', marginBottom: '4px' }}>
               <span>Entrada Analógica AI1 (0-10V):</span>
-              <strong style={{ color: '#00e676' }}>{(analogVal * 10).toFixed(1)} V</strong>
+              <strong style={{ color: '#00e676' }}>{currentVolt.toFixed(1)} V</strong>
             </div>
             <input
               type="range"
               min="0"
               max="1"
               step="0.01"
-              value={analogVal}
+              value={currentVolt / 10}
               onChange={handlePotChange}
-              style={{ width: '100%', accentColor: '#0288d1' }}
+              style={{ width: '100%', accentColor: '#0288d1', cursor: 'pointer' }}
             />
           </div>
         </div>
@@ -140,7 +194,6 @@ export const CFW300Workbench: React.FC = () => {
   );
 };
 
-// ESTILOS DA BANCADA CFW300
 const workbenchContainerStyle: React.CSSProperties = {
   background: '#0d1117',
   border: '1px solid #30363d',
@@ -199,7 +252,7 @@ const ledStatusRowStyle: React.CSSProperties = {
 };
 
 const sevenSegmentTextStyle: React.CSSProperties = {
-  fontFamily: 'monospace',
+  fontFamily: '"Courier New", Courier, monospace',
   fontSize: '24px',
   fontWeight: 'bold',
   color: '#ff3d00',
@@ -210,7 +263,7 @@ const sevenSegmentTextStyle: React.CSSProperties = {
 const keypadGridStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(3, 1fr)',
-  gap: '4px',
+  gap: '6px',
 };
 
 const btnKeyStyle: React.CSSProperties = {
@@ -218,8 +271,8 @@ const btnKeyStyle: React.CSSProperties = {
   border: '1px solid #30363d',
   borderRadius: '4px',
   color: '#e0e0e0',
-  padding: '6px 2px',
-  fontSize: '9px',
+  padding: '8px 2px',
+  fontSize: '11px',
   fontWeight: 'bold',
   cursor: 'pointer',
 };
