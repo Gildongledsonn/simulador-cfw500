@@ -1,89 +1,200 @@
 import { COURSE_MODULES } from '../constants/courseModules';
-import { CourseModule } from '../types/tutorial';
-
-const PROGRESS_STORAGE_PREFIX = 'cfw500_course_progress_';
 
 export interface UserProgressData {
+  studentId: string;
+  studentName: string;
   completedLessons: string[];
   completedSteps: Record<string, string[]>;
+  lastLessonId?: string;
 }
 
-const getActiveUsername = (): string => {
+// Chaves de armazenamento local para suporte offline
+const SESSION_KEY = '@CFW500_STUDENT_SESSION';
+const PROGRESS_STORAGE_PREFIX = '@CFW500_PROGRESS_DATA_';
+
+// URL base da sua pasta 'api' no UOL Host
+const API_BASE_URL: string =
+  ((import.meta as any).env?.VITE_API_URL as string) || 'https://gaflink.com.br/api';
+
+/**
+ * 1. Obtém a sessão do aluno atual (ID e Nome)
+ */
+export const getStudentSession = (): { id: string; name: string } => {
   try {
-    const session = localStorage.getItem('cfw500_auth_user');
-    if (session) {
-      const user = JSON.parse(session);
-      return user.username || 'default_user';
+    const saved = localStorage.getItem(SESSION_KEY);
+    if (saved) {
+      return JSON.parse(saved);
     }
-  } catch {
-    // fallback
-  }
-  return 'default_user';
+  } catch {}
+  return { id: 'aluno-demo', name: 'Aluno de Teste' };
 };
 
+/**
+ * 2. Define o aluno logado e busca automaticamente o progresso dele no banco MySQL
+ */
+export const setStudentSession = (id: string, name: string) => {
+  const cleanId = id.trim().toLowerCase();
+  const cleanName = name.trim();
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ id: cleanId, name: cleanName }));
+  
+  // Dispara busca na nuvem no UOL Host
+  syncProgressFromCloud(cleanId);
+};
+
+/**
+ * 3. Obtém o progresso atual do aluno
+ */
 export const getUserProgress = (): UserProgressData => {
-  const username = getActiveUsername();
-  const raw = localStorage.getItem(`${PROGRESS_STORAGE_PREFIX}${username}`);
-  if (!raw) {
-    return { completedLessons: [], completedSteps: {} };
-  }
+  const session = getStudentSession();
   try {
-    return JSON.parse(raw);
-  } catch {
-    return { completedLessons: [], completedSteps: {} };
+    const local = localStorage.getItem(`${PROGRESS_STORAGE_PREFIX}${session.id}`);
+    if (local) {
+      return JSON.parse(local);
+    }
+  } catch {}
+
+  return {
+    studentId: session.id,
+    studentName: session.name,
+    completedLessons: [],
+    completedSteps: {},
+  };
+};
+
+/**
+ * 4. Salva localmente e notifica a interface do React em tempo real
+ */
+const saveLocalAndNotify = (progress: UserProgressData) => {
+  try {
+    localStorage.setItem(`${PROGRESS_STORAGE_PREFIX}${progress.studentId}`, JSON.stringify(progress));
+    window.dispatchEvent(new Event('course_progress_updated'));
+  } catch (err) {
+    console.warn('Erro ao salvar no localStorage:', err);
   }
 };
 
-export const saveUserProgress = (progress: UserProgressData) => {
-  const username = getActiveUsername();
-  localStorage.setItem(`${PROGRESS_STORAGE_PREFIX}${username}`, JSON.stringify(progress));
-  window.dispatchEvent(new Event('course_progress_updated'));
-};
+/**
+ * 5. SINCRONIZAÇÃO: Salva no MySQL através do save_progress.php
+ */
+export const syncProgressToCloud = async (progress: UserProgressData) => {
+  if (!API_BASE_URL || progress.studentId === 'aluno-demo') return;
 
-export const markLessonCompleted = (lessonId: string) => {
-  const progress = getUserProgress();
-  if (!progress.completedLessons.includes(lessonId)) {
-    progress.completedLessons.push(lessonId);
-    saveUserProgress(progress);
+  try {
+    await fetch(`${API_BASE_URL}/save_progress.php`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(progress),
+    });
+  } catch (err) {
+    console.warn('Modo offline ativo ou falha ao sincronizar com UOL Host:', err);
   }
 };
 
+/**
+ * 6. SINCRONIZAÇÃO: Carrega do MySQL através do seu get_progress.php
+ */
+export const syncProgressFromCloud = async (studentId: string) => {
+  if (!API_BASE_URL || !studentId || studentId === 'aluno-demo') return;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/get_progress.php?student_id=${encodeURIComponent(studentId)}`
+    );
+    
+    if (response.ok) {
+      const cloudData = await response.json();
+      if (cloudData && Array.isArray(cloudData.completedLessons)) {
+        const merged: UserProgressData = {
+          studentId: cloudData.studentId || studentId,
+          studentName: cloudData.studentName || 'Aluno',
+          completedLessons: cloudData.completedLessons,
+          completedSteps: cloudData.completedSteps || {},
+          lastLessonId: cloudData.lastLessonId,
+        };
+        saveLocalAndNotify(merged);
+      }
+    }
+  } catch (err) {
+    console.warn('Não foi possível buscar progresso remoto:', err);
+  }
+};
+
+/**
+ * 7. Marca um passo prático como concluído e envia para a nuvem
+ */
 export const markStepCompleted = (lessonId: string, stepId: string) => {
-  const progress = getUserProgress();
-  if (!progress.completedSteps[lessonId]) {
-    progress.completedSteps[lessonId] = [];
+  const p = getUserProgress();
+  const list = p.completedSteps[lessonId] || [];
+
+  if (!list.includes(stepId)) {
+    p.completedSteps[lessonId] = [...list, stepId];
+    p.lastLessonId = lessonId;
+    saveLocalAndNotify(p);
+    syncProgressToCloud(p);
   }
-  if (!progress.completedSteps[lessonId].includes(stepId)) {
-    progress.completedSteps[lessonId].push(stepId);
-    saveUserProgress(progress);
+};
+
+/**
+ * 8. Marca uma lição/módulo como concluído e envia para a nuvem
+ */
+export const markLessonCompleted = (lessonId: string) => {
+  const p = getUserProgress();
+
+  if (!p.completedLessons.includes(lessonId)) {
+    p.completedLessons.push(lessonId);
+    p.lastLessonId = lessonId;
+    saveLocalAndNotify(p);
+    syncProgressToCloud(p);
   }
 };
 
-export const isModuleCompleted = (module: CourseModule, progress: UserProgressData): boolean => {
-  return module.lessons.every((lesson) => progress.completedLessons.includes(lesson.id));
+/**
+ * 9. Helpers de Bloqueio/Desbloqueio Sequencial Obrigatório
+ */
+
+// Verifica se um módulo específico foi 100% concluído
+export const isModuleCompleted = (module: any, progress: UserProgressData): boolean => {
+  if (!module || !module.lessons || !module.lessons.length) return false;
+  return module.lessons.every((l: any) => progress.completedLessons.includes(l.id));
 };
 
-export const getModuleCompletionPercent = (module: CourseModule, progress: UserProgressData): number => {
-  if (module.lessons.length === 0) return 0;
-  const completed = module.lessons.filter((l) => progress.completedLessons.includes(l.id)).length;
-  return Math.round((completed / module.lessons.length) * 100);
-};
-
+// Um módulo só é liberado se for o Módulo 1 OU se o módulo anterior tiver sido 100% concluído
 export const isModuleUnlocked = (moduleIndex: number, progress: UserProgressData): boolean => {
   if (moduleIndex === 0) return true;
-  const prevModule = COURSE_MODULES[moduleIndex - 1];
-  return isModuleCompleted(prevModule, progress);
+
+  const previousModule = COURSE_MODULES[moduleIndex - 1];
+  if (!previousModule) return false;
+
+  return isModuleCompleted(previousModule, progress);
 };
 
+// Uma lição só é liberada se o módulo dela estiver liberado E a lição anterior do mesmo módulo estiver concluída
 export const isLessonUnlocked = (
   moduleIndex: number,
   lessonIndex: number,
   progress: UserProgressData
 ): boolean => {
+  // 1. O módulo da lição precisa estar desbloqueado
   if (!isModuleUnlocked(moduleIndex, progress)) return false;
+
+  // 2. A primeira lição de um módulo desbloqueado sempre fica liberada
   if (lessonIndex === 0) return true;
 
+  // 3. As lições seguintes exigem que a lição imediatamente anterior esteja concluída
   const currentModule = COURSE_MODULES[moduleIndex];
-  const prevLesson = currentModule.lessons[lessonIndex - 1];
-  return progress.completedLessons.includes(prevLesson.id);
+  if (!currentModule || !currentModule.lessons) return false;
+
+  const previousLesson = currentModule.lessons[lessonIndex - 1];
+  if (!previousLesson) return false;
+
+  return progress.completedLessons.includes(previousLesson.id);
+};
+
+// Calcula a porcentagem de conclusão do módulo
+export const getModuleCompletionPercent = (module: any, progress: UserProgressData): number => {
+  if (!module || !module.lessons || !module.lessons.length) return 0;
+  const done = module.lessons.filter((l: any) => progress.completedLessons.includes(l.id)).length;
+  return Math.round((done / module.lessons.length) * 100);
 };
