@@ -4,6 +4,8 @@ import { useInverter } from '../context/InverterContext';
 export const CFW300Workbench: React.FC = () => {
   const { state, dispatch } = useInverter();
 
+  const faultCode = state.activeFault ? (typeof state.activeFault === 'object' ? state.activeFault.code : String(state.activeFault)) : 'F070';
+
   const handleKeyClick = (key: string) => {
     dispatch({ type: 'KEY_PRESS', payload: key } as any);
   };
@@ -50,7 +52,7 @@ export const CFW300Workbench: React.FC = () => {
             </div>
             <div style={sevenSegmentTextStyle}>
               {state.motorStatus === 'FAULT'
-                ? (state.activeFault || 'F070')
+                ? faultCode
                 : (state.outputFrequency ?? 0).toFixed(1)}
             </div>
           </div>
@@ -97,14 +99,14 @@ export const CFW300Workbench: React.FC = () => {
           <div style={{ marginTop: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#b0bec5', marginBottom: '4px' }}>
               <span>Entrada Analógica AI1 (0-10V):</span>
-              <strong style={{ color: '#00e676' }}>{((state.analogInputs?.ai1 ?? 0) * 10).toFixed(1)} V</strong>
+              <strong style={{ color: '#00e676' }}>{((state.ai1Voltage ?? 0) * 10).toFixed(1)} V</strong>
             </div>
             <input
               type="range"
               min="0"
-              max="1"
-              step="0.01"
-              value={state.analogInputs?.ai1 ?? 0}
+              max="10"
+              step="0.1"
+              value={state.ai1Voltage ?? 0}
               onChange={handlePotChange}
               style={{ width: '100%', accentColor: '#0288d1' }}
             />
