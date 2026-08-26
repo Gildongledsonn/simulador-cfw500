@@ -10,7 +10,7 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
   const { state } = useInverter();
   const mountRef = useRef<HTMLDivElement | null>(null);
 
-  // Referência sempre atualizada do state
+  // Referência sempre atualizada do state para o loop de física e animação
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
@@ -22,7 +22,7 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const shaftGroupRef = useRef<THREE.Group | null>(null);
 
-  // Controle de rotação da câmera (Orbital)
+  // Controle de rotação orbital da câmera
   const isDraggingRef = useRef<boolean>(false);
   const previousMousePositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const cameraAngleRef = useRef<{ theta: number; phi: number; radius: number }>({
@@ -31,11 +31,41 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
     radius: 4.2,
   });
 
-  const freq = Number(state.outputFrequency ?? 0);
-  const isRunning = state.motorStatus === 'RUNNING' || freq > 0.1;
-  const targetRpm = Math.round((freq / 60) * 1750);
-  const currentAmps =
-    state.outputCurrent ?? (isRunning ? (1.2 + (freq / 60) * 3.3).toFixed(1) : '0.0');
+  // Helper seguro para obter o valor numérico de um parâmetro
+  const getParam = (code: string): number => {
+    if (!state || !state.parameters) return 0;
+    const item = state.parameters[code];
+    if (item === undefined || item === null) return 0;
+    if (typeof item === 'object' && 'currentValue' in item) {
+      return Number(item.currentValue ?? 0);
+    }
+    return Number(item ?? 0);
+  };
+
+  // Leitura precisa de direção (FWD / REV)
+  const isReverse = (): boolean => {
+    const s = state as any;
+    if (s.rotationDirection === 'REV' || s.direction === 'REV' || s.isReverse === true) {
+      return true;
+    }
+    if ((s.outputFrequency ?? 0) < 0) {
+      return true;
+    }
+    // Verificação por bornes remotos: se DI2 estiver acionado em modo REM
+    const isRem = s.controlSource === 'REM' || s.isLocal === false;
+    const di2 = Boolean(
+      s.digitalInputs?.[1] ||
+      s.digitalInputs?.DI2 ||
+      s.digitalInputs?.di2
+    );
+    return isRem && di2;
+  };
+
+  const rawFreq = Math.abs(Number(state.outputFrequency ?? 0));
+  const isRev = isReverse();
+  const isRunning = (state.motorStatus === 'RUNNING' || rawFreq > 0.1) && state.motorStatus !== 'FAULT';
+  const targetRpm = Math.round((rawFreq / 60) * 1750);
+  const currentAmps = state.outputCurrent ?? (isRunning ? (1.2 + (rawFreq / 60) * 3.3).toFixed(1) : '0.0');
 
   const updateCameraPosition = () => {
     if (!cameraRef.current) return;
@@ -159,13 +189,13 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
     const motorGroup = new THREE.Group();
     scene.add(motorGroup);
 
-    // Carcaça
+    // Carcaça principal
     const statorGeo = new THREE.CylinderGeometry(0.85, 0.85, 1.8, 32);
     statorGeo.rotateZ(Math.PI / 2);
     const statorMesh = new THREE.Mesh(statorGeo, wegBlueMaterial);
     motorGroup.add(statorMesh);
 
-    // Aletas
+    // Aletas de ventilação
     for (let i = -0.7; i <= 0.7; i += 0.14) {
       const finGeo = new THREE.CylinderGeometry(0.92, 0.92, 0.04, 32);
       finGeo.rotateZ(Math.PI / 2);
@@ -174,20 +204,20 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
       motorGroup.add(finMesh);
     }
 
-    // Tampa Defletora
+    // Tampa defletora
     const fanCoverGeo = new THREE.CylinderGeometry(0.86, 0.86, 0.5, 32);
     fanCoverGeo.rotateZ(Math.PI / 2);
     const fanCoverMesh = new THREE.Mesh(fanCoverGeo, castIronMaterial);
     fanCoverMesh.position.x = -1.1;
     motorGroup.add(fanCoverMesh);
 
-    // Caixa de Ligação
+    // Caixa de ligação superior
     const termBoxGeo = new THREE.BoxGeometry(0.6, 0.35, 0.55);
     const termBoxMesh = new THREE.Mesh(termBoxGeo, wegBlueMaterial);
     termBoxMesh.position.set(0, 0.95, 0);
     motorGroup.add(termBoxMesh);
 
-    // Pés de Fixação
+    // Pés de fixação
     const feetGeo = new THREE.BoxGeometry(1.6, 0.15, 0.3);
     const foot1 = new THREE.Mesh(feetGeo, castIronMaterial);
     foot1.position.set(0, -0.85, 0.65);
@@ -197,7 +227,7 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
     foot2.position.set(0, -0.85, -0.65);
     motorGroup.add(foot2);
 
-    // Placa de Identificação
+    // Placa de identificação WEG
     const nameplateTex = createNameplateTexture();
     const nameplateGeo = new THREE.PlaneGeometry(0.75, 0.38);
     const nameplateMat = new THREE.MeshStandardMaterial({
@@ -210,7 +240,7 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
     nameplateMesh.position.set(0, 0.05, 0.87);
     motorGroup.add(nameplateMesh);
 
-    // Grupo Rotativo (Eixo e Polia)
+    // Grupo Rotativo (Eixo e Polia de Saída)
     const shaftGroup = new THREE.Group();
     shaftGroupRef.current = shaftGroup;
     shaftGroup.position.set(0.9, 0, 0);
@@ -238,7 +268,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
     gridHelper.position.y = -0.93;
     scene.add(gridHelper);
 
-    // Relógio Three.js para cálculo dinâmico baseado em delta de tempo
     const clock = new THREE.Clock();
     let animationFrameId: number;
 
@@ -246,20 +275,25 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
       animationFrameId = requestAnimationFrame(animate);
 
       const delta = clock.getDelta();
-      const currentState = stateRef.current;
-      const currentFreq = Number(currentState?.outputFrequency ?? 0);
-      const isMotorRunning = currentState?.motorStatus === 'RUNNING' || currentFreq > 0.1;
+      const s = stateRef.current as any;
+      const curFreq = Math.abs(Number(s?.outputFrequency ?? 0));
+      const isMotorRunning = (s?.motorStatus === 'RUNNING' || curFreq > 0.1) && s?.motorStatus !== 'FAULT';
 
       if (shaftGroupRef.current && isMotorRunning) {
-        // Cálculo da rotação real do motor 4 polos (1750 RPM a 60Hz)
-        const currentRpm = (currentFreq / 60) * 1750;
+        // Direção: -1 (Anti-horário/REV) ou 1 (Horário/FWD)
+        const isCurrentlyRev =
+          s?.rotationDirection === 'REV' ||
+          s?.direction === 'REV' ||
+          s?.isReverse === true ||
+          (s?.outputFrequency ?? 0) < 0 ||
+          (s?.controlSource === 'REM' && Boolean(s?.digitalInputs?.[1] || s?.digitalInputs?.DI2 || s?.digitalInputs?.di2));
 
-        // Fator visual dinâmico com proporção real por segundo
+        const dirFactor = isCurrentlyRev ? -1 : 1;
+        const currentRpm = (curFreq / 60) * 1750;
         const visualSpeedFactor = 0.35;
         const radPerSec = ((2 * Math.PI * currentRpm) / 60) * visualSpeedFactor;
-        const direction = (currentState as any)?.rotationDirection === 'REV' ? -1 : 1;
 
-        shaftGroupRef.current.rotation.x += radPerSec * delta * direction;
+        shaftGroupRef.current.rotation.x += radPerSec * delta * dirFactor;
       }
 
       renderer.render(scene, camera);
@@ -357,7 +391,13 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
       <div style={telemetryRowStyle}>
         <div style={telemetryCardStyle}>
           <span style={telemetryLabelStyle}>FREQUÊNCIA</span>
-          <strong style={{ color: '#00e676', fontSize: '13px' }}>{freq.toFixed(1)} Hz</strong>
+          <strong style={{ color: '#00e676', fontSize: '13px' }}>{rawFreq.toFixed(1)} Hz</strong>
+        </div>
+        <div style={telemetryCardStyle}>
+          <span style={telemetryLabelStyle}>SENTIDO DE GIRO</span>
+          <strong style={{ color: isRev ? '#ffb74d' : '#81d4fa', fontSize: '13px' }}>
+            {isRev ? '↺ ANTI-HORÁRIO (REV)' : '↻ HORÁRIO (FWD)'}
+          </strong>
         </div>
         <div style={telemetryCardStyle}>
           <span style={telemetryLabelStyle}>VELOCIDADE</span>
@@ -419,7 +459,7 @@ const viewport3DStyle: React.CSSProperties = {
 
 const telemetryRowStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
   gap: '8px',
 };
 
