@@ -31,17 +31,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
     radius: 4.2,
   });
 
-  // Helper seguro para obter o valor numérico de um parâmetro
-  const getParam = (code: string): number => {
-    if (!state || !state.parameters) return 0;
-    const item = state.parameters[code];
-    if (item === undefined || item === null) return 0;
-    if (typeof item === 'object' && 'currentValue' in item) {
-      return Number(item.currentValue ?? 0);
-    }
-    return Number(item ?? 0);
-  };
-
   // Leitura precisa de direção (FWD / REV)
   const isReverse = (): boolean => {
     const s = state as any;
@@ -280,7 +269,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({ loadTorquePerc
       const isMotorRunning = (s?.motorStatus === 'RUNNING' || curFreq > 0.1) && s?.motorStatus !== 'FAULT';
 
       if (shaftGroupRef.current && isMotorRunning) {
-        // Direção: -1 (Anti-horário/REV) ou 1 (Horário/FWD)
         const isCurrentlyRev =
           s?.rotationDirection === 'REV' ||
           s?.direction === 'REV' ||
