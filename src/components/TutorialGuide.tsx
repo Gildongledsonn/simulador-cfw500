@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useInverter } from '../context/InverterContext';
 import { COURSE_MODULES } from '../constants/courseModules';
 import { Lesson } from '../types/tutorial';
@@ -10,6 +10,9 @@ import {
   isLessonUnlocked,
   isModuleCompleted,
   getModuleCompletionPercent,
+  isAdminUnlockAllActive,
+  setAdminUnlockAll,
+  resetStudentProgress,
   UserProgressData,
 } from '../services/courseProgressService';
 
@@ -24,8 +27,12 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 }) => {
   const { state, dispatch } = useInverter();
   const [progress, setProgress] = useState<UserProgressData>(() => getUserProgress());
+  const [adminMode, setAdminMode] = useState<boolean>(() => isAdminUnlockAllActive());
 
-  // Função centralizada e segura de Reset de Fábrica
+  // Referência para identificar mudança de lição/módulo
+  const previousLessonIdRef = useRef<string>(selectedLesson.id);
+
+  // Função centralizada e segura de Reset de Fábrica da bancada
   const triggerFactoryReset = () => {
     if (!dispatch) return;
     try {
@@ -34,25 +41,29 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
       try {
         dispatch({ type: 'RESET_DEFAULTS' } as any);
       } catch {
-        // Fallback silencioso sem interromper o fluxo
+        // Fallback silencioso
       }
     }
   };
 
-  // 1. Reseta o inversor SEMPRE que o aluno mudar de lição ou módulo
+  // 1. AUTONOMIA TOTAL: Reseta os parâmetros do inversor para o padrão de fábrica sempre que mudar de lição/módulo
   useEffect(() => {
-    triggerFactoryReset();
+    if (previousLessonIdRef.current !== selectedLesson.id) {
+      triggerFactoryReset();
+      previousLessonIdRef.current = selectedLesson.id;
+    }
   }, [selectedLesson.id]);
 
   useEffect(() => {
     const handleProgressUpdate = () => {
       setProgress(getUserProgress());
+      setAdminMode(isAdminUnlockAllActive());
     };
     window.addEventListener('course_progress_updated', handleProgressUpdate);
     return () => window.removeEventListener('course_progress_updated', handleProgressUpdate);
   }, []);
 
-  // Monitora a conclusão dos passos práticos
+  // Monitora e valida a conclusão dos passos práticos no estado atual da bancada
   useEffect(() => {
     if (selectedLesson.type === 'PRACTICE' && selectedLesson.steps) {
       const currentSavedSteps = progress.completedSteps[selectedLesson.id] || [];
@@ -71,17 +82,48 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 
       if (allDone && !updatedProgress.completedLessons.includes(selectedLesson.id)) {
         markLessonCompleted(selectedLesson.id);
+
+        // 2. RESET AUTOMÁTICO AO CONCLUIR O MÓDULO
+        const currentMod = COURSE_MODULES.find((m) =>
+          m.lessons.some((l) => l.id === selectedLesson.id)
+        );
+        if (currentMod) {
+          const isNowModCompleted = currentMod.lessons.every((l) =>
+            l.id === selectedLesson.id || updatedProgress.completedLessons.includes(l.id)
+          );
+          if (isNowModCompleted) {
+            triggerFactoryReset();
+          }
+        }
       }
     }
   }, [state, selectedLesson, progress.completedSteps, progress.completedLessons]);
 
-  // 2. Conclui a teoria e limpa o inversor
+  // Alterna modo de testes do instrutor/administrador
+  const handleToggleAdminMode = () => {
+    const next = !adminMode;
+    setAdminUnlockAll(next);
+    setAdminMode(next);
+  };
+
+  // Reseta todo o progresso do aluno para reiniciar o treinamento
+  const handleFullReset = () => {
+    if (window.confirm('Deseja resetar todo o progresso do aluno para reiniciar os testes da lição 1?')) {
+      resetStudentProgress();
+      triggerFactoryReset();
+      if (COURSE_MODULES[0]?.lessons[0]) {
+        setSelectedLesson(COURSE_MODULES[0].lessons[0]);
+      }
+    }
+  };
+
+  // Conclui a teoria e limpa o inversor
   const handleCompleteTheory = () => {
     markLessonCompleted(selectedLesson.id);
     triggerFactoryReset();
   };
 
-  // 3. Avança para a próxima lição garantindo que a bancada inicie limpa
+  // Avança para a próxima lição garantindo que a bancada inicie no padrão de fábrica
   const handleNextLesson = () => {
     triggerFactoryReset();
 
@@ -108,6 +150,32 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 
   return (
     <div style={containerStyle}>
+      {/* BARRA DE CONTROLE ADMINISTRATIVO / INSTRUTOR */}
+      <div style={adminControlBarStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#ffb74d' }}>⚙️ Painel ADM:</span>
+          <button
+            onClick={handleToggleAdminMode}
+            style={{
+              ...adminBtnStyle,
+              background: adminMode ? '#00e676' : '#374151',
+              color: adminMode ? '#000' : '#fff',
+            }}
+            title="Libera o acesso imediato a todos os 20 módulos sem exigir conclusão prévia"
+          >
+            {adminMode ? '🔓 Todos Módulos Liberados' : '🔒 Trava Sequencial Ativa'}
+          </button>
+        </div>
+
+        <button
+          onClick={handleFullReset}
+          style={{ ...adminBtnStyle, background: '#d32f2f', color: '#fff' }}
+          title="Zera o progresso do aluno para testar o fluxo desde o início"
+        >
+          🗑️ Resetar Progresso
+        </button>
+      </div>
+
       {/* SELETOR DE MÓDULOS */}
       <div style={moduleListHeaderStyle}>
         <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#90a4ae' }}>
@@ -230,7 +298,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                 <button
                   onClick={triggerFactoryReset}
                   style={btnResetFactoryStyle}
-                  title="Restaura os parâmetros do inversor para o padrão de fábrica"
+                  title="Restaura os parâmetros do inversor para o padrão de fábrica da bancada"
                 >
                   🔄 Resetar Inversor
                 </button>
@@ -351,6 +419,27 @@ const containerStyle: React.CSSProperties = {
   gap: '10px',
   width: '100%',
   boxSizing: 'border-box',
+};
+
+const adminControlBarStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  background: '#1b222c',
+  border: '1px solid #374151',
+  borderRadius: '8px',
+  padding: '6px 10px',
+  boxSizing: 'border-box',
+};
+
+const adminBtnStyle: React.CSSProperties = {
+  border: 'none',
+  borderRadius: '4px',
+  padding: '4px 8px',
+  fontSize: '10px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
 };
 
 const moduleListHeaderStyle: React.CSSProperties = {

@@ -8,13 +8,14 @@ export interface UserProgressData {
   lastLessonId?: string;
 }
 
-// Chaves de armazenamento local para suporte offline
+// Chaves de armazenamento local
 const SESSION_KEY = '@CFW500_STUDENT_SESSION';
 const PROGRESS_STORAGE_PREFIX = '@CFW500_PROGRESS_DATA_';
+const ADMIN_BYPASS_KEY = '@CFW500_ADMIN_UNLOCK_ALL';
 
-// URL base da sua pasta 'api' no UOL Host
+// URL base da API no UOL Host
 const API_BASE_URL: string =
-  ((import.meta as any).env?.VITE_API_URL as string) || 'https://gaflink.com.br/api';
+  ((import.meta as any).env?.VITE_API_URL as string) || 'https://seudominio.com.br/api';
 
 /**
  * 1. Obtém a sessão do aluno atual (ID e Nome)
@@ -36,8 +37,6 @@ export const setStudentSession = (id: string, name: string) => {
   const cleanId = id.trim().toLowerCase();
   const cleanName = name.trim();
   localStorage.setItem(SESSION_KEY, JSON.stringify({ id: cleanId, name: cleanName }));
-  
-  // Dispara busca na nuvem no UOL Host
   syncProgressFromCloud(cleanId);
 };
 
@@ -93,7 +92,7 @@ export const syncProgressToCloud = async (progress: UserProgressData) => {
 };
 
 /**
- * 6. SINCRONIZAÇÃO: Carrega do MySQL através do seu get_progress.php
+ * 6. SINCRONIZAÇÃO: Carrega do MySQL através do get_progress.php
  */
 export const syncProgressFromCloud = async (studentId: string) => {
   if (!API_BASE_URL || !studentId || studentId === 'aluno-demo') return;
@@ -102,7 +101,7 @@ export const syncProgressFromCloud = async (studentId: string) => {
     const response = await fetch(
       `${API_BASE_URL}/get_progress.php?student_id=${encodeURIComponent(studentId)}`
     );
-    
+
     if (response.ok) {
       const cloudData = await response.json();
       if (cloudData && Array.isArray(cloudData.completedLessons)) {
@@ -151,17 +150,50 @@ export const markLessonCompleted = (lessonId: string) => {
 };
 
 /**
- * 9. Helpers de Bloqueio/Desbloqueio Sequencial Obrigatório
+ * 9. FUNÇÕES ADMINISTRATIVAS (DevTools / Testes)
  */
+export const isAdminUnlockAllActive = (): boolean => {
+  try {
+    return localStorage.getItem(ADMIN_BYPASS_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
 
-// Verifica se um módulo específico foi 100% concluído
+export const setAdminUnlockAll = (enabled: boolean) => {
+  try {
+    localStorage.setItem(ADMIN_BYPASS_KEY, enabled ? 'true' : 'false');
+    window.dispatchEvent(new Event('course_progress_updated'));
+  } catch (err) {
+    console.warn('Erro ao salvar admin bypass:', err);
+  }
+};
+
+export const resetStudentProgress = (studentId?: string) => {
+  const session = getStudentSession();
+  const targetId = studentId || session.id;
+
+  const emptyProgress: UserProgressData = {
+    studentId: targetId,
+    studentName: session.name,
+    completedLessons: [],
+    completedSteps: {},
+  };
+
+  saveLocalAndNotify(emptyProgress);
+  syncProgressToCloud(emptyProgress);
+};
+
+/**
+ * 10. Helpers de Bloqueio/Desbloqueio Sequencial
+ */
 export const isModuleCompleted = (module: any, progress: UserProgressData): boolean => {
   if (!module || !module.lessons || !module.lessons.length) return false;
   return module.lessons.every((l: any) => progress.completedLessons.includes(l.id));
 };
 
-// Um módulo só é liberado se for o Módulo 1 OU se o módulo anterior tiver sido 100% concluído
 export const isModuleUnlocked = (moduleIndex: number, progress: UserProgressData): boolean => {
+  if (isAdminUnlockAllActive()) return true;
   if (moduleIndex === 0) return true;
 
   const previousModule = COURSE_MODULES[moduleIndex - 1];
@@ -170,19 +202,15 @@ export const isModuleUnlocked = (moduleIndex: number, progress: UserProgressData
   return isModuleCompleted(previousModule, progress);
 };
 
-// Uma lição só é liberada se o módulo dela estiver liberado E a lição anterior do mesmo módulo estiver concluída
 export const isLessonUnlocked = (
   moduleIndex: number,
   lessonIndex: number,
   progress: UserProgressData
 ): boolean => {
-  // 1. O módulo da lição precisa estar desbloqueado
+  if (isAdminUnlockAllActive()) return true;
   if (!isModuleUnlocked(moduleIndex, progress)) return false;
-
-  // 2. A primeira lição de um módulo desbloqueado sempre fica liberada
   if (lessonIndex === 0) return true;
 
-  // 3. As lições seguintes exigem que a lição imediatamente anterior esteja concluída
   const currentModule = COURSE_MODULES[moduleIndex];
   if (!currentModule || !currentModule.lessons) return false;
 
@@ -192,7 +220,6 @@ export const isLessonUnlocked = (
   return progress.completedLessons.includes(previousLesson.id);
 };
 
-// Calcula a porcentagem de conclusão do módulo
 export const getModuleCompletionPercent = (module: any, progress: UserProgressData): number => {
   if (!module || !module.lessons || !module.lessons.length) return 0;
   const done = module.lessons.filter((l: any) => progress.completedLessons.includes(l.id)).length;
