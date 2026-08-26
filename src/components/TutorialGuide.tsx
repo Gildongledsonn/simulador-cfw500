@@ -191,7 +191,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
               color: activeInverterType === 'CFW500' ? '#fff' : '#90a4ae',
             }}
           >
-            ⚡ Inversor CFW500 (20 Módulos)
+            ⚡ Inversor CFW500
           </button>
           <button
             onClick={() => handleSelectInverterType('CFW300')}
@@ -202,7 +202,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
               color: activeInverterType === 'CFW300' ? '#fff' : '#90a4ae',
             }}
           >
-            ⚙️ Inversor CFW300 (Aulas e Desafios)
+            ⚙️ Inversor CFW300
           </button>
         </div>
 
@@ -351,6 +351,23 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                   </p>
                 ))}
               </div>
+
+              {/* CARD EXCLUSIVO DE DOWNLOAD DO MANUAL DO MÓDULO 0 */}
+              {selectedLesson.id === 'l0-1' && (
+                <div style={manualDownloadCardStyle}>
+                  <a
+                    href="https://static.weg.net/medias/downloadcenter/h96/h7c/WEG-CFW500-programming-manual-10001469555-pt.pdf"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={btnDownloadManualStyle}
+                  >
+                    📥 WEG-CFW500-programming-manual-10001469555-pt.pdf
+                  </a>
+                  <span style={{ fontSize: '10px', color: '#81d4fa', fontWeight: 'bold' }}>
+                    👇 Baixe o manual
+                  </span>
+                </div>
+              )}
 
               {selectedLesson.theoryData.diagramInfo && (
                 <div style={diagramBoxStyle}>
@@ -597,6 +614,35 @@ const theoryContainerStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '6px',
+};
+
+const manualDownloadCardStyle: React.CSSProperties = {
+  background: '#131e2b',
+  border: '1px solid #0288d1',
+  borderRadius: '8px',
+  padding: '12px',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '6px',
+  margin: '8px 0',
+};
+
+const btnDownloadManualStyle: React.CSSProperties = {
+  background: '#0288d1',
+  color: '#ffffff',
+  textDecoration: 'none',
+  borderRadius: '6px',
+  padding: '10px 16px',
+  fontSize: '12px',
+  fontWeight: 'bold',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '8px',
+  boxShadow: '0 4px 12px rgba(2, 136, 209, 0.4)',
+  transition: 'transform 0.2s ease',
+  cursor: 'pointer',
 };
 
 const diagramBoxStyle: React.CSSProperties = {

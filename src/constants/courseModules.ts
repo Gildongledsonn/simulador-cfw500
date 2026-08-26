@@ -29,6 +29,34 @@ const getDI = (state: any, index: number): boolean => {
 
 export const COURSE_MODULES: CourseModule[] = [
   // =========================================================================
+  // MÓDULO 0: MANUAL DE PROGRAMAÇÃO OFICIAL DO WEG CFW500
+  // =========================================================================
+  {
+    id: 'mod-0',
+    moduleNumber: 0,
+    title: 'Manual de Programação CFW500',
+    icon: '📑',
+    description: 'Acesse e baixe o manual oficial completo de programação do WEG CFW500 para consulta técnica.',
+    lessons: [
+      {
+        id: 'l0-1',
+        title: 'Download do Manual Oficial de Programação',
+        durationMin: 2,
+        type: 'THEORY',
+        description: 'Material de apoio indispensável para consulta de parâmetros, tabelas de falhas e diagramas de ligação.',
+        theoryData: {
+          title: 'Documentação Técnica Oficial WEG',
+          content: [
+            'O manual de programação do WEG CFW500 reúne toda a tabela detalhada de parâmetros, diagramas dos cartões plug-in, curvas de torque e guias de resolução de falhas.',
+            'Clique no botão abaixo para baixar o PDF e utilize-o como fonte de consulta durante os desafios e comissionamentos das próximas etapas.'
+          ],
+          diagramInfo: 'DOCUMENTAÇÃO TÉCNICA OFICIAL ➔ WEG CFW500 (CÓD. 10001469555)',
+          keyTakeaway: 'Baixe o manual no seu computador ou celular para consultar os parâmetros e grupos de controle durante o treinamento.'
+        }
+      }
+    ]
+  },
+  // =========================================================================
   // MÓDULO 1: FUNDAMENTOS, IHM E PRIMEIRO ACIONAMENTO
   // =========================================================================
   {

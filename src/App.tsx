@@ -12,10 +12,12 @@ import { TutorialGuide } from './components/TutorialGuide';
 import { ModbusPanel } from './components/ModbusPanel';
 import { LoginScreen } from './components/LoginScreen';
 import { AdminPanel } from './components/AdminPanel';
+import { CFW300Workbench } from './components/CFW300Workbench';
 import { COURSE_MODULES } from './constants/courseModules';
 import { Lesson } from './types/tutorial';
 
 type ActiveTab = 'workbench' | 'modbus' | 'tutorial' | 'admin';
+type InverterModel = 'CFW500' | 'CFW300';
 
 interface AuthUser {
   name: string;
@@ -25,11 +27,15 @@ interface AuthUser {
 
 const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('workbench');
+  const [inverterModel, setInverterModel] = useState<InverterModel>('CFW500');
   const [loadTorque, setLoadTorque] = useState(20);
   const [currentLesson, setCurrentLesson] = useState<Lesson>(COURSE_MODULES[0].lessons[0]);
 
   usePhysicsLoop({ loadTorquePercent: loadTorque, enableNoise: true });
   useKeyboardControls();
+
+  // Detecta se a lição ativa no TutorialGuide pertence ao CFW300 para sincronizar a bancada prática
+  const isLessonCFW300 = currentLesson.id.startsWith('c300-');
 
   return (
     <div style={mainContainerStyle}>
@@ -108,38 +114,98 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
         <AudioControls />
       </div>
 
-      {/* ABA 1: BANCADA */}
+      {/* ABA 1: BANCADA LIVRE */}
       {activeTab === 'workbench' && (
         <div style={tabContentStyle}>
-          <div style={rowStyle}>
-            <IHM />
-            <div style={motorColumnStyle}>
-              <MotorVisualizer loadTorquePercent={loadTorque} />
-              <div style={loadBoxStyle}>
-                <label style={{ fontSize: '11px', color: '#90a4ae', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Carga Mecânica no Eixo (Freio)</span>
-                  <strong>{loadTorque}%</strong>
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={loadTorque}
-                  onChange={(e) => setLoadTorque(Number(e.target.value))}
-                  style={{ width: '100%', marginTop: '8px', cursor: 'pointer', height: '28px' }}
-                />
-              </div>
+          {/* SELETOR DE MODELO DE BANCADA LIVRE */}
+          <div style={modelSelectorBarStyle}>
+            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#90a4ae' }}>
+              Modelo de Inversor Ativo na Bancada:
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setInverterModel('CFW500')}
+                style={{
+                  ...modelTabBtnStyle,
+                  background: inverterModel === 'CFW500' ? '#0288d1' : '#161b22',
+                  borderColor: inverterModel === 'CFW500' ? '#29b6f6' : '#30363d',
+                  color: inverterModel === 'CFW500' ? '#fff' : '#90a4ae',
+                }}
+              >
+                ⚡ WEG CFW500 (Padrão Industrial)
+              </button>
+              <button
+                onClick={() => setInverterModel('CFW300')}
+                style={{
+                  ...modelTabBtnStyle,
+                  background: inverterModel === 'CFW300' ? '#0288d1' : '#161b22',
+                  borderColor: inverterModel === 'CFW300' ? '#29b6f6' : '#30363d',
+                  color: inverterModel === 'CFW300' ? '#fff' : '#90a4ae',
+                }}
+              >
+                ⚙️ WEG CFW300 (Micro Drive Compacto)
+              </button>
             </div>
           </div>
-          <div style={rowStyle}>
-            <TerminalBlock />
-            <RelayPanel />
-          </div>
-          <FaultInjectionPanel />
+
+          {/* EXIBIÇÃO DA BANCADA ESCOLHIDA */}
+          {inverterModel === 'CFW500' ? (
+            <>
+              <div style={rowStyle}>
+                <IHM />
+                <div style={motorColumnStyle}>
+                  <MotorVisualizer loadTorquePercent={loadTorque} />
+                  <div style={loadBoxStyle}>
+                    <label style={{ fontSize: '11px', color: '#90a4ae', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Carga Mecânica no Eixo (Freio)</span>
+                      <strong>{loadTorque}%</strong>
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={loadTorque}
+                      onChange={(e) => setLoadTorque(Number(e.target.value))}
+                      style={{ width: '100%', marginTop: '8px', cursor: 'pointer', height: '28px' }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div style={rowStyle}>
+                <TerminalBlock />
+                <RelayPanel />
+              </div>
+              <FaultInjectionPanel />
+            </>
+          ) : (
+            <>
+              <div style={rowStyle}>
+                <CFW300Workbench />
+                <div style={motorColumnStyle}>
+                  <MotorVisualizer loadTorquePercent={loadTorque} />
+                  <div style={loadBoxStyle}>
+                    <label style={{ fontSize: '11px', color: '#90a4ae', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Carga Mecânica no Eixo (Freio)</span>
+                      <strong>{loadTorque}%</strong>
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={loadTorque}
+                      onChange={(e) => setLoadTorque(Number(e.target.value))}
+                      style={{ width: '100%', marginTop: '8px', cursor: 'pointer', height: '28px' }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <FaultInjectionPanel />
+            </>
+          )}
         </div>
       )}
 
-      {/* ABA 2: MODBUS */}
+      {/* ABA 2: MODBUS RTU */}
       {activeTab === 'modbus' && (
         <div style={tabContentStyle}>
           <ModbusPanel />
@@ -152,7 +218,7 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
         </div>
       )}
 
-      {/* ABA 3: MODO AULA */}
+      {/* ABA 3: MODO AULA & TRILHA */}
       {activeTab === 'tutorial' && (
         <div style={tabContentStyle}>
           <TutorialGuide
@@ -163,15 +229,26 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
           {currentLesson.type === 'PRACTICE' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '6px' }}>
               <div style={{ fontSize: '12px', color: '#64b5f6', fontWeight: 'bold' }}>
-                🎛️ Bancada de Testes Ativa para a Prática:
+                🎛️ Bancada Ativa para a Lição ({isLessonCFW300 ? 'WEG CFW300' : 'WEG CFW500'}):
               </div>
-              <div style={rowStyle}>
-                <IHM />
-                <div style={motorColumnStyle}>
-                  <MotorVisualizer loadTorquePercent={loadTorque} />
-                  <TerminalBlock />
+              
+              {isLessonCFW300 ? (
+                <div style={rowStyle}>
+                  <CFW300Workbench />
+                  <div style={motorColumnStyle}>
+                    <MotorVisualizer loadTorquePercent={loadTorque} />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div style={rowStyle}>
+                  <IHM />
+                  <div style={motorColumnStyle}>
+                    <MotorVisualizer loadTorquePercent={loadTorque} />
+                    <TerminalBlock />
+                  </div>
+                </div>
+              )}
+              
               <FaultInjectionPanel />
             </div>
           )}
@@ -280,6 +357,28 @@ const tabButtonStyle: React.CSSProperties = {
   cursor: 'pointer',
   transition: 'all 0.2s ease',
   boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+};
+
+const modelSelectorBarStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  background: '#13171d',
+  border: '1px solid #232b36',
+  borderRadius: '8px',
+  padding: '8px 12px',
+  flexWrap: 'wrap',
+  gap: '8px',
+};
+
+const modelTabBtnStyle: React.CSSProperties = {
+  border: '1px solid',
+  borderRadius: '6px',
+  padding: '6px 12px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
 };
 
 const tabContentStyle: React.CSSProperties = {
