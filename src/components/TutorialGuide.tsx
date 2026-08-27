@@ -21,7 +21,7 @@ import {
 interface TutorialGuideProps {
   selectedLesson: Lesson;
   setSelectedLesson: (lesson: Lesson) => void;
-  userRole?: string; // Cargo do usuário conectado ('ADMIN' ou 'USER')
+  userRole?: string;
 }
 
 export const TutorialGuide: React.FC<TutorialGuideProps> = ({
@@ -33,6 +33,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
   const [activeInverterType, setActiveInverterType] = useState<'CFW500' | 'CFW300' | 'L1000'>('CFW500');
   const [progress, setProgress] = useState<UserProgressData>(() => getUserProgress());
   const [adminMode, setAdminMode] = useState<boolean>(() => isAdminUnlockAllActive());
+  const [isInitializingLesson, setIsInitializingLesson] = useState<boolean>(true);
 
   const activeCourseModules =
     activeInverterType === 'CFW500'
@@ -43,22 +44,26 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 
   const previousLessonIdRef = useRef<string>(selectedLesson.id);
 
-  const triggerFactoryReset = () => {
+  // Executa o Hard Reset de Hardware e Parâmetros da Memória
+  const triggerHardReset = () => {
     if (!dispatch) return;
-    try {
-      dispatch({ type: 'RESET_FACTORY_DEFAULTS' } as any);
-    } catch {
-      try {
-        dispatch({ type: 'RESET_DEFAULTS' } as any);
-      } catch {}
-    }
+    dispatch({ type: 'RESET_FACTORY_DEFAULTS' } as any);
+    dispatch({ type: 'PRESS_STOP' });
+    dispatch({ type: 'SET_AI1_VOLTAGE', payload: 0 } as any);
   };
 
+  // Limpa o checklist e reinicia a bancada a cada troca de lição
   useEffect(() => {
-    if (previousLessonIdRef.current !== selectedLesson.id) {
-      triggerFactoryReset();
-      previousLessonIdRef.current = selectedLesson.id;
-    }
+    setIsInitializingLesson(true);
+    triggerHardReset();
+    previousLessonIdRef.current = selectedLesson.id;
+
+    // Tempo hábil para o Reducer propagar o estado inicial limpo
+    const timer = setTimeout(() => {
+      setIsInitializingLesson(false);
+    }, 150);
+
+    return () => clearTimeout(timer);
   }, [selectedLesson.id]);
 
   useEffect(() => {
@@ -70,7 +75,10 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     return () => window.removeEventListener('course_progress_updated', handleProgressUpdate);
   }, []);
 
+  // Avaliação do Checklist Prático
   useEffect(() => {
+    if (isInitializingLesson) return;
+
     if (selectedLesson.type === 'PRACTICE' && selectedLesson.steps) {
       const currentSavedSteps = progress.completedSteps[selectedLesson.id] || [];
 
@@ -97,17 +105,18 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             l.id === selectedLesson.id || updatedProgress.completedLessons.includes(l.id)
           );
           if (isNowModCompleted) {
-            triggerFactoryReset();
+            triggerHardReset();
           }
         }
       }
     }
-  }, [state, selectedLesson, progress.completedSteps, progress.completedLessons, activeCourseModules]);
+  }, [state, selectedLesson, progress.completedSteps, progress.completedLessons, activeCourseModules, isInitializingLesson]);
 
   const handleSelectInverterType = (type: 'CFW500' | 'CFW300' | 'L1000') => {
     if (type === activeInverterType) return;
     setActiveInverterType(type);
-    triggerFactoryReset();
+    triggerHardReset();
+
     const targetModules =
       type === 'CFW500'
         ? COURSE_MODULES
@@ -129,7 +138,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
   const handleFullReset = () => {
     if (window.confirm('Deseja resetar todo o progresso do aluno para reiniciar os testes da lição 1?')) {
       resetStudentProgress();
-      triggerFactoryReset();
+      triggerHardReset();
       if (activeCourseModules[0]?.lessons[0]) {
         setSelectedLesson(activeCourseModules[0].lessons[0]);
       }
@@ -138,11 +147,10 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 
   const handleCompleteTheory = () => {
     markLessonCompleted(selectedLesson.id);
-    triggerFactoryReset();
   };
 
   const handleNextLesson = () => {
-    triggerFactoryReset();
+    triggerHardReset();
 
     let foundCurrent = false;
     for (let mIdx = 0; mIdx < activeCourseModules.length; mIdx++) {
@@ -167,7 +175,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 
   return (
     <div style={containerStyle}>
-      {/* BARRA DE CONTROLE EXCLUSIVA PARA ADMINISTRADORES / INSTRUTORES */}
+      {/* PAINEL ADMIN */}
       {userRole === 'ADMIN' && (
         <div style={adminControlBarStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -195,7 +203,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
         </div>
       )}
 
-      {/* SELEÇÃO DO MODELO DE INVERSOR */}
+      {/* SELEÇÃO DO MODELO */}
       <div style={moduleListHeaderStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
           <button
@@ -253,7 +261,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                 }}
                 onClick={() => {
                   if (unlocked) {
-                    triggerFactoryReset();
+                    triggerHardReset();
                     const firstUnlocked =
                       mod.lessons.find((_, lIdx) => isLessonUnlocked(mIdx, lIdx, progress, activeCourseModules)) ||
                       mod.lessons[0];
@@ -290,7 +298,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
       </div>
 
       <div style={contentGridStyle}>
-        {/* LISTA DE LIÇÕES DO MÓDULO ATIVO */}
+        {/* LISTA DE LIÇÕES */}
         <div style={lessonSidebarStyle}>
           <strong style={{ fontSize: '11px', color: '#81d4fa', marginBottom: '8px', display: 'block' }}>
             Lições do Módulo ({activeInverterType}):
@@ -310,7 +318,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                     key={lesson.id}
                     disabled={!isUnlocked}
                     onClick={() => {
-                      triggerFactoryReset();
+                      triggerHardReset();
                       setSelectedLesson(lesson);
                     }}
                     style={{
@@ -349,9 +357,9 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {selectedLesson.type === 'PRACTICE' && (
                 <button
-                  onClick={triggerFactoryReset}
+                  onClick={triggerHardReset}
                   style={btnResetFactoryStyle}
-                  title="Restaura os parâmetros do inversor para o padrão de fábrica da bancada"
+                  title="Reinicia a bancada e limpa os passos da lição"
                 >
                   🔄 Resetar Inversor
                 </button>
@@ -365,7 +373,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             </div>
           </div>
 
-          {/* CONTEÚDO TEÓRICO */}
+          {/* TEORIA */}
           {selectedLesson.type === 'THEORY' && selectedLesson.theoryData && (
             <div style={theoryContainerStyle}>
               <h3 style={{ fontSize: '13px', color: '#81d4fa', marginBottom: '8px' }}>
@@ -373,41 +381,24 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {selectedLesson.theoryData.content.map((par, i) => (
-                  <p key={i} style={{ fontSize: '11px', color: '#cfd8dc', lineHeight: '1.5', margin: 0 }}>
+                  <p key={i} style={{ fontSize: '11px', color: '#cfd8dc', lineHeight: '1.6', margin: 0 }}>
                     {par}
                   </p>
                 ))}
               </div>
 
-              {/* CARD EXCLUSIVO DE DOWNLOAD DO MANUAL DO MÓDULO 0 */}
-              {selectedLesson.id === 'l0-1' && activeInverterType === 'CFW500' && (
-                <div style={manualDownloadCardStyle}>
-                  <a
-                    href="/WEG-CFW500-programming-manual-10001469555-pt.pdf"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={btnDownloadManualStyle}
-                  >
-                    📥 WEG-CFW500-programming-manual-10001469555-pt.pdf
-                  </a>
-                  <span style={{ fontSize: '10px', color: '#81d4fa', fontWeight: 'bold' }}>
-                    👇 Baixe o manual
-                  </span>
-                </div>
-              )}
-
               {selectedLesson.theoryData.diagramInfo && (
                 <div style={diagramBoxStyle}>
-                  <strong style={{ fontSize: '10px', color: '#00e676' }}>Fluxo / Diagrama:</strong>
-                  <div style={{ fontSize: '11px', color: '#fff', marginTop: '2px', fontFamily: 'monospace' }}>
+                  <strong style={{ fontSize: '10px', color: '#00e676' }}>Fluxo / Diagrama Técnico:</strong>
+                  <div style={{ fontSize: '11px', color: '#fff', marginTop: '4px', fontFamily: 'monospace', lineHeight: '1.4' }}>
                     {selectedLesson.theoryData.diagramInfo}
                   </div>
                 </div>
               )}
 
               <div style={keyTakeawayBoxStyle}>
-                <strong>💡 Ponto-Chave para o Eletricista:</strong>
-                <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#eceff1' }}>
+                <strong>💡 Diretriz Prática para o Técnico:</strong>
+                <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#eceff1', lineHeight: '1.4' }}>
                   {selectedLesson.theoryData.keyTakeaway}
                 </p>
               </div>
@@ -426,11 +417,11 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             </div>
           )}
 
-          {/* CONTEÚDO PRÁTICO */}
+          {/* PRÁTICA */}
           {selectedLesson.type === 'PRACTICE' && selectedLesson.steps && (
             <div style={practiceContainerStyle}>
               <strong style={{ fontSize: '11px', color: '#81d4fa', display: 'block', marginBottom: '6px' }}>
-                Checklist Prático no Painel e IHM ao lado:
+                Roteiro de Comissionamento Prático:
               </strong>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {selectedLesson.steps.map((step, idx) => {
@@ -456,7 +447,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                           {stepDone ? 'OK' : 'Pendente'}
                         </span>
                       </div>
-                      <p style={{ fontSize: '10px', color: '#b0bec5', margin: '3px 0 0 22px' }}>
+                      <p style={{ fontSize: '10px', color: '#b0bec5', margin: '4px 0 0 22px', lineHeight: '1.4' }}>
                         {step.instruction}
                       </p>
                     </div>
@@ -643,35 +634,6 @@ const theoryContainerStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '6px',
-};
-
-const manualDownloadCardStyle: React.CSSProperties = {
-  background: '#131e2b',
-  border: '1px solid #0288d1',
-  borderRadius: '8px',
-  padding: '12px',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '6px',
-  margin: '8px 0',
-};
-
-const btnDownloadManualStyle: React.CSSProperties = {
-  background: '#0288d1',
-  color: '#ffffff',
-  textDecoration: 'none',
-  borderRadius: '6px',
-  padding: '10px 16px',
-  fontSize: '12px',
-  fontWeight: 'bold',
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '8px',
-  boxShadow: '0 4px 12px rgba(2, 136, 209, 0.4)',
-  transition: 'transform 0.2s ease',
-  cursor: 'pointer',
 };
 
 const diagramBoxStyle: React.CSSProperties = {
