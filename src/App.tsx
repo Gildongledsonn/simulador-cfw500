@@ -4,6 +4,7 @@ import { usePhysicsLoop } from './hooks/usePhysicsLoop';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { IHM } from './components/IHM';
 import { MotorVisualizer } from './components/MotorVisualizer';
+import { ElevatorTractionVisualizer } from './components/ElevatorTractionVisualizer';
 import { TerminalBlock } from './components/TerminalBlock';
 import { RelayPanel } from './components/RelayPanel';
 import { FaultInjectionPanel } from './components/FaultInjectionPanel';
@@ -13,11 +14,12 @@ import { ModbusPanel } from './components/ModbusPanel';
 import { LoginScreen } from './components/LoginScreen';
 import { AdminPanel } from './components/AdminPanel';
 import { CFW300Workbench } from './components/CFW300Workbench';
+import { L1000Workbench } from './components/L1000Workbench';
 import { COURSE_MODULES } from './constants/courseModules';
 import { Lesson } from './types/tutorial';
 
 type ActiveTab = 'workbench' | 'modbus' | 'tutorial' | 'admin';
-type InverterModel = 'CFW500' | 'CFW300';
+type InverterModel = 'CFW500' | 'CFW300' | 'L1000';
 
 interface AuthUser {
   name: string;
@@ -34,8 +36,21 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
   usePhysicsLoop({ loadTorquePercent: loadTorque, enableNoise: true });
   useKeyboardControls();
 
-  // Detecta se a lição ativa no TutorialGuide pertence ao CFW300 para sincronizar a bancada prática
-  const isLessonCFW300 = currentLesson.id.startsWith('c300-');
+  // Detecta automaticamente o inversor da lição ativa
+  const isLessonL1000 =
+    currentLesson.id.toLowerCase().startsWith('l1000') ||
+    currentLesson.id.toLowerCase().startsWith('l1-') ||
+    currentLesson.id.toLowerCase().startsWith('l1000-m');
+
+  const isLessonCFW300 =
+    currentLesson.id.toLowerCase().startsWith('c300') ||
+    currentLesson.id.toLowerCase().startsWith('cfw300');
+
+  const activeLessonModel: InverterModel = isLessonL1000
+    ? 'L1000'
+    : isLessonCFW300
+    ? 'CFW300'
+    : 'CFW500';
 
   return (
     <div style={mainContainerStyle}>
@@ -95,7 +110,6 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
             🎓 Modo Aula & Trilha
           </button>
 
-          {/* ABA EXCLUSIVA DO INSTRUTOR/ADMIN */}
           {user.role === 'ADMIN' && (
             <button
               onClick={() => setActiveTab('admin')}
@@ -117,12 +131,11 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
       {/* ABA 1: BANCADA LIVRE */}
       {activeTab === 'workbench' && (
         <div style={tabContentStyle}>
-          {/* SELETOR DE MODELO DE BANCADA LIVRE */}
           <div style={modelSelectorBarStyle}>
             <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#90a4ae' }}>
               Modelo de Inversor Ativo na Bancada:
             </span>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => setInverterModel('CFW500')}
                 style={{
@@ -132,7 +145,7 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
                   color: inverterModel === 'CFW500' ? '#fff' : '#90a4ae',
                 }}
               >
-                ⚡ WEG CFW500 (Padrão Industrial)
+                ⚡ WEG CFW500 (Industrial)
               </button>
               <button
                 onClick={() => setInverterModel('CFW300')}
@@ -143,13 +156,74 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
                   color: inverterModel === 'CFW300' ? '#fff' : '#90a4ae',
                 }}
               >
-                ⚙️ WEG CFW300 (Micro Drive Compacto)
+                ⚙️ WEG CFW300 (Micro Drive)
+              </button>
+              <button
+                onClick={() => setInverterModel('L1000')}
+                style={{
+                  ...modelTabBtnStyle,
+                  background: inverterModel === 'L1000' ? '#0288d1' : '#161b22',
+                  borderColor: inverterModel === 'L1000' ? '#29b6f6' : '#30363d',
+                  color: inverterModel === 'L1000' ? '#fff' : '#90a4ae',
+                }}
+              >
+                🛗 Yaskawa L1000 (Elevadores)
               </button>
             </div>
           </div>
 
-          {/* EXIBIÇÃO DA BANCADA ESCOLHIDA */}
-          {inverterModel === 'CFW500' ? (
+          {/* EXIBIÇÃO DA BANCADA LIVRE SELECIONADA */}
+          {inverterModel === 'L1000' ? (
+            <>
+              <L1000Workbench />
+              <div style={rowStyle}>
+                <div style={{ flex: '1 1 350px' }}>
+                  <ElevatorTractionVisualizer loadTorquePercent={loadTorque} />
+                </div>
+                <div style={motorColumnStyle}>
+                  <div style={loadBoxStyle}>
+                    <label style={{ fontSize: '11px', color: '#90a4ae', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Carga na Cabine / Eixo de Tração</span>
+                      <strong style={{ color: '#00e676' }}>{loadTorque}%</strong>
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={loadTorque}
+                      onChange={(e) => setLoadTorque(Number(e.target.value))}
+                      style={{ width: '100%', marginTop: '8px', cursor: 'pointer', height: '28px' }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <FaultInjectionPanel />
+            </>
+          ) : inverterModel === 'CFW300' ? (
+            <>
+              <div style={rowStyle}>
+                <CFW300Workbench />
+                <div style={motorColumnStyle}>
+                  <MotorVisualizer loadTorquePercent={loadTorque} />
+                  <div style={loadBoxStyle}>
+                    <label style={{ fontSize: '11px', color: '#90a4ae', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Carga Mecânica no Eixo (Freio)</span>
+                      <strong>{loadTorque}%</strong>
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={loadTorque}
+                      onChange={(e) => setLoadTorque(Number(e.target.value))}
+                      style={{ width: '100%', marginTop: '8px', cursor: 'pointer', height: '28px' }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <FaultInjectionPanel />
+            </>
+          ) : (
             <>
               <div style={rowStyle}>
                 <IHM />
@@ -174,30 +248,6 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
               <div style={rowStyle}>
                 <TerminalBlock />
                 <RelayPanel />
-              </div>
-              <FaultInjectionPanel />
-            </>
-          ) : (
-            <>
-              <div style={rowStyle}>
-                <CFW300Workbench />
-                <div style={motorColumnStyle}>
-                  <MotorVisualizer loadTorquePercent={loadTorque} />
-                  <div style={loadBoxStyle}>
-                    <label style={{ fontSize: '11px', color: '#90a4ae', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Carga Mecânica no Eixo (Freio)</span>
-                      <strong>{loadTorque}%</strong>
-                    </label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={loadTorque}
-                      onChange={(e) => setLoadTorque(Number(e.target.value))}
-                      style={{ width: '100%', marginTop: '8px', cursor: 'pointer', height: '28px' }}
-                    />
-                  </div>
-                </div>
               </div>
               <FaultInjectionPanel />
             </>
@@ -230,10 +280,19 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
           {currentLesson.type === 'PRACTICE' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '6px' }}>
               <div style={{ fontSize: '12px', color: '#64b5f6', fontWeight: 'bold' }}>
-                🎛️ Bancada Ativa para a Lição ({isLessonCFW300 ? 'WEG CFW300' : 'WEG CFW500'}):
+                🎛️ Bancada Ativa para a Lição: {activeLessonModel === 'L1000' ? 'YASKAWA L1000 (ELEVADORES)' : activeLessonModel === 'CFW300' ? 'WEG CFW300' : 'WEG CFW500'}
               </div>
-              
-              {isLessonCFW300 ? (
+
+              {activeLessonModel === 'L1000' ? (
+                <>
+                  <L1000Workbench />
+                  <div style={rowStyle}>
+                    <div style={{ flex: '1 1 350px' }}>
+                      <ElevatorTractionVisualizer loadTorquePercent={loadTorque} />
+                    </div>
+                  </div>
+                </>
+              ) : activeLessonModel === 'CFW300' ? (
                 <div style={rowStyle}>
                   <CFW300Workbench />
                   <div style={motorColumnStyle}>
@@ -249,7 +308,7 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
                   </div>
                 </div>
               )}
-              
+
               <FaultInjectionPanel />
             </div>
           )}

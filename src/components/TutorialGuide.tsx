@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useInverter } from '../context/InverterContext';
 import { COURSE_MODULES } from '../constants/courseModules';
 import { COURSE_MODULES_CFW300 } from '../constants/courseModulesCFW300';
+import { COURSE_MODULES_L1000 } from '../constants/courseModulesL1000';
 import { Lesson } from '../types/tutorial';
 import {
   getUserProgress,
@@ -29,11 +30,17 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
   userRole,
 }) => {
   const { state, dispatch } = useInverter();
-  const [activeInverterType, setActiveInverterType] = useState<'CFW500' | 'CFW300'>('CFW500');
+  const [activeInverterType, setActiveInverterType] = useState<'CFW500' | 'CFW300' | 'L1000'>('CFW500');
   const [progress, setProgress] = useState<UserProgressData>(() => getUserProgress());
   const [adminMode, setAdminMode] = useState<boolean>(() => isAdminUnlockAllActive());
 
-  const activeCourseModules = activeInverterType === 'CFW500' ? COURSE_MODULES : COURSE_MODULES_CFW300;
+  const activeCourseModules =
+    activeInverterType === 'CFW500'
+      ? COURSE_MODULES
+      : activeInverterType === 'CFW300'
+      ? COURSE_MODULES_CFW300
+      : COURSE_MODULES_L1000;
+
   const previousLessonIdRef = useRef<string>(selectedLesson.id);
 
   const triggerFactoryReset = () => {
@@ -97,11 +104,17 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     }
   }, [state, selectedLesson, progress.completedSteps, progress.completedLessons, activeCourseModules]);
 
-  const handleSelectInverterType = (type: 'CFW500' | 'CFW300') => {
+  const handleSelectInverterType = (type: 'CFW500' | 'CFW300' | 'L1000') => {
     if (type === activeInverterType) return;
     setActiveInverterType(type);
     triggerFactoryReset();
-    const targetModules = type === 'CFW500' ? COURSE_MODULES : COURSE_MODULES_CFW300;
+    const targetModules =
+      type === 'CFW500'
+        ? COURSE_MODULES
+        : type === 'CFW300'
+        ? COURSE_MODULES_CFW300
+        : COURSE_MODULES_L1000;
+
     if (targetModules[0]?.lessons[0]) {
       setSelectedLesson(targetModules[0].lessons[0]);
     }
@@ -184,7 +197,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 
       {/* SELEÇÃO DO MODELO DE INVERSOR */}
       <div style={moduleListHeaderStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
           <button
             onClick={() => handleSelectInverterType('CFW500')}
             style={{
@@ -206,6 +219,17 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             }}
           >
             ⚙️ Inversor CFW300
+          </button>
+          <button
+            onClick={() => handleSelectInverterType('L1000')}
+            style={{
+              ...inverterTabBtnStyle,
+              background: activeInverterType === 'L1000' ? '#0288d1' : '#161b22',
+              borderColor: activeInverterType === 'L1000' ? '#29b6f6' : '#30363d',
+              color: activeInverterType === 'L1000' ? '#fff' : '#90a4ae',
+            }}
+          >
+            📟 Inversor L1000 (Elevadores)
           </button>
         </div>
 
@@ -356,7 +380,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
               </div>
 
               {/* CARD EXCLUSIVO DE DOWNLOAD DO MANUAL DO MÓDULO 0 */}
-              {selectedLesson.id === 'l0-1' && (
+              {selectedLesson.id === 'l0-1' && activeInverterType === 'CFW500' && (
                 <div style={manualDownloadCardStyle}>
                   <a
                     href="/WEG-CFW500-programming-manual-10001469555-pt.pdf"
@@ -508,6 +532,8 @@ const modulesTabsRowStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
   gap: '6px',
+  maxHeight: '220px',
+  overflowY: 'auto',
 };
 
 const moduleCardStyle: React.CSSProperties = {
