@@ -4,7 +4,6 @@ import { useInverter } from '../context/InverterContext';
 export const CFW300Workbench: React.FC = () => {
   const { state, dispatch, currentDisplayValue } = useInverter();
 
-  // Tratamento idêntico ao IHM.tsx para acionamento das teclas
   const handleKeyClick = (key: string) => {
     if (!dispatch) return;
 
@@ -35,13 +34,30 @@ export const CFW300Workbench: React.FC = () => {
     }
   };
 
-  // Alterna as entradas digitais DI1 a DI4
-  const handleToggleDI = (inputIndex: number) => {
-    if (!dispatch) return;
-    dispatch({ type: 'TOGGLE_DI', payload: inputIndex } as any);
+  const isDIActive = (i: number): boolean => {
+    const diObj = state.digitalInputs as any;
+    if (!diObj) return false;
+    if (Array.isArray(diObj)) return Boolean(diObj[i - 1]);
+    return Boolean(
+      diObj[`di${i}`] ??
+      diObj[`DI${i}`] ??
+      diObj[String(i - 1)] ??
+      diObj[String(i)]
+    );
   };
 
-  // Potenciômetro Analógico AI1 (0 a 10V)
+  const handleToggleDI = (inputIndex: number) => {
+    if (!dispatch) return;
+    const diKey = `di${inputIndex}`;
+    const nextVal = !isDIActive(inputIndex);
+
+    // Dispara em todos os formatos para compatibilidade total com o reducer do CFW500
+    dispatch({ type: 'TOGGLE_DIGITAL_INPUT', payload: diKey } as any);
+    dispatch({ type: 'TOGGLE_DI', payload: diKey } as any);
+    dispatch({ type: 'TOGGLE_DI', payload: inputIndex } as any);
+    dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: diKey, value: nextVal } } as any);
+  };
+
   const handlePotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
     const voltage = val * 10;
@@ -66,10 +82,24 @@ export const CFW300Workbench: React.FC = () => {
     <div style={workbenchContainerStyle}>
       {/* CABEÇALHO */}
       <div style={headerStyle}>
-        <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#00e676' }}>
-          WEG CFW300 • MICRO DRIVE COMPACTO
-        </span>
-        <span style={{ fontSize: '10px', color: '#90a4ae' }}>Plug-in I/O • Bornes Rápidos</span>
+        <div>
+          <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#00e676' }}>
+            WEG CFW300 • MICRO DRIVE COMPACTO
+          </span>
+          <span style={{ fontSize: '10px', color: '#90a4ae', display: 'block', marginTop: '2px' }}>
+            Modo: <strong style={{ color: !isLoc ? '#00e676' : '#ffa726' }}>{!isLoc ? 'REMOTO (Bornes Ativos)' : 'LOCAL (Teclado IHM)'}</strong>
+          </span>
+        </div>
+
+        {isLoc && (
+          <button
+            onClick={() => handleKeyClick('LOC_REM')}
+            style={btnSwitchToRemStyle}
+            title="Mudar para Modo Remoto para liberar os botões DI1-DI4"
+          >
+            Mudar para REMOTO ➔
+          </button>
+        )}
       </div>
 
       <div style={mainLayoutRowStyle}>
@@ -95,14 +125,9 @@ export const CFW300Workbench: React.FC = () => {
 
           {/* TECLADO DE MEMBRANA DO CFW300 */}
           <div style={keypadGridStyle}>
-            <button
-              onClick={() => handleKeyClick('UP')}
-              style={btnKeyStyle}
-              title="Incrementar (▲)"
-            >
+            <button onClick={() => handleKeyClick('UP')} style={btnKeyStyle} title="Incrementar (▲)">
               ▲
             </button>
-
             <button
               onClick={() => handleKeyClick('PROG')}
               style={{ ...btnKeyStyle, background: '#0288d1', color: '#fff' }}
@@ -110,15 +135,9 @@ export const CFW300Workbench: React.FC = () => {
             >
               PROG
             </button>
-
-            <button
-              onClick={() => handleKeyClick('DOWN')}
-              style={btnKeyStyle}
-              title="Decrementar (▼)"
-            >
+            <button onClick={() => handleKeyClick('DOWN')} style={btnKeyStyle} title="Decrementar (▼)">
               ▼
             </button>
-
             <button
               onClick={() => handleKeyClick('RUN')}
               style={{ ...btnKeyStyle, background: '#2e7d32', color: '#fff' }}
@@ -126,15 +145,9 @@ export const CFW300Workbench: React.FC = () => {
             >
               I
             </button>
-
-            <button
-              onClick={() => handleKeyClick('LOC_REM')}
-              style={btnKeyStyle}
-              title="Alternar Local / Remoto"
-            >
+            <button onClick={() => handleKeyClick('LOC_REM')} style={btnKeyStyle} title="Alternar Local / Remoto">
               LOC/REM
             </button>
-
             <button
               onClick={() => handleKeyClick('STOP')}
               style={{ ...btnKeyStyle, background: '#c62828', color: '#fff' }}
@@ -147,15 +160,20 @@ export const CFW300Workbench: React.FC = () => {
 
         {/* PAINEL DE BORNES PLUG-IN CFW300 */}
         <div style={ioPanelStyle}>
-          <strong style={{ fontSize: '11px', color: '#81d4fa', marginBottom: '8px', display: 'block' }}>
-            Bornes de Comando (CFW300-IOAR):
-          </strong>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <strong style={{ fontSize: '11px', color: '#81d4fa' }}>
+              Bornes de Comando (CFW300-IOAR):
+            </strong>
+            {isLoc && (
+              <span style={{ fontSize: '9px', color: '#ff9800', fontWeight: 'bold' }}>
+                ⚠️ Pressione LOC/REM para acionar via Bornes
+              </span>
+            )}
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
             {[1, 2, 3, 4].map((i) => {
-              const active = Boolean(
-                state.digitalInputs?.[`di${i}` as keyof typeof state.digitalInputs]
-              );
+              const active = isDIActive(i);
               return (
                 <button
                   key={i}
@@ -212,6 +230,17 @@ const headerStyle: React.CSSProperties = {
   alignItems: 'center',
   borderBottom: '1px solid #21262d',
   paddingBottom: '6px',
+};
+
+const btnSwitchToRemStyle: React.CSSProperties = {
+  background: '#e65100',
+  color: '#fff',
+  border: 'none',
+  borderRadius: '4px',
+  padding: '4px 8px',
+  fontSize: '10px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
 };
 
 const mainLayoutRowStyle: React.CSSProperties = {

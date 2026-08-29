@@ -4,7 +4,6 @@ import { useInverter } from '../context/InverterContext';
 export const L1000Workbench: React.FC = () => {
   const { state, dispatch, currentDisplayValue } = useInverter();
 
-  // Estados locais do CLP de Manobra do Elevador
   const [currentFloor, setCurrentFloor] = useState<number>(1);
   const [targetFloor, setTargetFloor] = useState<number>(1);
   const [doorStatus, setDoorStatus] = useState<'FECHADA' | 'ABRINDO' | 'ABERTA' | 'FECHANDO'>('FECHADA');
@@ -17,7 +16,18 @@ export const L1000Workbench: React.FC = () => {
   const isLoc = state.controlSource === 'LOC' || (state as any).isLocal === true;
   const currentVolt = typeof state.ai1Voltage === 'number' ? state.ai1Voltage : 0;
 
-  // Teclado da IHM Digital Yaskawa L1000
+  const isDIActive = (i: number): boolean => {
+    const diObj = state.digitalInputs as any;
+    if (!diObj) return false;
+    if (Array.isArray(diObj)) return Boolean(diObj[i - 1]);
+    return Boolean(
+      diObj[`di${i}`] ??
+      diObj[`DI${i}`] ??
+      diObj[String(i - 1)] ??
+      diObj[String(i)]
+    );
+  };
+
   const handleKeyClick = (key: string) => {
     if (!dispatch) return;
     switch (key) {
@@ -53,15 +63,28 @@ export const L1000Workbench: React.FC = () => {
     }
   };
 
-  // Acionamento de Entradas Digitais do CLP de Manobra (S1 a S4)
   const handleToggleDI = (inputIndex: number) => {
     if (!dispatch) return;
+    if (!safetyChain && (inputIndex === 1 || inputIndex === 2)) {
+      alert('BLOQUEIO: Linha de segurança do elevador aberta!');
+      return;
+    }
+
+    const diKey = `di${inputIndex}`;
+    const nextVal = !isDIActive(inputIndex);
+
+    dispatch({ type: 'TOGGLE_DIGITAL_INPUT', payload: diKey } as any);
+    dispatch({ type: 'TOGGLE_DI', payload: diKey } as any);
     dispatch({ type: 'TOGGLE_DI', payload: inputIndex } as any);
+    dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: diKey, value: nextVal } } as any);
+
+    if (inputIndex === 1 || inputIndex === 2) {
+      setBrakeEngaged(!nextVal);
+    }
   };
 
-  // Chamada de Pavimento no CLP
   const handleCallFloor = (floor: number) => {
-    if (!safetyChain) return;
+    if (!safetyChain || floor === currentFloor) return;
     setTargetFloor(floor);
     setDoorStatus('FECHANDO');
 
@@ -69,15 +92,23 @@ export const L1000Workbench: React.FC = () => {
       setDoorStatus('FECHADA');
       setBrakeEngaged(false);
 
-      if (floor > currentFloor) {
-        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'DI1', value: true } } as any);
-        dispatch({ type: 'PRESS_RUN' });
-      } else if (floor < currentFloor) {
-        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'DI2', value: true } } as any);
+      if (isLoc) {
+        dispatch({ type: 'PRESS_LOCREM' });
+      }
+
+      const isGoingUp = floor > currentFloor;
+      if (isGoingUp) {
+        if (!state.isForwardDirection) {
+          dispatch({ type: 'PRESS_DIRECTION' });
+        }
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di1', value: true } } as any);
+        dispatch({ type: 'TOGGLE_DI', payload: 'di1' } as any);
+      } else {
         if (state.isForwardDirection) {
           dispatch({ type: 'PRESS_DIRECTION' });
         }
-        dispatch({ type: 'PRESS_RUN' });
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di2', value: true } } as any);
+        dispatch({ type: 'TOGGLE_DI', payload: 'di2' } as any);
       }
 
       setTimeout(() => {
@@ -101,7 +132,6 @@ export const L1000Workbench: React.FC = () => {
 
   return (
     <div style={containerStyle}>
-      {/* CABEÇALHO DA BANCADA INDUSTRIAL DE ELEVADORES */}
       <div style={headerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '18px' }}>🛗</span>
@@ -126,7 +156,6 @@ export const L1000Workbench: React.FC = () => {
       </div>
 
       <div style={mainGridStyle}>
-        {/* COLUNA 1: GABINETE REALISTA YASKAWA L1000 */}
         <div style={yaskawaChassisStyle}>
           <div style={yaskawaTopBannerStyle}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -136,7 +165,6 @@ export const L1000Workbench: React.FC = () => {
             <span style={{ fontSize: '10px', color: '#ffb74d', fontWeight: 'bold' }}>EN 81-20 Compliant</span>
           </div>
 
-          {/* DISPLAY LCD */}
           <div style={yaskawaLcdStyle}>
             <div style={lcdTopIndicatorsStyle}>
               <span style={{ color: isLoc ? '#00e676' : '#546e7a', fontWeight: 'bold', fontSize: '9px' }}>[LOC]</span>
@@ -163,30 +191,25 @@ export const L1000Workbench: React.FC = () => {
             </div>
           </div>
 
-          {/* TECLADO INTEGRADO YASKAWA */}
           <div style={keypadGridStyle}>
             <button onClick={() => handleKeyClick('UP')} style={btnYaskawaKeyStyle} title="Incrementar (▲)">▲</button>
             <button onClick={() => handleKeyClick('PROG')} style={{ ...btnYaskawaKeyStyle, background: '#0288d1', color: '#fff' }} title="Menu / Programação">PROG</button>
             <button onClick={() => handleKeyClick('RESET')} style={{ ...btnYaskawaKeyStyle, background: '#ff9800', color: '#000' }} title="Reset de Falhas">RESET</button>
-
             <button onClick={() => handleKeyClick('DOWN')} style={btnYaskawaKeyStyle} title="Decrementar (▼)">▼</button>
             <button onClick={() => handleKeyClick('LOC_REM')} style={btnYaskawaKeyStyle} title="Comutar Local/Remoto">LOC/REM</button>
             <button onClick={() => handleKeyClick('RUN')} style={{ ...btnYaskawaKeyStyle, background: '#2e7d32', color: '#fff' }} title="Partida (RUN)">RUN</button>
-
             <button onClick={() => handleKeyClick('STOP')} style={{ ...btnYaskawaKeyStyle, gridColumn: 'span 3', background: '#c62828', color: '#fff' }} title="Parada Segura (STOP)">
               STOP / PARADA DE EMERGÊNCIA
             </button>
           </div>
         </div>
 
-        {/* COLUNA 2: CLP DE MANOBRA & PAVIMENTOS */}
         <div style={plcCardStyle}>
           <div style={plcHeaderStyle}>
             <strong style={{ fontSize: '12px', color: '#81d4fa' }}>📟 CLP DE MANOBRA & DESPACHO DE CHAMADAS</strong>
             <span style={{ fontSize: '10px', color: '#00e676', fontWeight: 'bold' }}>MODO: {inspectionMode ? 'INSPEÇÃO' : 'AUTOMÁTICO'}</span>
           </div>
 
-          {/* PAVIMENTOS */}
           <div style={elevatorShaftRowStyle}>
             <div style={floorsButtonGroupStyle}>
               <span style={{ fontSize: '10px', color: '#90a4ae', fontWeight: 'bold' }}>Chamar Andar:</span>
@@ -208,7 +231,6 @@ export const L1000Workbench: React.FC = () => {
               </div>
             </div>
 
-            {/* STATUS DA CABINE */}
             <div style={cabineStatusBoxStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
                 <span>Pavimento Atual:</span>
@@ -221,7 +243,6 @@ export const L1000Workbench: React.FC = () => {
             </div>
           </div>
 
-          {/* CHAVES DE COMANDO MANUAL / BORNES */}
           <div style={{ marginTop: '10px' }}>
             <span style={{ fontSize: '10px', color: '#90a4ae', fontWeight: 'bold', display: 'block', marginBottom: '6px' }}>
               Bornes de Comando do L1000 (S1 a S4):
@@ -231,24 +252,24 @@ export const L1000Workbench: React.FC = () => {
                 onClick={() => handleToggleDI(1)}
                 style={{
                   ...switchBtnStyle,
-                  borderColor: state.digitalInputs?.di1 ? '#00e676' : '#374151',
-                  background: state.digitalInputs?.di1 ? '#1b5e20' : '#161b22',
-                  color: state.digitalInputs?.di1 ? '#fff' : '#90a4ae',
+                  borderColor: isDIActive(1) ? '#00e676' : '#374151',
+                  background: isDIActive(1) ? '#1b5e20' : '#161b22',
+                  color: isDIActive(1) ? '#fff' : '#90a4ae',
                 }}
               >
-                S1: {state.digitalInputs?.di1 ? '▲ SUBIR (ON)' : 'SUBIR (OFF)'}
+                S1: {isDIActive(1) ? '▲ SUBIR (ON)' : 'SUBIR (OFF)'}
               </button>
 
               <button
                 onClick={() => handleToggleDI(2)}
                 style={{
                   ...switchBtnStyle,
-                  borderColor: state.digitalInputs?.di2 ? '#00e676' : '#374151',
-                  background: state.digitalInputs?.di2 ? '#1b5e20' : '#161b22',
-                  color: state.digitalInputs?.di2 ? '#fff' : '#90a4ae',
+                  borderColor: isDIActive(2) ? '#00e676' : '#374151',
+                  background: isDIActive(2) ? '#1b5e20' : '#161b22',
+                  color: isDIActive(2) ? '#fff' : '#90a4ae',
                 }}
               >
-                S2: {state.digitalInputs?.di2 ? '▼ DESCER (ON)' : 'DESCER (OFF)'}
+                S2: {isDIActive(2) ? '▼ DESCER (ON)' : 'DESCER (OFF)'}
               </button>
 
               <button
@@ -277,7 +298,6 @@ export const L1000Workbench: React.FC = () => {
             </div>
           </div>
 
-          {/* SENSOR ANALÓGICO DA CÉLULA DE CARGA */}
           <div style={{ marginTop: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#b0bec5', marginBottom: '4px' }}>
               <span>Célula de Carga / Pesador (Entrada A2 Pré-Torque):</span>
@@ -401,7 +421,6 @@ const btnYaskawaKeyStyle: React.CSSProperties = {
   fontSize: '10px',
   fontWeight: 'bold',
   cursor: 'pointer',
-  transition: 'all 0.15s ease',
 };
 
 const plcCardStyle: React.CSSProperties = {
@@ -462,5 +481,4 @@ const switchBtnStyle: React.CSSProperties = {
   fontSize: '9px',
   fontWeight: 'bold',
   cursor: 'pointer',
-  transition: 'all 0.15s ease',
 };
