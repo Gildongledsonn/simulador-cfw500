@@ -54,9 +54,60 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     dispatch({ type: 'SET_AI1_VOLTAGE', payload: 0 } as any);
   };
 
+  // Injeção de Cenários Contextuais Específicos por Lição
+  const applyLessonContextScenario = (lessonId: string) => {
+    if (lessonId === 'l1000_l14_pratica_resgate') {
+      window.dispatchEvent(
+        new CustomEvent('l1000_set_scenario', {
+          detail: {
+            floor: 2,
+            targetFloor: 2,
+            safetyChain: false,
+            doorStatus: 'FECHADA',
+            brakeEngaged: true,
+          },
+        })
+      );
+    } else if (lessonId === 'l1000_l8_pratica_despacho_4andar') {
+      window.dispatchEvent(
+        new CustomEvent('l1000_set_scenario', {
+          detail: {
+            floor: 1,
+            targetFloor: 1,
+            safetyChain: true,
+            doorStatus: 'ABERTA',
+          },
+        })
+      );
+    } else if (lessonId === 'l1000_l18_pratica_nivelamento_3andar') {
+      window.dispatchEvent(
+        new CustomEvent('l1000_set_scenario', {
+          detail: {
+            floor: 1,
+            targetFloor: 1,
+            safetyChain: true,
+            doorStatus: 'ABERTA',
+          },
+        })
+      );
+    } else {
+      window.dispatchEvent(
+        new CustomEvent('l1000_set_scenario', {
+          detail: {
+            floor: 1,
+            targetFloor: 1,
+            safetyChain: true,
+            doorStatus: 'ABERTA',
+          },
+        })
+      );
+    }
+  };
+
   useEffect(() => {
     setIsInitializingLesson(true);
     triggerHardReset();
+    applyLessonContextScenario(selectedLesson.id);
     previousLessonIdRef.current = selectedLesson.id;
 
     const timer = setTimeout(() => {

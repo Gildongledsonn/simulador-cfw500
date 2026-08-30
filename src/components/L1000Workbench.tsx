@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useInverter } from '../context/InverterContext';
 
 export const L1000Workbench: React.FC = () => {
@@ -18,7 +18,23 @@ export const L1000Workbench: React.FC = () => {
   const isRunning = (state.motorStatus === 'RUNNING' || freq > 0.05) && state.motorStatus !== 'FAULT';
   const currentVolt = typeof state.ai1Voltage === 'number' ? state.ai1Voltage : 0;
 
-  // Checagem robusta de estado dos bornes
+  // Escuta de cenários contextuais dinâmicos enviados pelas lições
+  useEffect(() => {
+    const handleScenarioEvent = (e: any) => {
+      const detail = e.detail;
+      if (!detail) return;
+      if (typeof detail.floor === 'number') setCurrentFloor(detail.floor);
+      if (typeof detail.targetFloor === 'number') setTargetFloor(detail.targetFloor);
+      if (typeof detail.safetyChain === 'boolean') setSafetyChain(detail.safetyChain);
+      if (typeof detail.doorStatus === 'string') setDoorStatus(detail.doorStatus);
+      if (typeof detail.inspectionMode === 'boolean') setInspectionMode(detail.inspectionMode);
+      if (typeof detail.brakeEngaged === 'boolean') setBrakeEngaged(detail.brakeEngaged);
+    };
+
+    window.addEventListener('l1000_set_scenario', handleScenarioEvent);
+    return () => window.removeEventListener('l1000_set_scenario', handleScenarioEvent);
+  }, []);
+
   const isDIActive = (i: number): boolean => {
     const diObj = state.digitalInputs as any;
     if (!diObj) return false;
@@ -33,8 +49,6 @@ export const L1000Workbench: React.FC = () => {
 
   const isS1Active = isDIActive(1);
   const isS2Active = isDIActive(2);
-
-  // Determinação garantida do sentido para o LCD do L1000
   const isGoingDown = isS2Active || state.isForwardDirection === false;
 
   const handleKeyClick = (key: string) => {
@@ -108,23 +122,16 @@ export const L1000Workbench: React.FC = () => {
       if (nextVal) {
         const oppositeIndex = inputIndex === 1 ? 2 : 1;
         
-        // 1. Limpa o borne oposto
         dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: `di${oppositeIndex}`, value: false } } as any);
         dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: `DI${oppositeIndex}`, value: false } } as any);
 
-        // 2. Aciona o borne selecionado
         dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: `di${inputIndex}`, value: true } } as any);
         dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: `DI${inputIndex}`, value: true } } as any);
 
-        // 3. Força a direção correta sem dependência de estado assíncrono
         if (inputIndex === 1) {
-          if (!state.isForwardDirection) {
-            dispatch({ type: 'PRESS_DIRECTION' });
-          }
+          if (!state.isForwardDirection) dispatch({ type: 'PRESS_DIRECTION' });
         } else if (inputIndex === 2) {
-          if (state.isForwardDirection) {
-            dispatch({ type: 'PRESS_DIRECTION' });
-          }
+          if (state.isForwardDirection) dispatch({ type: 'PRESS_DIRECTION' });
         }
 
         setBrakeEngaged(false);
