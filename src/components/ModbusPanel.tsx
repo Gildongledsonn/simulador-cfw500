@@ -32,8 +32,6 @@ export const ModbusPanel: React.FC = () => {
   const { state, dispatch } = useInverter();
 
   const [activeSubMode, setActiveSubMode] = useState<ModbusMode>('ladder');
-  const [slaveAddress, setSlaveAddress] = useState(1);
-  const [modbusSpeedHz, setModbusSpeedHz] = useState(50.0);
 
   const [isPlcRun, setIsPlcRun] = useState(true);
   const [inputsState, setInputsState] = useState<{ [key: string]: boolean }>({

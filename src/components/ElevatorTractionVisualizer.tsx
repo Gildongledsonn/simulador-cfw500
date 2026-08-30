@@ -15,7 +15,7 @@ export const ElevatorTractionVisualizer: React.FC<ElevatorTractionVisualizerProp
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  const lastDirectionRef = useRef<number>(1); // Guarda a direção durante a desaceleração
+  const lastDirectionRef = useRef<number>(1);
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -93,7 +93,6 @@ export const ElevatorTractionVisualizer: React.FC<ElevatorTractionVisualizerProp
     const castIronMat = new THREE.MeshStandardMaterial({ color: 0x2d3436, roughness: 0.7, metalness: 0.5 });
     const steelPolishedMat = new THREE.MeshStandardMaterial({ color: 0xdcdde1, roughness: 0.25, metalness: 0.9 });
     const brakePadMat = new THREE.MeshStandardMaterial({ color: 0xd63031, roughness: 0.4, metalness: 0.3 });
-    const copperCoilMat = new THREE.MeshStandardMaterial({ color: 0xe17055, roughness: 0.3, metalness: 0.7 });
     const cableMat = new THREE.MeshStandardMaterial({ color: 0x718093, roughness: 0.35, metalness: 0.95 });
 
     const machineGroup = new THREE.Group();
@@ -202,13 +201,11 @@ export const ElevatorTractionVisualizer: React.FC<ElevatorTractionVisualizerProp
       const isCurRunning = (s?.motorStatus === 'RUNNING' || curFreq > 0.05) && s?.motorStatus !== 'FAULT';
 
       if (sheaveRotorGroupRef.current && isCurRunning) {
-        // Se o motor estiver rodando, atualiza a direção ativa
         if (s?.motorStatus === 'RUNNING') {
           const currentlyRev = isMotorReverse(s);
           lastDirectionRef.current = currentlyRev ? -1 : 1;
         }
 
-        // Usa a última direção ativa durante a desaceleração para não inverter o sentido
         const dirFactor = lastDirectionRef.current;
         const currentRpm = (curFreq / 60) * 180;
         const visualSpeedFactor = 0.55;
