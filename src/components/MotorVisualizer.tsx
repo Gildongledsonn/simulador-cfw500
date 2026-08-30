@@ -96,7 +96,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
   const activeNameplateRef = useRef(activeNameplate);
   activeNameplateRef.current = activeNameplate;
 
-  // Referências Three.js
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -113,7 +112,28 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
 
   const isMotorReverse = (s: any): boolean => {
     if (!s) return false;
+
+    const di2 = Boolean(
+      s.digitalInputs?.di2 ??
+      s.digitalInputs?.DI2 ??
+      s.digitalInputs?.[1] ??
+      s.digitalInputs?.['1'] ??
+      s.digitalInputs?.[2] ??
+      s.digitalInputs?.['2']
+    );
+    const di1 = Boolean(
+      s.digitalInputs?.di1 ??
+      s.digitalInputs?.DI1 ??
+      s.digitalInputs?.[0] ??
+      s.digitalInputs?.['0']
+    );
+
+    if (di2 && !di1) return true;
+    if (di1 && !di2) return false;
+
     if (s.isForwardDirection === false) return true;
+    if (s.isForwardDirection === true) return false;
+
     if (
       s.rotationDirection === 'REV' ||
       s.direction === 'REV' ||
@@ -123,6 +143,7 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
     ) {
       return true;
     }
+
     const p223 = s.parameters?.P0223;
     const p223Val = typeof p223 === 'object' ? Number(p223?.currentValue ?? p223?.value ?? 0) : Number(p223 ?? 0);
     if (p223Val === 1) return true;
@@ -130,21 +151,12 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
     if (typeof s.outputFrequency === 'number' && s.outputFrequency < 0) return true;
     if (typeof s.targetFrequency === 'number' && s.targetFrequency < 0) return true;
 
-    const isRem = s.controlSource === 'REM' || s.isLocal === false;
-    const di2 = Boolean(
-      s.digitalInputs?.[1] ||
-      s.digitalInputs?.DI2 ||
-      s.digitalInputs?.di2 ||
-      s.digitalInputs?.['2']
-    );
-    if (isRem && di2) return true;
-
     return false;
   };
 
   const rawFreq = Math.abs(Number(state.outputFrequency ?? 0));
   const isRev = isMotorReverse(state);
-  const isRunning = (state.motorStatus === 'RUNNING' || rawFreq > 0.1) && state.motorStatus !== 'FAULT';
+  const isRunning = (state.motorStatus === 'RUNNING' || rawFreq > 0.05) && state.motorStatus !== 'FAULT';
   const targetRpm = Math.round((rawFreq / 60) * activeNameplate.nominalRpm);
   const currentAmps = state.outputCurrent ?? (isRunning ? (1.2 + (rawFreq / 60) * 3.3).toFixed(1) : '0.0');
 
@@ -157,7 +169,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
     cameraRef.current.lookAt(0, 0, 0);
   };
 
-  // Renderizador em Ultra Alta Resolução (2048x1024) com Tipografia Nítida
   const createUltraHdNameplateTexture = (data: MotorNameplateData): THREE.CanvasTexture => {
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
@@ -168,29 +179,23 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
-      // Fundo em alumínio escovado com alto contraste
       ctx.fillStyle = '#f8f9fa';
       ctx.fillRect(0, 0, 2048, 1024);
 
-      // Moldura externa preta sólida
       ctx.strokeStyle = '#1e272e';
       ctx.lineWidth = 24;
       ctx.strokeRect(16, 16, 2016, 992);
 
-      // Faixa Superior WEG Azul
       ctx.fillStyle = '#005ea6';
       ctx.fillRect(32, 32, 1984, 180);
 
-      // Logotipo WEG
       ctx.fillStyle = '#ffffff';
       ctx.font = '900 110px Arial, sans-serif';
       ctx.fillText('WEG', 70, 160);
 
-      // Modelo e Tipo
       ctx.font = 'bold 70px Arial, sans-serif';
       ctx.fillText(`MOTOR DE INDUÇÃO 3~ | ${data.model}`, 380, 150);
 
-      // Separador
       ctx.strokeStyle = '#005ea6';
       ctx.lineWidth = 6;
       ctx.beginPath();
@@ -198,7 +203,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
       ctx.lineTo(2008, 230);
       ctx.stroke();
 
-      // Grade de Dados em Preto Puro (#000) e Fonte Monospace Ultra Nítida
       ctx.fillStyle = '#000000';
       ctx.font = 'bold 58px "Courier New", monospace';
 
@@ -217,7 +221,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
       ctx.fillText(`GRAU PROT: ${data.protection}`, 70, 800);
       ctx.fillText(`REGIME: S1 CONTÍNUO`, 1200, 800);
 
-      // Linha de Rodapé com Norma
       ctx.fillStyle = '#2f3542';
       ctx.font = 'bold 46px Arial, sans-serif';
       ctx.fillText('FABRICADO NO BRASIL - NBR 17094 / IEC 60034', 70, 950);
@@ -225,7 +228,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
     }
 
     const texture = new THREE.CanvasTexture(canvas);
-    // Configurações de nitidez máxima sem embaçamento
     texture.generateMipmaps = false;
     texture.minFilter = THREE.LinearFilter;
     texture.magFilter = THREE.LinearFilter;
@@ -303,13 +305,11 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
     const motorGroup = new THREE.Group();
     scene.add(motorGroup);
 
-    // Carcaça Cilíndrica Principal
     const statorGeo = new THREE.CylinderGeometry(0.85, 0.85, 1.8, 32);
     statorGeo.rotateZ(Math.PI / 2);
     const statorMesh = new THREE.Mesh(statorGeo, wegBlueMaterial);
     motorGroup.add(statorMesh);
 
-    // Aletas de Refrigeração
     for (let i = -0.7; i <= 0.7; i += 0.14) {
       const finGeo = new THREE.CylinderGeometry(0.92, 0.92, 0.04, 32);
       finGeo.rotateZ(Math.PI / 2);
@@ -318,20 +318,17 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
       motorGroup.add(finMesh);
     }
 
-    // Tampa Defletora Traseira
     const fanCoverGeo = new THREE.CylinderGeometry(0.86, 0.86, 0.5, 32);
     fanCoverGeo.rotateZ(Math.PI / 2);
     const fanCoverMesh = new THREE.Mesh(fanCoverGeo, castIronMaterial);
     fanCoverMesh.position.x = -1.1;
     motorGroup.add(fanCoverMesh);
 
-    // Caixa de Ligação Superior
     const termBoxGeo = new THREE.BoxGeometry(0.6, 0.35, 0.55);
     const termBoxMesh = new THREE.Mesh(termBoxGeo, wegBlueMaterial);
     termBoxMesh.position.set(0, 0.95, 0);
     motorGroup.add(termBoxMesh);
 
-    // Pés de Fixação
     const feetGeo = new THREE.BoxGeometry(1.6, 0.15, 0.3);
     const foot1 = new THREE.Mesh(feetGeo, castIronMaterial);
     foot1.position.set(0, -0.85, 0.65);
@@ -341,7 +338,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
     foot2.position.set(0, -0.85, -0.65);
     motorGroup.add(foot2);
 
-    // Suporte Externo da Placa
     const plateMountGeo = new THREE.BoxGeometry(0.98, 0.54, 0.04);
     const plateMountMat = new THREE.MeshStandardMaterial({
       color: 0x11161d,
@@ -352,7 +348,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
     plateMountMesh.position.set(0, 0.05, 0.94);
     motorGroup.add(plateMountMesh);
 
-    // Placa de Identificação WEG Ultra Nítida
     const nameplateTex = createUltraHdNameplateTexture(activeNameplateRef.current);
     nameplateTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
@@ -368,7 +363,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
     nameplateMeshRef.current = nameplateMesh;
     motorGroup.add(nameplateMesh);
 
-    // Eixo e Polia Rotativa
     const shaftGroup = new THREE.Group();
     shaftGroupRef.current = shaftGroup;
     shaftGroup.position.set(0.9, 0, 0);
@@ -405,7 +399,7 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
       const delta = clock.getDelta();
       const s = stateRef.current as any;
       const curFreq = Math.abs(Number(s?.outputFrequency ?? 0));
-      const isMotorRunning = (s?.motorStatus === 'RUNNING' || curFreq > 0.1) && s?.motorStatus !== 'FAULT';
+      const isMotorRunning = (s?.motorStatus === 'RUNNING' || curFreq > 0.05) && s?.motorStatus !== 'FAULT';
 
       if (shaftGroupRef.current && isMotorRunning) {
         const currentlyRev = isMotorReverse(s);
@@ -549,7 +543,6 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
         </div>
       </div>
 
-      {/* MODAL 2D ULTRA HD PARA LEITURA IMEDIATA */}
       {showPlateModal && (
         <div style={modalOverlayStyle} onClick={() => setShowPlateModal(false)}>
           <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>

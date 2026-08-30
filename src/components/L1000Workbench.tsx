@@ -11,11 +11,14 @@ export const L1000Workbench: React.FC = () => {
   const [inspectionMode, setInspectionMode] = useState<boolean>(false);
   const [brakeEngaged, setBrakeEngaged] = useState<boolean>(true);
 
+  const isLoc = String(state.controlSource || '').toUpperCase() === 'LOC';
+  const isRem = !isLoc;
+
   const freq = Math.abs(Number(state.outputFrequency ?? 0));
-  const isRunning = (state.motorStatus === 'RUNNING' || freq > 0.1) && state.motorStatus !== 'FAULT';
-  const isLoc = state.controlSource === 'LOC' || (state as any).isLocal === true;
+  const isRunning = (state.motorStatus === 'RUNNING' || freq > 0.05) && state.motorStatus !== 'FAULT';
   const currentVolt = typeof state.ai1Voltage === 'number' ? state.ai1Voltage : 0;
 
+  // Checagem robusta de estado dos bornes
   const isDIActive = (i: number): boolean => {
     const diObj = state.digitalInputs as any;
     if (!diObj) return false;
@@ -28,36 +31,58 @@ export const L1000Workbench: React.FC = () => {
     );
   };
 
+  const isS1Active = isDIActive(1);
+  const isS2Active = isDIActive(2);
+
+  // Determinação garantida do sentido para o LCD do L1000
+  const isGoingDown = isS2Active || state.isForwardDirection === false;
+
   const handleKeyClick = (key: string) => {
     if (!dispatch) return;
+
     switch (key) {
       case 'RUN':
+        if (!isLoc) {
+          alert('BLOQUEIO: Inversor em modo REMOTO. O acionamento é via Bornes S1/S2 ou CLP de Manobra.');
+          return;
+        }
         if (!safetyChain) {
-          alert('BLOQUEIO: Linha de segurança do elevador aberta! Feche a linha para partir.');
+          alert('BLOQUEIO: Linha de segurança aberta!');
           return;
         }
         setBrakeEngaged(false);
         dispatch({ type: 'PRESS_RUN' });
         break;
+
       case 'STOP':
         setBrakeEngaged(true);
         dispatch({ type: 'PRESS_STOP' });
         break;
+
       case 'LOC_REM':
+      case 'LOCREM':
+        setBrakeEngaged(true);
+        dispatch({ type: 'PRESS_STOP' });
         dispatch({ type: 'PRESS_LOCREM' });
         break;
+
       case 'UP':
         dispatch({ type: 'PRESS_UP' });
         break;
+
       case 'DOWN':
         dispatch({ type: 'PRESS_DOWN' });
         break;
+
       case 'PROG':
         dispatch({ type: 'PRESS_PROG' });
         break;
+
       case 'RESET':
+        setBrakeEngaged(true);
         dispatch({ type: 'PRESS_STOP' });
         break;
+
       default:
         break;
     }
@@ -65,26 +90,64 @@ export const L1000Workbench: React.FC = () => {
 
   const handleToggleDI = (inputIndex: number) => {
     if (!dispatch) return;
+
+    if (isLoc) {
+      alert('BLOQUEIO: O inversor está em modo LOCAL (IHM). Pressione LOC/REM no teclado para habilitar o comando por bornes.');
+      return;
+    }
+
     if (!safetyChain && (inputIndex === 1 || inputIndex === 2)) {
       alert('BLOQUEIO: Linha de segurança do elevador aberta!');
       return;
     }
 
-    const diKey = `di${inputIndex}`;
-    const nextVal = !isDIActive(inputIndex);
-
-    dispatch({ type: 'TOGGLE_DIGITAL_INPUT', payload: diKey } as any);
-    dispatch({ type: 'TOGGLE_DI', payload: diKey } as any);
-    dispatch({ type: 'TOGGLE_DI', payload: inputIndex } as any);
-    dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: diKey, value: nextVal } } as any);
+    const currentlyActive = isDIActive(inputIndex);
+    const nextVal = !currentlyActive;
 
     if (inputIndex === 1 || inputIndex === 2) {
-      setBrakeEngaged(!nextVal);
+      if (nextVal) {
+        const oppositeIndex = inputIndex === 1 ? 2 : 1;
+        
+        // 1. Limpa o borne oposto
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: `di${oppositeIndex}`, value: false } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: `DI${oppositeIndex}`, value: false } } as any);
+
+        // 2. Aciona o borne selecionado
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: `di${inputIndex}`, value: true } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: `DI${inputIndex}`, value: true } } as any);
+
+        // 3. Força a direção correta sem dependência de estado assíncrono
+        if (inputIndex === 1) {
+          if (!state.isForwardDirection) {
+            dispatch({ type: 'PRESS_DIRECTION' });
+          }
+        } else if (inputIndex === 2) {
+          if (state.isForwardDirection) {
+            dispatch({ type: 'PRESS_DIRECTION' });
+          }
+        }
+
+        setBrakeEngaged(false);
+        dispatch({ type: 'PRESS_RUN' });
+      } else {
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: `di${inputIndex}`, value: false } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: `DI${inputIndex}`, value: false } } as any);
+        setBrakeEngaged(true);
+        dispatch({ type: 'PRESS_STOP' });
+      }
+    } else {
+      dispatch({ type: 'TOGGLE_DIGITAL_INPUT', payload: `di${inputIndex}` } as any);
     }
   };
 
   const handleCallFloor = (floor: number) => {
     if (!safetyChain || floor === currentFloor) return;
+
+    if (isLoc) {
+      alert('BLOQUEIO: Comute para modo REMOTO (botão LOC/REM) para despacho automático de pavimento.');
+      return;
+    }
+
     setTargetFloor(floor);
     setDoorStatus('FECHANDO');
 
@@ -92,29 +155,32 @@ export const L1000Workbench: React.FC = () => {
       setDoorStatus('FECHADA');
       setBrakeEngaged(false);
 
-      if (isLoc) {
-        dispatch({ type: 'PRESS_LOCREM' });
+      const isGoingUp = floor > currentFloor;
+
+      if (isGoingUp) {
+        if (!state.isForwardDirection) dispatch({ type: 'PRESS_DIRECTION' });
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di1', value: true } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'DI1', value: true } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di2', value: false } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'DI2', value: false } } as any);
+      } else {
+        if (state.isForwardDirection) dispatch({ type: 'PRESS_DIRECTION' });
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di2', value: true } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'DI2', value: true } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di1', value: false } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'DI1', value: false } } as any);
       }
 
-      const isGoingUp = floor > currentFloor;
-      if (isGoingUp) {
-        if (!state.isForwardDirection) {
-          dispatch({ type: 'PRESS_DIRECTION' });
-        }
-        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di1', value: true } } as any);
-        dispatch({ type: 'TOGGLE_DI', payload: 'di1' } as any);
-      } else {
-        if (state.isForwardDirection) {
-          dispatch({ type: 'PRESS_DIRECTION' });
-        }
-        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di2', value: true } } as any);
-        dispatch({ type: 'TOGGLE_DI', payload: 'di2' } as any);
-      }
+      dispatch({ type: 'PRESS_RUN' });
 
       setTimeout(() => {
         setCurrentFloor(floor);
         setBrakeEngaged(true);
         dispatch({ type: 'PRESS_STOP' });
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di1', value: false } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'DI1', value: false } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di2', value: false } } as any);
+        dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'DI2', value: false } } as any);
         setDoorStatus('ABRINDO');
         setTimeout(() => setDoorStatus('ABERTA'), 1000);
       }, 3500);
@@ -140,7 +206,7 @@ export const L1000Workbench: React.FC = () => {
               BANCADA ESPECIAL YASKAWA L1000 • MÁQUINA GEARLESS PMSM
             </strong>
             <span style={{ fontSize: '10px', color: '#90a4ae', display: 'block' }}>
-              Controle Vetorial de Elevadores • Encoder PG Absoluto • CLP de Manobra
+              Modo Atual: <strong style={{ color: isRem ? '#00e676' : '#ffa726' }}>{isRem ? 'REMOTO (Bornes S1-S4 / CLP)' : 'LOCAL (Teclado IHM)'}</strong>
             </span>
           </div>
         </div>
@@ -156,23 +222,24 @@ export const L1000Workbench: React.FC = () => {
       </div>
 
       <div style={mainGridStyle}>
+        {/* CHASSIS DO L1000 */}
         <div style={yaskawaChassisStyle}>
           <div style={yaskawaTopBannerStyle}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: '14px', fontWeight: 900, color: '#fff', letterSpacing: '1px' }}>YASKAWA</span>
               <span style={{ fontSize: '9px', color: '#81d4fa', fontWeight: 'bold' }}>L1000 Lift Drive</span>
             </div>
-            <span style={{ fontSize: '10px', color: '#ffb74d', fontWeight: 'bold' }}>EN 81-20 Compliant</span>
+            <span style={{ fontSize: '10px', color: '#ffb74d', fontWeight: 'bold' }}>EN 81-20</span>
           </div>
 
           <div style={yaskawaLcdStyle}>
             <div style={lcdTopIndicatorsStyle}>
-              <span style={{ color: isLoc ? '#00e676' : '#546e7a', fontWeight: 'bold', fontSize: '9px' }}>[LOC]</span>
-              <span style={{ color: !isLoc ? '#00e676' : '#546e7a', fontWeight: 'bold', fontSize: '9px' }}>[REM]</span>
-              <span style={{ color: isRunning ? '#00e676' : '#546e7a', fontWeight: 'bold', fontSize: '9px' }}>[RUN]</span>
-              <span style={{ color: !brakeEngaged ? '#00e676' : '#546e7a', fontWeight: 'bold', fontSize: '9px' }}>[BRK_RLS]</span>
-              <span style={{ color: state.isForwardDirection ? '#81d4fa' : '#ffb74d', fontWeight: 'bold', fontSize: '9px' }}>
-                {state.isForwardDirection ? '▲ SUBIDA' : '▼ DESCIDA'}
+              <span style={{ color: isLoc ? '#00e676' : '#263238', fontWeight: 'bold', fontSize: '10px' }}>● LOC</span>
+              <span style={{ color: isRem ? '#00e676' : '#263238', fontWeight: 'bold', fontSize: '10px' }}>● REM</span>
+              <span style={{ color: isRunning ? '#00e676' : '#263238', fontWeight: 'bold', fontSize: '10px' }}>● RUN</span>
+              <span style={{ color: !brakeEngaged ? '#00e676' : '#263238', fontWeight: 'bold', fontSize: '10px' }}>● BRK_RLS</span>
+              <span style={{ color: isGoingDown ? '#ff9800' : '#81d4fa', fontWeight: 'bold', fontSize: '10px' }}>
+                {isGoingDown ? '▼ DESCENDO' : '▲ SUBINDO'}
               </span>
             </div>
 
@@ -192,18 +259,45 @@ export const L1000Workbench: React.FC = () => {
           </div>
 
           <div style={keypadGridStyle}>
-            <button onClick={() => handleKeyClick('UP')} style={btnYaskawaKeyStyle} title="Incrementar (▲)">▲</button>
-            <button onClick={() => handleKeyClick('PROG')} style={{ ...btnYaskawaKeyStyle, background: '#0288d1', color: '#fff' }} title="Menu / Programação">PROG</button>
-            <button onClick={() => handleKeyClick('RESET')} style={{ ...btnYaskawaKeyStyle, background: '#ff9800', color: '#000' }} title="Reset de Falhas">RESET</button>
-            <button onClick={() => handleKeyClick('DOWN')} style={btnYaskawaKeyStyle} title="Decrementar (▼)">▼</button>
-            <button onClick={() => handleKeyClick('LOC_REM')} style={btnYaskawaKeyStyle} title="Comutar Local/Remoto">LOC/REM</button>
-            <button onClick={() => handleKeyClick('RUN')} style={{ ...btnYaskawaKeyStyle, background: '#2e7d32', color: '#fff' }} title="Partida (RUN)">RUN</button>
-            <button onClick={() => handleKeyClick('STOP')} style={{ ...btnYaskawaKeyStyle, gridColumn: 'span 3', background: '#c62828', color: '#fff' }} title="Parada Segura (STOP)">
+            <button onClick={() => handleKeyClick('UP')} style={btnYaskawaKeyStyle} title="▲">▲</button>
+            <button onClick={() => handleKeyClick('PROG')} style={{ ...btnYaskawaKeyStyle, background: '#0288d1', color: '#fff' }}>PROG</button>
+            <button onClick={() => handleKeyClick('RESET')} style={{ ...btnYaskawaKeyStyle, background: '#ff9800', color: '#000' }}>RESET</button>
+            <button onClick={() => handleKeyClick('DOWN')} style={btnYaskawaKeyStyle} title="▼">▼</button>
+            
+            <button
+              onClick={() => handleKeyClick('LOC_REM')}
+              style={{
+                ...btnYaskawaKeyStyle,
+                background: isRem ? '#00897b' : '#37474f',
+                borderColor: isRem ? '#00e676' : '#546e7a',
+                color: '#fff',
+                fontWeight: 'bold',
+              }}
+              title="Alternar Modo Local / Remoto"
+            >
+              LOC/REM
+            </button>
+
+            <button
+              onClick={() => handleKeyClick('RUN')}
+              style={{
+                ...btnYaskawaKeyStyle,
+                background: isLoc ? '#2e7d32' : '#1e293b',
+                color: isLoc ? '#fff' : '#64748b',
+                cursor: isLoc ? 'pointer' : 'not-allowed',
+              }}
+              title={isLoc ? 'Partida Local' : 'Desabilitado no Modo REMOTO'}
+            >
+              RUN
+            </button>
+
+            <button onClick={() => handleKeyClick('STOP')} style={{ ...btnYaskawaKeyStyle, gridColumn: 'span 3', background: '#c62828', color: '#fff' }}>
               STOP / PARADA DE EMERGÊNCIA
             </button>
           </div>
         </div>
 
+        {/* CLP DE MANOBRA */}
         <div style={plcCardStyle}>
           <div style={plcHeaderStyle}>
             <strong style={{ fontSize: '12px', color: '#81d4fa' }}>📟 CLP DE MANOBRA & DESPACHO DE CHAMADAS</strong>
@@ -223,7 +317,10 @@ export const L1000Workbench: React.FC = () => {
                       background: currentFloor === fl ? '#00e676' : targetFloor === fl ? '#ffb74d' : '#1f2937',
                       color: currentFloor === fl ? '#000' : '#fff',
                       borderColor: currentFloor === fl ? '#00e676' : '#374151',
+                      opacity: isRem ? 1 : 0.6,
+                      cursor: isRem ? 'pointer' : 'not-allowed',
                     }}
+                    title={isRem ? `Despachar para ${fl}º Andar` : 'Requer Modo REMOTO'}
                   >
                     {fl}º ANDAR
                   </button>
@@ -243,33 +340,36 @@ export const L1000Workbench: React.FC = () => {
             </div>
           </div>
 
+          {/* BORNES S1 E S2 */}
           <div style={{ marginTop: '10px' }}>
             <span style={{ fontSize: '10px', color: '#90a4ae', fontWeight: 'bold', display: 'block', marginBottom: '6px' }}>
-              Bornes de Comando do L1000 (S1 a S4):
+              Bornes de Comando do L1000 (S1 a S4): {isLoc && <span style={{ color: '#ff9800' }}>(Habilite o modo REMOTO na IHM)</span>}
             </span>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '6px' }}>
               <button
                 onClick={() => handleToggleDI(1)}
                 style={{
                   ...switchBtnStyle,
-                  borderColor: isDIActive(1) ? '#00e676' : '#374151',
-                  background: isDIActive(1) ? '#1b5e20' : '#161b22',
-                  color: isDIActive(1) ? '#fff' : '#90a4ae',
+                  borderColor: isS1Active ? '#00e676' : '#374151',
+                  background: isS1Active ? '#1b5e20' : '#161b22',
+                  color: isS1Active ? '#fff' : '#90a4ae',
+                  opacity: isRem ? 1 : 0.6,
                 }}
               >
-                S1: {isDIActive(1) ? '▲ SUBIR (ON)' : 'SUBIR (OFF)'}
+                S1: {isS1Active ? '▲ SUBIR (ON)' : 'SUBIR (OFF)'}
               </button>
 
               <button
                 onClick={() => handleToggleDI(2)}
                 style={{
                   ...switchBtnStyle,
-                  borderColor: isDIActive(2) ? '#00e676' : '#374151',
-                  background: isDIActive(2) ? '#1b5e20' : '#161b22',
-                  color: isDIActive(2) ? '#fff' : '#90a4ae',
+                  borderColor: isS2Active ? '#ff9800' : '#374151',
+                  background: isS2Active ? '#e65100' : '#161b22',
+                  color: isS2Active ? '#fff' : '#90a4ae',
+                  opacity: isRem ? 1 : 0.6,
                 }}
               >
-                S2: {isDIActive(2) ? '▼ DESCER (ON)' : 'DESCER (OFF)'}
+                S2: {isS2Active ? '▼ DESCER (ON)' : 'DESCER (OFF)'}
               </button>
 
               <button

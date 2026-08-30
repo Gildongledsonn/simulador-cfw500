@@ -15,6 +15,8 @@ export const ElevatorTractionVisualizer: React.FC<ElevatorTractionVisualizerProp
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  const lastDirectionRef = useRef<number>(1); // Guarda a direção durante a desaceleração
+
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -31,20 +33,18 @@ export const ElevatorTractionVisualizer: React.FC<ElevatorTractionVisualizerProp
 
   const isMotorReverse = (s: any): boolean => {
     if (!s) return false;
+    const di2 = Boolean(s.digitalInputs?.di2 || s.digitalInputs?.DI2);
+    if (di2) return true;
     if (s.isForwardDirection === false) return true;
     if (s.rotationDirection === 'REV' || s.direction === 'REV' || s.isReverse === true) return true;
-    const isRem = s.controlSource === 'REM' || s.isLocal === false;
-    const di2 = Boolean(s.digitalInputs?.di2 || s.digitalInputs?.DI2);
-    if (isRem && di2) return true;
     return false;
   };
 
   const rawFreq = Math.abs(Number(state.outputFrequency ?? 0));
   const isRev = isMotorReverse(state);
-  const isRunning = (state.motorStatus === 'RUNNING' || rawFreq > 0.1) && state.motorStatus !== 'FAULT';
-  // Máquinas Gearless operam em rotação mais baixa com alto torque (ex: nominal 180 RPM a 60Hz)
+  const isRunning = (state.motorStatus === 'RUNNING' || rawFreq > 0.05) && state.motorStatus !== 'FAULT';
   const elevatorRpm = Math.round((rawFreq / 60) * 180);
-  const linearSpeedMs = ((Math.PI * 0.45 * elevatorRpm) / 60).toFixed(2); // Polia Ø450mm
+  const linearSpeedMs = ((Math.PI * 0.45 * elevatorRpm) / 60).toFixed(2);
   const currentAmps = state.outputCurrent ?? (isRunning ? (2.4 + (rawFreq / 60) * 7.8).toFixed(1) : '0.0');
 
   const updateCameraPosition = () => {
@@ -78,7 +78,6 @@ export const ElevatorTractionVisualizer: React.FC<ElevatorTractionVisualizerProp
 
     mountRef.current.appendChild(renderer.domElement);
 
-    // Iluminação de estúdio industrial
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
     scene.add(ambientLight);
 
@@ -100,15 +99,12 @@ export const ElevatorTractionVisualizer: React.FC<ElevatorTractionVisualizerProp
     const machineGroup = new THREE.Group();
     scene.add(machineGroup);
 
-    // ==========================================
-    // 1. BASE ESTRUTURAL DE VIGA I (CHASSIS)
-    // ==========================================
+    // Chassis
     const baseBedGeo = new THREE.BoxGeometry(2.4, 0.16, 1.4);
     const baseBedMesh = new THREE.Mesh(baseBedGeo, metalDarkMat);
     baseBedMesh.position.set(0, -0.9, 0);
     machineGroup.add(baseBedMesh);
 
-    // Coxins de borracha anti-vibração
     for (let x = -0.9; x <= 0.9; x += 1.8) {
       for (let z = -0.5; z <= 0.5; z += 1.0) {
         const isolatorGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.1, 16);
@@ -118,46 +114,30 @@ export const ElevatorTractionVisualizer: React.FC<ElevatorTractionVisualizerProp
       }
     }
 
-    // ==========================================
-    // 2. ESTATOR PMSM CILÍNDRICO (CORPO DO MOTOR)
-    // ==========================================
+    // Estator
     const statorGeo = new THREE.CylinderGeometry(0.95, 0.95, 0.75, 48);
     statorGeo.rotateZ(Math.PI / 2);
     const statorMesh = new THREE.Mesh(statorGeo, castIronMat);
     statorMesh.position.set(-0.25, 0.1, 0);
     machineGroup.add(statorMesh);
 
-    // Aletas radiais de refrigeração
-    for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
-      const ribGeo = new THREE.BoxGeometry(0.72, 0.04, 0.08);
-      const ribMesh = new THREE.Mesh(ribGeo, metalDarkMat);
-      ribMesh.position.set(-0.25, 0.1 + Math.sin(a) * 0.96, Math.cos(a) * 0.96);
-      ribMesh.rotation.x = a;
-      machineGroup.add(ribMesh);
-    }
-
-    // ==========================================
-    // 3. GRUPO ROTATIVO: POLIA DE TRAÇÃO + ROTOR
-    // ==========================================
+    // Grupo Rotativo
     const sheaveRotorGroup = new THREE.Group();
     sheaveRotorGroupRef.current = sheaveRotorGroup;
     sheaveRotorGroup.position.set(0.45, 0.1, 0);
     machineGroup.add(sheaveRotorGroup);
 
-    // Eixo Central de Alta Resistência
     const mainShaftGeo = new THREE.CylinderGeometry(0.24, 0.24, 1.6, 32);
     mainShaftGeo.rotateZ(Math.PI / 2);
     const mainShaftMesh = new THREE.Mesh(mainShaftGeo, steelPolishedMat);
     mainShaftMesh.position.x = -0.3;
     sheaveRotorGroup.add(mainShaftMesh);
 
-    // Polia de Tração Principal (Traction Sheave Ø 450mm)
     const sheaveBodyGeo = new THREE.CylinderGeometry(0.88, 0.88, 0.42, 48);
     sheaveBodyGeo.rotateZ(Math.PI / 2);
     const sheaveBodyMesh = new THREE.Mesh(sheaveBodyGeo, castIronMat);
     sheaveRotorGroup.add(sheaveBodyMesh);
 
-    // 5 Ranhuras em V para Cabos de Aço
     for (let g = -0.15; g <= 0.15; g += 0.075) {
       const grooveGeo = new THREE.TorusGeometry(0.88, 0.02, 16, 48);
       grooveGeo.rotateY(Math.PI / 2);
@@ -166,7 +146,6 @@ export const ElevatorTractionVisualizer: React.FC<ElevatorTractionVisualizerProp
       sheaveRotorGroup.add(grooveMesh);
     }
 
-    // Marcações visuais de rotação na face da polia
     for (let m = 0; m < 4; m++) {
       const markGeo = new THREE.BoxGeometry(0.04, 0.35, 0.06);
       const markMesh = new THREE.Mesh(markGeo, new THREE.MeshBasicMaterial({ color: 0x00e676 }));
@@ -176,71 +155,37 @@ export const ElevatorTractionVisualizer: React.FC<ElevatorTractionVisualizerProp
       sheaveRotorGroup.add(markMesh);
     }
 
-    // ==========================================
-    // 4. CABOS DE TRAÇÃO DE AÇO VERTICAIS
-    // ==========================================
+    // Cabos
     const cablesGroup = new THREE.Group();
     cablesGroupRef.current = cablesGroup;
     machineGroup.add(cablesGroup);
 
     for (let c = -0.15; c <= 0.15; c += 0.075) {
-      // Lado da Cabine (Frente Z+)
       const cableCabGeo = new THREE.CylinderGeometry(0.016, 0.016, 1.8, 12);
       const cableCabMesh = new THREE.Mesh(cableCabGeo, cableMat);
       cableCabMesh.position.set(0.45 + c, -0.8, 0.88);
       cablesGroup.add(cableCabMesh);
 
-      // Lado do Contrapeso (Trás Z-)
       const cableCwtGeo = new THREE.CylinderGeometry(0.016, 0.016, 1.8, 12);
       const cableCwtMesh = new THREE.Mesh(cableCwtGeo, cableMat);
       cableCwtMesh.position.set(0.45 + c, -0.8, -0.88);
       cablesGroup.add(cableCwtMesh);
     }
 
-    // ==========================================
-    // 5. FREIO ELETROMECÂNICO DUPLO DE SEGURANÇA
-    // ==========================================
+    // Freio
     const brakeGroup = new THREE.Group();
     brakeGroup.position.set(-0.25, 0.1, 0);
     machineGroup.add(brakeGroup);
 
-    // Sapata Superior
     const topShoeGeo = new THREE.BoxGeometry(0.35, 0.14, 0.4);
     const topShoeMesh = new THREE.Mesh(topShoeGeo, brakePadMat);
     topShoeMesh.position.set(0, 1.05, 0);
     brakeGroup.add(topShoeMesh);
 
-    // Sapata Inferior
     const botShoeMesh = new THREE.Mesh(topShoeGeo, brakePadMat);
     botShoeMesh.position.set(0, -0.85, 0);
     brakeGroup.add(botShoeMesh);
 
-    // Bobinas Eletromagnéticas do Freio (Eletroímãs)
-    const coilGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.3, 24);
-    const coil1 = new THREE.Mesh(coilGeo, copperCoilMat);
-    coil1.position.set(0.2, 1.2, 0);
-    brakeGroup.add(coil1);
-
-    const coil2 = new THREE.Mesh(coilGeo, copperCoilMat);
-    coil2.position.set(-0.2, 1.2, 0);
-    brakeGroup.add(coil2);
-
-    // ==========================================
-    // 6. ENCODER ABSOLUTO ACOPLADO (EnDat/SinCos)
-    // ==========================================
-    const encoderGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.35, 32);
-    encoderGeo.rotateZ(Math.PI / 2);
-    const encoderMesh = new THREE.Mesh(encoderGeo, new THREE.MeshStandardMaterial({ color: 0x0984e3, roughness: 0.3, metalness: 0.6 }));
-    encoderMesh.position.set(-0.85, 0.1, 0);
-    machineGroup.add(encoderMesh);
-
-    // Conector e Cabo Blindado do Encoder
-    const encCableGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.6, 16);
-    const encCableMesh = new THREE.Mesh(encCableGeo, new THREE.MeshBasicMaterial({ color: 0xf1c40f }));
-    encCableMesh.position.set(-0.95, -0.15, 0);
-    machineGroup.add(encCableMesh);
-
-    // Grade do Piso da Casa de Máquinas
     const gridHelper = new THREE.GridHelper(7, 14, 0x00e676, 0x1f2937);
     gridHelper.position.y = -1.04;
     scene.add(gridHelper);
@@ -254,11 +199,17 @@ export const ElevatorTractionVisualizer: React.FC<ElevatorTractionVisualizerProp
       const delta = clock.getDelta();
       const s = stateRef.current as any;
       const curFreq = Math.abs(Number(s?.outputFrequency ?? 0));
-      const isCurRunning = (s?.motorStatus === 'RUNNING' || curFreq > 0.1) && s?.motorStatus !== 'FAULT';
+      const isCurRunning = (s?.motorStatus === 'RUNNING' || curFreq > 0.05) && s?.motorStatus !== 'FAULT';
 
       if (sheaveRotorGroupRef.current && isCurRunning) {
-        const currentlyRev = isMotorReverse(s);
-        const dirFactor = currentlyRev ? -1 : 1;
+        // Se o motor estiver rodando, atualiza a direção ativa
+        if (s?.motorStatus === 'RUNNING') {
+          const currentlyRev = isMotorReverse(s);
+          lastDirectionRef.current = currentlyRev ? -1 : 1;
+        }
+
+        // Usa a última direção ativa durante a desaceleração para não inverter o sentido
+        const dirFactor = lastDirectionRef.current;
         const currentRpm = (curFreq / 60) * 180;
         const visualSpeedFactor = 0.55;
         const radPerSec = ((2 * Math.PI * currentRpm) / 60) * visualSpeedFactor;

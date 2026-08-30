@@ -1,37 +1,32 @@
-import { InverterState, ParameterKey, ParameterMap, FaultData, DigitalInputsState } from '../types/cfw500';
+import { InverterState, ParameterKey, ParameterMap } from '../types/cfw500';
+import { INITIAL_PARAMETERS } from './InverterContext';
 
 export type InverterAction =
-  | { type: 'PRESS_PROG' }
-  | { type: 'PRESS_UP' }
-  | { type: 'PRESS_DOWN' }
   | { type: 'PRESS_RUN' }
   | { type: 'PRESS_STOP' }
   | { type: 'PRESS_LOCREM' }
+  | { type: 'PRESS_PROG' }
+  | { type: 'PRESS_UP' }
+  | { type: 'PRESS_DOWN' }
   | { type: 'PRESS_DIRECTION' }
   | { type: 'SELECT_PARAM_DIRECT'; payload: ParameterKey }
-  | { type: 'SET_DIGITAL_INPUT'; payload: { input: keyof DigitalInputsState; value: boolean } }
+  | { type: 'SET_DIGITAL_INPUT'; payload: { input: string | number; value: boolean } }
+  | { type: 'TOGGLE_DIGITAL_INPUT'; payload: string }
+  | { type: 'TOGGLE_DI'; payload: string | number }
+  | { type: 'SET_AI1_VOLTAGE'; payload: number }
   | { type: 'SET_ANALOG_INPUT_1'; payload: number }
-  | { type: 'TRIGGER_FAULT'; payload: FaultData }
+  | { type: 'TRIGGER_FAULT'; payload: any }
   | { type: 'RESET_FAULT' }
   | { type: 'RESET_FACTORY_DEFAULTS' }
-  | { type: 'UPDATE_DYNAMIC_TELEMETRY'; payload: { freq: number; current: number; rpm: number } };
-
-export const executeFactoryReset = (params: ParameterMap): ParameterMap => {
-  const resetParams = { ...params };
-  (Object.keys(resetParams) as ParameterKey[]).forEach((key) => {
-    if (resetParams[key]) {
-      resetParams[key] = {
-        ...resetParams[key],
-        currentValue: resetParams[key].defaultValue ?? 0,
+  | {
+      type: 'UPDATE_PHYSICS';
+      payload: {
+        frequency: number;
+        current?: number;
+        motorRPM?: number;
+        dcBus?: number;
       };
-    }
-  });
-
-  if (resetParams.P0000) resetParams.P0000.currentValue = 5;
-  if (resetParams.P0204) resetParams.P0204.currentValue = 0;
-
-  return resetParams;
-};
+    };
 
 export const inverterReducer = (state: InverterState, action: InverterAction): InverterState => {
   const paramKeys = Object.keys(state.parameters) as ParameterKey[];
@@ -39,269 +34,200 @@ export const inverterReducer = (state: InverterState, action: InverterAction): I
   const currentParam = state.parameters[currentKey];
 
   switch (action.type) {
-    case 'PRESS_PROG': {
+    case 'PRESS_RUN': {
       if (state.activeFault) return state;
+      return {
+        ...state,
+        motorStatus: 'RUNNING',
+      };
+    }
 
-      // 1. Modo de monitoramento (MONIT) -> vai para seleção de parâmetros
+    case 'PRESS_STOP': {
+      let nextActiveFault = state.activeFault;
+      if (state.activeFault) {
+        nextActiveFault = null;
+      }
+      return {
+        ...state,
+        motorStatus: 'READY',
+        activeFault: nextActiveFault,
+      };
+    }
+
+    case 'PRESS_LOCREM': {
+      const nextSource = state.controlSource === 'LOC' ? 'REM' : 'LOC';
+      return {
+        ...state,
+        controlSource: nextSource,
+        motorStatus: 'READY',
+      };
+    }
+
+    case 'PRESS_DIRECTION': {
+      return {
+        ...state,
+        isForwardDirection: !state.isForwardDirection,
+      };
+    }
+
+    case 'PRESS_PROG': {
       if (state.ihmMode === 'MONIT') {
-        return { ...state, ihmMode: 'PARAM_SELECT' };
-      }
-
-      // 2. Modo Seleção de Parâmetros -> abre edição de valor
-      if (state.ihmMode === 'PARAM_SELECT') {
-        if (!currentParam || currentParam.readOnly) return state;
-        return {
-          ...state,
-          ihmMode: 'PARAM_EDIT',
-          editBuffer: currentParam.currentValue,
-        };
-      }
-
-      // 3. Modo Edição -> grava na memória
-      if (state.ihmMode === 'PARAM_EDIT') {
-        // Reset de Fábrica: P0204 = 5
-        if (currentKey === 'P0204' && Math.round(state.editBuffer) === 5) {
-          const resetParams = executeFactoryReset(state.parameters);
-          return {
-            ...state,
-            ihmMode: 'PARAM_SELECT',
-            parameters: resetParams,
-            motorStatus: 'READY',
-            activeFault: null,
-            outputFrequency: 0,
-            outputCurrent: 0,
-            motorRPM: 0,
-            controlSource: 'LOC',
-            isForwardDirection: true,
-            lastFactoryResetTimestamp: Date.now(),
-          };
-        }
-
-        const savedValue = +(state.editBuffer).toFixed(1);
-        const updatedParams = {
-          ...state.parameters,
-          [currentKey]: {
-            ...currentParam,
-            currentValue: savedValue,
-          },
-        };
-
         return {
           ...state,
           ihmMode: 'PARAM_SELECT',
+        };
+      } else if (state.ihmMode === 'PARAM_SELECT') {
+        return {
+          ...state,
+          ihmMode: 'PARAM_EDIT',
+          editBuffer: currentParam ? currentParam.currentValue : 0,
+        };
+      } else if (state.ihmMode === 'PARAM_EDIT') {
+        const updatedParams: ParameterMap = {
+          ...state.parameters,
+          [currentKey]: {
+            ...currentParam,
+            currentValue: state.editBuffer,
+          },
+        };
+        return {
+          ...state,
           parameters: updatedParams,
+          ihmMode: 'PARAM_SELECT',
         };
       }
       return state;
     }
 
     case 'PRESS_UP': {
-      // 1. MODO MONITOR: incrementa a velocidade P0121 em modo Local
-      if (state.ihmMode === 'MONIT') {
-        if (state.controlSource === 'LOC' && !state.activeFault) {
-          const currentHz = state.parameters.P0121?.currentValue ?? state.outputFrequency ?? 0;
-          const maxHz = state.parameters.P0134?.currentValue ?? 60.0;
-          const nextHz = Math.min(maxHz, Number((currentHz + 5.0).toFixed(1)));
-
-          return {
-            ...state,
-            parameters: {
-              ...state.parameters,
-              P0121: {
-                ...state.parameters.P0121,
-                currentValue: nextHz,
-              },
-            },
-          };
-        }
-        return state;
-      }
-
-      // 2. MODO SELEÇÃO: navega para o próximo Pxxxx
       if (state.ihmMode === 'PARAM_SELECT') {
         const nextIndex = (state.selectedParamIndex + 1) % paramKeys.length;
-        return { ...state, selectedParamIndex: nextIndex };
-      }
-
-      // 3. MODO EDIÇÃO: incrementa o valor
-      if (state.ihmMode === 'PARAM_EDIT') {
-        const step = currentParam?.step ?? 1;
-        const max = currentParam?.max ?? 9999;
-        const nextVal = Math.min(max, Number((state.editBuffer + step).toFixed(step < 1 ? 1 : 0)));
+        return {
+          ...state,
+          selectedParamIndex: nextIndex,
+        };
+      } else if (state.ihmMode === 'PARAM_EDIT') {
+        if (!currentParam || currentParam.readOnly) return state;
+        const step = currentParam.step || 1;
+        const nextVal = Math.min(currentParam.max, Number((state.editBuffer + step).toFixed(2)));
         return {
           ...state,
           editBuffer: nextVal,
         };
+      } else if (state.ihmMode === 'MONIT') {
+        const p121 = state.parameters.P0121;
+        if (!p121) return state;
+        const nextFreq = Math.min(p121.max, Number((p121.currentValue + 1.0).toFixed(1)));
+        return {
+          ...state,
+          parameters: {
+            ...state.parameters,
+            P0121: { ...p121, currentValue: nextFreq },
+          },
+        };
       }
-
       return state;
     }
 
     case 'PRESS_DOWN': {
-      // 1. MODO MONITOR: decrementa a velocidade P0121 em modo Local
-      if (state.ihmMode === 'MONIT') {
-        if (state.controlSource === 'LOC' && !state.activeFault) {
-          const currentHz = state.parameters.P0121?.currentValue ?? state.outputFrequency ?? 0;
-          const minHz = 0.0;
-          const nextHz = Math.max(minHz, Number((currentHz - 5.0).toFixed(1)));
-
-          return {
-            ...state,
-            parameters: {
-              ...state.parameters,
-              P0121: {
-                ...state.parameters.P0121,
-                currentValue: nextHz,
-              },
-            },
-          };
-        }
-        return state;
-      }
-
-      // 2. MODO SELEÇÃO: navega para o Pxxxx anterior
       if (state.ihmMode === 'PARAM_SELECT') {
         const prevIndex = (state.selectedParamIndex - 1 + paramKeys.length) % paramKeys.length;
-        return { ...state, selectedParamIndex: prevIndex };
-      }
-
-      // 3. MODO EDIÇÃO: decrementa o valor
-      if (state.ihmMode === 'PARAM_EDIT') {
-        const step = currentParam?.step ?? 1;
-        const min = currentParam?.min ?? 0;
-        const nextVal = Math.max(min, Number((state.editBuffer - step).toFixed(step < 1 ? 1 : 0)));
+        return {
+          ...state,
+          selectedParamIndex: prevIndex,
+        };
+      } else if (state.ihmMode === 'PARAM_EDIT') {
+        if (!currentParam || currentParam.readOnly) return state;
+        const step = currentParam.step || 1;
+        const nextVal = Math.max(currentParam.min, Number((state.editBuffer - step).toFixed(2)));
         return {
           ...state,
           editBuffer: nextVal,
         };
+      } else if (state.ihmMode === 'MONIT') {
+        const p121 = state.parameters.P0121;
+        if (!p121) return state;
+        const prevFreq = Math.max(p121.min, Number((p121.currentValue - 1.0).toFixed(1)));
+        return {
+          ...state,
+          parameters: {
+            ...state.parameters,
+            P0121: { ...p121, currentValue: prevFreq },
+          },
+        };
       }
-
       return state;
     }
 
     case 'SELECT_PARAM_DIRECT': {
-      const idx = paramKeys.indexOf(action.payload);
-      if (idx === -1) return state;
-      return { ...state, selectedParamIndex: idx, ihmMode: 'PARAM_SELECT' };
-    }
-
-    case 'PRESS_RUN': {
-      if (state.activeFault) return state;
-
-      if (state.controlSource === 'LOC') {
-        const currentRef = state.parameters.P0121?.currentValue ?? 0;
-        const startRef = currentRef > 0 ? currentRef : 30.0;
-
+      const targetKey = action.payload;
+      const idx = paramKeys.indexOf(targetKey);
+      if (idx !== -1) {
         return {
           ...state,
-          motorStatus: 'RUNNING',
-          parameters: {
-            ...state.parameters,
-            P0121: {
-              ...state.parameters.P0121,
-              currentValue: startRef,
-            },
-          },
+          selectedParamIndex: idx,
+          ihmMode: 'PARAM_SELECT',
         };
       }
-
       return state;
     }
 
-    case 'PRESS_STOP': {
-      if (state.activeFault) {
-        return { ...state, activeFault: null, motorStatus: 'READY' };
-      }
-      if (state.ihmMode === 'PARAM_EDIT') {
-        return { ...state, ihmMode: 'PARAM_SELECT' };
-      }
-      if (state.ihmMode === 'PARAM_SELECT') {
-        return { ...state, ihmMode: 'MONIT' };
-      }
-      return { ...state, motorStatus: 'READY' };
-    }
-
-    case 'PRESS_LOCREM': {
-      return {
-        ...state,
-        controlSource: state.controlSource === 'LOC' ? 'REM' : 'LOC',
-        motorStatus: 'READY',
-      };
-    }
-
-    case 'PRESS_DIRECTION': {
-      return { ...state, isForwardDirection: !state.isForwardDirection };
-    }
-
     case 'SET_DIGITAL_INPUT': {
-      const nextInputs = {
+      const { input, value } = action.payload;
+      const key = String(input).toLowerCase();
+      const keyUpper = key.toUpperCase();
+
+      const newDigitalInputs: Record<string, boolean> = {
         ...state.digitalInputs,
-        [action.payload.input]: action.payload.value,
+        [key]: value,
+        [keyUpper]: value,
       };
 
-      let nextStatus = state.motorStatus;
-      let nextForward = state.isForwardDirection;
-      let targetSpeed = state.parameters.P0121?.currentValue ?? 60.0;
+      let newMotorStatus = state.motorStatus;
+      let newIsForward = state.isForwardDirection;
 
-      if (state.controlSource === 'REM' && !state.activeFault) {
-        const isDi1 = Boolean(nextInputs.di1 ?? (nextInputs as any).DI1);
-        const isDi2 = Boolean(nextInputs.di2 ?? (nextInputs as any).DI2);
-        const isDi3 = Boolean(nextInputs.di3 ?? (nextInputs as any).DI3);
-        const isDi4 = Boolean(nextInputs.di4 ?? (nextInputs as any).DI4);
+      if (state.controlSource === 'REM') {
+        const di1Active = Boolean(newDigitalInputs.di1 || newDigitalInputs.DI1);
+        const di2Active = Boolean(newDigitalInputs.di2 || newDigitalInputs.DI2);
 
-        // 1. DI1 = Gira/Para (Partida do motor)
-        nextStatus = isDi1 ? 'RUNNING' : 'READY';
-
-        // 2. DI2 = Sentido de Giro (P0264 = 1): Aberto = Horário (FWD), Fechado = Anti-horário (REV)
-        nextForward = !isDi2;
-
-        // 3. MULTISPEED (DI3 e DI4): Seleção de frequências pré-programadas
-        // DI3=OFF, DI4=OFF -> P0124 (Multispeed 1)
-        // DI3=ON,  DI4=OFF -> P0125 (Multispeed 2)
-        // DI3=OFF, DI4=ON  -> P0126 (Multispeed 3)
-        // DI3=ON,  DI4=ON  -> P0127 (Multispeed 4)
-        if (isDi3 && !isDi4) {
-          targetSpeed = state.parameters.P0125?.currentValue ?? 35.0;
-        } else if (!isDi3 && isDi4) {
-          targetSpeed = state.parameters.P0126?.currentValue ?? 50.0;
-        } else if (isDi3 && isDi4) {
-          targetSpeed = state.parameters.P0127?.currentValue ?? 60.0;
-        } else if (state.parameters.P0222?.currentValue === 6 || isDi1) {
-          targetSpeed = state.parameters.P0124?.currentValue ?? 15.0;
+        if (di1Active && !di2Active) {
+          newMotorStatus = 'RUNNING';
+          newIsForward = true;
+        } else if (di2Active && !di1Active) {
+          newMotorStatus = 'RUNNING';
+          newIsForward = false;
+        } else if (!di1Active && !di2Active) {
+          newMotorStatus = 'READY';
         }
       }
 
       return {
         ...state,
-        digitalInputs: nextInputs,
-        motorStatus: nextStatus,
-        isForwardDirection: nextForward,
-        parameters: {
-          ...state.parameters,
-          P0121: {
-            ...state.parameters.P0121,
-            currentValue: targetSpeed,
-          },
-        },
+        digitalInputs: newDigitalInputs as any,
+        motorStatus: newMotorStatus,
+        isForwardDirection: newIsForward,
       };
     }
 
-    case 'SET_ANALOG_INPUT_1': {
-      const voltage = Math.min(10, Math.max(0, action.payload));
-      const fMin = state.parameters.P0133?.currentValue ?? 3.0;
-      const fMax = state.parameters.P0134?.currentValue ?? 60.0;
-      const targetFreqFromAI = fMin + (voltage / 10) * (fMax - fMin);
+    case 'TOGGLE_DIGITAL_INPUT':
+    case 'TOGGLE_DI': {
+      const rawKey = action.payload;
+      const key = typeof rawKey === 'number' ? `di${rawKey}` : String(rawKey).toLowerCase();
+      const curVal = Boolean((state.digitalInputs as any)?.[key] || (state.digitalInputs as any)?.[key.toUpperCase()]);
+      const nextVal = !curVal;
 
+      return inverterReducer(state, {
+        type: 'SET_DIGITAL_INPUT',
+        payload: { input: key, value: nextVal },
+      });
+    }
+
+    case 'SET_AI1_VOLTAGE':
+    case 'SET_ANALOG_INPUT_1': {
+      const v = typeof action.payload === 'number' ? action.payload : 0;
       return {
         ...state,
-        ai1Voltage: voltage,
-        parameters:
-          state.controlSource === 'REM' && state.parameters.P0222?.currentValue === 1
-            ? {
-                ...state.parameters,
-                P0121: { ...state.parameters.P0121, currentValue: +targetFreqFromAI.toFixed(1) },
-              }
-            : state.parameters,
+        ai1Voltage: v,
       };
     }
 
@@ -310,45 +236,45 @@ export const inverterReducer = (state: InverterState, action: InverterAction): I
         ...state,
         activeFault: action.payload,
         motorStatus: 'FAULT',
-        outputFrequency: 0,
-        outputCurrent: 0,
-        motorRPM: 0,
       };
     }
 
     case 'RESET_FAULT': {
-      return { ...state, activeFault: null, motorStatus: 'READY' };
-    }
-
-    case 'RESET_FACTORY_DEFAULTS': {
-      const resetParams = executeFactoryReset(state.parameters);
       return {
         ...state,
-        ihmMode: 'PARAM_SELECT',
-        parameters: resetParams,
-        motorStatus: 'READY',
         activeFault: null,
-        outputFrequency: 0,
-        outputCurrent: 0,
-        motorRPM: 0,
-        controlSource: 'LOC',
-        isForwardDirection: true,
-        lastFactoryResetTimestamp: Date.now(),
+        motorStatus: 'READY',
       };
     }
 
-    case 'UPDATE_DYNAMIC_TELEMETRY': {
+    case 'RESET_FACTORY_DEFAULTS': {
       return {
         ...state,
-        outputFrequency: action.payload.freq,
-        outputCurrent: action.payload.current,
-        motorRPM: action.payload.rpm,
-        parameters: {
-          ...state.parameters,
-          P0001: { ...state.parameters.P0001, currentValue: action.payload.rpm },
-          P0002: { ...state.parameters.P0002, currentValue: action.payload.freq },
-          P0003: { ...state.parameters.P0003, currentValue: action.payload.current },
-        },
+        parameters: { ...INITIAL_PARAMETERS },
+        selectedParamIndex: 0,
+        editBuffer: 0,
+        ihmMode: 'MONIT',
+        controlSource: 'LOC',
+        motorStatus: 'READY',
+        isForwardDirection: true,
+        activeFault: null,
+        digitalInputs: { di1: false, di2: false, di3: false, di4: false } as any,
+        ai1Voltage: 0,
+        outputFrequency: 0,
+        outputCurrent: 0,
+        motorRPM: 0,
+        dcBusVoltage: 310,
+      };
+    }
+
+    case 'UPDATE_PHYSICS': {
+      const { frequency, current, motorRPM, dcBus } = action.payload;
+      return {
+        ...state,
+        outputFrequency: frequency,
+        outputCurrent: current !== undefined ? current : state.outputCurrent,
+        motorRPM: motorRPM !== undefined ? motorRPM : state.motorRPM,
+        dcBusVoltage: dcBus !== undefined ? dcBus : state.dcBusVoltage,
       };
     }
 

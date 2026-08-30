@@ -3,6 +3,7 @@ import { useInverter } from '../context/InverterContext';
 import { COURSE_MODULES } from '../constants/courseModules';
 import { COURSE_MODULES_CFW300 } from '../constants/courseModulesCFW300';
 import { COURSE_MODULES_L1000 } from '../constants/courseModulesL1000';
+import { COURSE_MODULES_CLIC02 } from '../constants/courseModulesClic02';
 import { Lesson } from '../types/tutorial';
 import {
   getUserProgress,
@@ -30,7 +31,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
   userRole,
 }) => {
   const { state, dispatch } = useInverter();
-  const [activeInverterType, setActiveInverterType] = useState<'CFW500' | 'CFW300' | 'L1000'>('CFW500');
+  const [activeInverterType, setActiveInverterType] = useState<'CFW500' | 'CFW300' | 'L1000' | 'CLIC02'>('CFW500');
   const [progress, setProgress] = useState<UserProgressData>(() => getUserProgress());
   const [adminMode, setAdminMode] = useState<boolean>(() => isAdminUnlockAllActive());
   const [isInitializingLesson, setIsInitializingLesson] = useState<boolean>(true);
@@ -40,11 +41,12 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
       ? COURSE_MODULES
       : activeInverterType === 'CFW300'
       ? COURSE_MODULES_CFW300
-      : COURSE_MODULES_L1000;
+      : activeInverterType === 'L1000'
+      ? COURSE_MODULES_L1000
+      : COURSE_MODULES_CLIC02;
 
   const previousLessonIdRef = useRef<string>(selectedLesson.id);
 
-  // Executa o Hard Reset de Hardware e Parâmetros da Memória
   const triggerHardReset = () => {
     if (!dispatch) return;
     dispatch({ type: 'RESET_FACTORY_DEFAULTS' } as any);
@@ -52,13 +54,11 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     dispatch({ type: 'SET_AI1_VOLTAGE', payload: 0 } as any);
   };
 
-  // Limpa o checklist e reinicia a bancada a cada troca de lição
   useEffect(() => {
     setIsInitializingLesson(true);
     triggerHardReset();
     previousLessonIdRef.current = selectedLesson.id;
 
-    // Tempo hábil para o Reducer propagar o estado inicial limpo
     const timer = setTimeout(() => {
       setIsInitializingLesson(false);
     }, 150);
@@ -75,7 +75,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     return () => window.removeEventListener('course_progress_updated', handleProgressUpdate);
   }, []);
 
-  // Avaliação do Checklist Prático
   useEffect(() => {
     if (isInitializingLesson) return;
 
@@ -112,7 +111,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     }
   }, [state, selectedLesson, progress.completedSteps, progress.completedLessons, activeCourseModules, isInitializingLesson]);
 
-  const handleSelectInverterType = (type: 'CFW500' | 'CFW300' | 'L1000') => {
+  const handleSelectInverterType = (type: 'CFW500' | 'CFW300' | 'L1000' | 'CLIC02') => {
     if (type === activeInverterType) return;
     setActiveInverterType(type);
     triggerHardReset();
@@ -122,7 +121,9 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
         ? COURSE_MODULES
         : type === 'CFW300'
         ? COURSE_MODULES_CFW300
-        : COURSE_MODULES_L1000;
+        : type === 'L1000'
+        ? COURSE_MODULES_L1000
+        : COURSE_MODULES_CLIC02;
 
     if (targetModules[0]?.lessons[0]) {
       setSelectedLesson(targetModules[0].lessons[0]);
@@ -175,7 +176,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
 
   return (
     <div style={containerStyle}>
-      {/* PAINEL ADMIN */}
       {userRole === 'ADMIN' && (
         <div style={adminControlBarStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -203,7 +203,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
         </div>
       )}
 
-      {/* SELEÇÃO DO MODELO */}
       <div style={moduleListHeaderStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
           <button
@@ -239,9 +238,19 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
           >
             📟 Inversor L1000 (Elevadores)
           </button>
+          <button
+            onClick={() => handleSelectInverterType('CLIC02')}
+            style={{
+              ...inverterTabBtnStyle,
+              background: activeInverterType === 'CLIC02' ? '#00897b' : '#161b22',
+              borderColor: activeInverterType === 'CLIC02' ? '#00e676' : '#30363d',
+              color: activeInverterType === 'CLIC02' ? '#fff' : '#90a4ae',
+            }}
+          >
+            🪜 CLP CLIC-02 (Ladder)
+          </button>
         </div>
 
-        {/* GRADE DE MÓDULOS */}
         <div style={modulesTabsRowStyle}>
           {activeCourseModules.map((mod, mIdx) => {
             const unlocked = isModuleUnlocked(mIdx, progress, activeCourseModules);
@@ -298,7 +307,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
       </div>
 
       <div style={contentGridStyle}>
-        {/* LISTA DE LIÇÕES */}
         <div style={lessonSidebarStyle}>
           <strong style={{ fontSize: '11px', color: '#81d4fa', marginBottom: '8px', display: 'block' }}>
             Lições do Módulo ({activeInverterType}):
@@ -340,7 +348,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
           </div>
         </div>
 
-        {/* ÁREA PRINCIPAL DA LIÇÃO */}
         <div style={lessonMainAreaStyle}>
           <div style={lessonHeaderStyle}>
             <div>
@@ -373,7 +380,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             </div>
           </div>
 
-          {/* TEORIA */}
           {selectedLesson.type === 'THEORY' && selectedLesson.theoryData && (
             <div style={theoryContainerStyle}>
               <h3 style={{ fontSize: '13px', color: '#81d4fa', marginBottom: '8px' }}>
@@ -417,7 +423,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             </div>
           )}
 
-          {/* PRÁTICA */}
           {selectedLesson.type === 'PRACTICE' && selectedLesson.steps && (
             <div style={practiceContainerStyle}>
               <strong style={{ fontSize: '11px', color: '#81d4fa', display: 'block', marginBottom: '6px' }}>
