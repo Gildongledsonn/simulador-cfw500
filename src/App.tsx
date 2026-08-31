@@ -15,6 +15,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { AdminPanel } from './components/AdminPanel';
 import { CFW300Workbench } from './components/CFW300Workbench';
 import { L1000Workbench } from './components/L1000Workbench';
+import { Clic02RealisticPLC } from './components/Clic02RealisticPLC';
 import { COURSE_MODULES } from './constants/courseModules';
 import { Lesson } from './types/tutorial';
 
@@ -30,31 +31,30 @@ interface AuthUser {
 const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('workbench');
   const [inverterModel, setInverterModel] = useState<InverterModel>('CFW500');
+  const [tutorialModel, setTutorialModel] = useState<'CFW500' | 'CFW300' | 'L1000' | 'CLIC02'>('CFW500');
   const [loadTorque, setLoadTorque] = useState(20);
   const [currentLesson, setCurrentLesson] = useState<Lesson>(COURSE_MODULES[0].lessons[0]);
 
   usePhysicsLoop({ loadTorquePercent: loadTorque, enableNoise: true });
   useKeyboardControls();
 
-  // Detecta automaticamente o inversor da lição ativa
-  const isLessonL1000 =
-    currentLesson.id.toLowerCase().startsWith('l1000') ||
-    currentLesson.id.toLowerCase().startsWith('l1-') ||
-    currentLesson.id.toLowerCase().startsWith('l1000-m');
-
-  const isLessonCFW300 =
-    currentLesson.id.toLowerCase().startsWith('c300') ||
-    currentLesson.id.toLowerCase().startsWith('cfw300');
-
-  const activeLessonModel: InverterModel = isLessonL1000
-    ? 'L1000'
-    : isLessonCFW300
-    ? 'CFW300'
-    : 'CFW500';
+  // Determina o modelo ativo na aula pelo ID da lição selecionada
+  useEffect(() => {
+    const id = currentLesson.id;
+    if (id.startsWith('c300_')) {
+      setTutorialModel('CFW300');
+    } else if (id.startsWith('l1000_')) {
+      setTutorialModel('L1000');
+    } else if (id.startsWith('clic_')) {
+      setTutorialModel('CLIC02');
+    } else {
+      setTutorialModel('CFW500');
+    }
+  }, [currentLesson.id]);
 
   return (
     <div style={mainContainerStyle}>
-      {/* BARRA SUPERIOR DE USUÁRIO */}
+      {/* BARRA SUPERIOR DO USUÁRIO */}
       <div style={userHeaderBarStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '16px' }}>👤</span>
@@ -95,7 +95,7 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
               borderColor: activeTab === 'modbus' ? '#29b6f6' : '#323842',
             }}
           >
-            📡 Modbus RTU (RS-485)
+            📡 Modbus RTU & CLIC-02
           </button>
 
           <button
@@ -120,7 +120,7 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
                 borderColor: activeTab === 'admin' ? '#ffa726' : '#323842',
               }}
             >
-              🛡️ Painel Admin (Aprovações)
+              🛡️ Painel Admin
             </button>
           )}
         </div>
@@ -172,7 +172,6 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
             </div>
           </div>
 
-          {/* EXIBIÇÃO DA BANCADA LIVRE SELECIONADA */}
           {inverterModel === 'L1000' ? (
             <>
               <L1000Workbench />
@@ -255,63 +254,76 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
         </div>
       )}
 
-      {/* ABA 2: MODBUS RTU */}
+      {/* ABA 2: MODBUS RTU & CLIC-02 */}
       {activeTab === 'modbus' && (
         <div style={tabContentStyle}>
           <ModbusPanel />
-          <div style={rowStyle}>
-            <IHM />
-            <div style={motorColumnStyle}>
-              <MotorVisualizer loadTorquePercent={loadTorque} />
-            </div>
-          </div>
         </div>
       )}
 
-      {/* ABA 3: MODO AULA & TRILHA */}
+      {/* ABA 3: MODO AULA & TRILHA (GUIA NO TOPO + BANCADA DINÂMICA EMBAIXO) */}
       {activeTab === 'tutorial' && (
         <div style={tabContentStyle}>
+          {/* ROTEIRO PEDAGÓGICO, CHECKLIST E TEORIA */}
           <TutorialGuide
             selectedLesson={currentLesson}
             setSelectedLesson={setCurrentLesson}
             userRole={user.role}
           />
 
-          {currentLesson.type === 'PRACTICE' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '6px' }}>
-              <div style={{ fontSize: '12px', color: '#64b5f6', fontWeight: 'bold' }}>
-                🎛️ Bancada Ativa para a Lição: {activeLessonModel === 'L1000' ? 'YASKAWA L1000 (ELEVADORES)' : activeLessonModel === 'CFW300' ? 'WEG CFW300' : 'WEG CFW500'}
-              </div>
+          {/* BANCADA CORRESPONDENTE AO EQUIPAMENTO DA LIÇÃO ATIVA */}
+          <div style={{ marginTop: '10px' }}>
+            <div style={sectionDividerHeader}>
+              <strong style={{ fontSize: '12px', color: '#81d4fa' }}>
+                🛠️ BANCADA DE PRÁTICA INTERATIVA ({tutorialModel})
+              </strong>
+            </div>
 
-              {activeLessonModel === 'L1000' ? (
-                <>
-                  <L1000Workbench />
-                  <div style={rowStyle}>
-                    <div style={{ flex: '1 1 350px' }}>
-                      <ElevatorTractionVisualizer loadTorquePercent={loadTorque} />
-                    </div>
-                  </div>
-                </>
-              ) : activeLessonModel === 'CFW300' ? (
+            {tutorialModel === 'L1000' ? (
+              <>
+                <L1000Workbench />
                 <div style={rowStyle}>
-                  <CFW300Workbench />
-                  <div style={motorColumnStyle}>
-                    <MotorVisualizer loadTorquePercent={loadTorque} />
+                  <div style={{ flex: '1 1 350px' }}>
+                    <ElevatorTractionVisualizer loadTorquePercent={loadTorque} />
                   </div>
                 </div>
-              ) : (
+              </>
+            ) : tutorialModel === 'CFW300' ? (
+              <div style={rowStyle}>
+                <CFW300Workbench />
+                <div style={motorColumnStyle}>
+                  <MotorVisualizer loadTorquePercent={loadTorque} />
+                </div>
+              </div>
+            ) : tutorialModel === 'CLIC02' ? (
+              <div style={rowStyle}>
+                <div style={{ width: '380px' }}>
+                  <Clic02RealisticPLC activePlant="esteira" />
+                </div>
+                <div style={motorColumnStyle}>
+                  <IHM />
+                  <MotorVisualizer loadTorquePercent={loadTorque} />
+                </div>
+              </div>
+            ) : (
+              <>
                 <div style={rowStyle}>
                   <IHM />
                   <div style={motorColumnStyle}>
                     <MotorVisualizer loadTorquePercent={loadTorque} />
-                    <TerminalBlock />
                   </div>
                 </div>
-              )}
+                <div style={rowStyle}>
+                  <TerminalBlock />
+                  <RelayPanel />
+                </div>
+              </>
+            )}
 
+            <div style={{ marginTop: '14px' }}>
               <FaultInjectionPanel />
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -361,7 +373,6 @@ export default function App() {
   );
 }
 
-// ESTILOS VISUAIS
 const mainContainerStyle: React.CSSProperties = {
   maxWidth: '1100px',
   width: '100%',
@@ -467,4 +478,12 @@ const loadBoxStyle: React.CSSProperties = {
   border: '1px solid #323842',
   borderRadius: '12px',
   padding: '12px 14px',
+};
+
+const sectionDividerHeader: React.CSSProperties = {
+  background: '#161b22',
+  border: '1px solid #263238',
+  borderRadius: '8px',
+  padding: '8px 12px',
+  marginBottom: '10px',
 };
