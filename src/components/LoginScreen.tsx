@@ -76,10 +76,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         <div style={headerStyle}>
           <div style={badgeIconStyle}>⚡</div>
           <h2 style={{ fontSize: '18px', color: '#fff', margin: '8px 0 2px 0' }}>
-            Portal de Treinamento CFW500
+            Portal GAF Treinamentos
           </h2>
           <span style={{ fontSize: '11px', color: '#90a4ae' }}>
-            GafLink Automação • Plataforma de Capacitação Técnica
+            Plataforma de Capacitação Técnica • Automação & Comandos
           </span>
         </div>
 

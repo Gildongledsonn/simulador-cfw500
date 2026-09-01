@@ -16,10 +16,11 @@ import { AdminPanel } from './components/AdminPanel';
 import { CFW300Workbench } from './components/CFW300Workbench';
 import { L1000Workbench } from './components/L1000Workbench';
 import { Clic02RealisticPLC } from './components/Clic02RealisticPLC';
+import { ComandosEletricosWorkbench } from './components/ComandosEletricosWorkbench';
 import { COURSE_MODULES } from './constants/courseModules';
 import { Lesson } from './types/tutorial';
 
-type ActiveTab = 'workbench' | 'modbus' | 'tutorial' | 'admin';
+type ActiveTab = 'workbench' | 'modbus' | 'tutorial' | 'comandos' | 'admin';
 type InverterModel = 'CFW500' | 'CFW300' | 'L1000';
 
 interface AuthUser {
@@ -38,7 +39,7 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
   usePhysicsLoop({ loadTorquePercent: loadTorque, enableNoise: true });
   useKeyboardControls();
 
-  // Determina o modelo ativo na aula pelo ID da lição selecionada
+  // Sincroniza a bancada conforme o equipamento da lição ativa
   useEffect(() => {
     const id = currentLesson.id;
     if (id.startsWith('c300_')) {
@@ -51,6 +52,13 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
       setTutorialModel('CFW500');
     }
   }, [currentLesson.id]);
+
+  // Se um aluno estiver com a aba de comandos selecionada por algum estado anterior, redireciona
+  useEffect(() => {
+    if (user.role !== 'ADMIN' && activeTab === 'comandos') {
+      setActiveTab('workbench');
+    }
+  }, [user.role, activeTab]);
 
   return (
     <div style={mainContainerStyle}>
@@ -107,8 +115,23 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
               borderColor: activeTab === 'tutorial' ? '#29b6f6' : '#323842',
             }}
           >
-            🎓 Modo Aula & Trilha
+            🎓 Treinamento de Automações
           </button>
+
+          {/* ABA DE COMANDOS ELÉTRICOS: VISÍVEL SOMENTE PARA ADMINISTRADORES/INSTRUTORES */}
+          {user.role === 'ADMIN' && (
+            <button
+              onClick={() => setActiveTab('comandos')}
+              style={{
+                ...tabButtonStyle,
+                background: activeTab === 'comandos' ? '#00897b' : '#1a1d21',
+                color: activeTab === 'comandos' ? '#fff' : '#80cbc4',
+                borderColor: activeTab === 'comandos' ? '#00e676' : '#323842',
+              }}
+            >
+              ⚡ Comandos Elétricos (Dev/Admin)
+            </button>
+          )}
 
           {user.role === 'ADMIN' && (
             <button
@@ -128,7 +151,7 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
         <AudioControls />
       </div>
 
-      {/* ABA 1: BANCADA LIVRE */}
+      {/* ABA 1: BANCADA DE OPERAÇÃO LIVRE */}
       {activeTab === 'workbench' && (
         <div style={tabContentStyle}>
           <div style={modelSelectorBarStyle}>
@@ -261,17 +284,15 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
         </div>
       )}
 
-      {/* ABA 3: MODO AULA & TRILHA (GUIA NO TOPO + BANCADA DINÂMICA EMBAIXO) */}
+      {/* ABA 3: TREINAMENTO DE AUTOMAÇÕES */}
       {activeTab === 'tutorial' && (
         <div style={tabContentStyle}>
-          {/* ROTEIRO PEDAGÓGICO, CHECKLIST E TEORIA */}
           <TutorialGuide
             selectedLesson={currentLesson}
             setSelectedLesson={setCurrentLesson}
             userRole={user.role}
           />
 
-          {/* BANCADA CORRESPONDENTE AO EQUIPAMENTO DA LIÇÃO ATIVA */}
           <div style={{ marginTop: '10px' }}>
             <div style={sectionDividerHeader}>
               <strong style={{ fontSize: '12px', color: '#81d4fa' }}>
@@ -327,7 +348,14 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
         </div>
       )}
 
-      {/* ABA 4: PAINEL DO ADMINISTRADOR */}
+      {/* ABA 4: COMANDOS ELÉTRICOS (EXCLUSIVA PARA INSTRUTORES / ADMINS) */}
+      {activeTab === 'comandos' && user.role === 'ADMIN' && (
+        <div style={tabContentStyle}>
+          <ComandosEletricosWorkbench />
+        </div>
+      )}
+
+      {/* ABA 5: PAINEL DO ADMINISTRADOR */}
       {activeTab === 'admin' && user.role === 'ADMIN' && (
         <div style={tabContentStyle}>
           <AdminPanel />
