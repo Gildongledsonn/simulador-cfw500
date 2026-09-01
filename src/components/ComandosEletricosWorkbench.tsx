@@ -530,7 +530,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     return d;
   };
 
-  // Continuidade BFS com Acionamento Conjugado por TAG
   useEffect(() => {
     const adj: Record<string, string[]> = {};
     const addEdge = (u: string, v: string) => {
@@ -683,7 +682,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     }
   }, [cables, components.map((c) => `${c.id}:${c.tag}:${c.state}:${c.tripped}`).join()]);
 
-  // Tecla Delete para apagar cabo ou componente selecionado
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -914,7 +912,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
   return (
     <div style={containerStyle}>
-      {/* 1. BARRA SUPERIOR: BOTÃO DO CATÁLOGO DE COMPONENTES & PALETA DE CABOS */}
       <div style={topControlBarStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <button
@@ -976,7 +973,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL DE INSPEÇÃO 3D REALISTA WEG THREE.JS */}
       {inspectingComp && (
         <div style={modalOverlayStyle} onClick={() => setInspect3DCompId(null)}>
           <div style={{ ...modalCardStyle, maxWidth: '920px' }} onClick={(e) => e.stopPropagation()}>
@@ -1010,7 +1006,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL / BIBLIOTECA COMPLETA DE COMPONENTES */}
       {isCatalogModalOpen && (
         <div style={modalOverlayStyle} onClick={() => setIsCatalogModalOpen(false)}>
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
@@ -1098,7 +1093,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       )}
 
-      {/* BARRA DE SELEÇÃO E AÇÕES */}
       {selectedCompObj ? (
         <div style={{ ...selectedCableAlertBarStyle, borderColor: '#ffd600', background: 'rgba(255, 214, 0, 0.15)', color: '#fff' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -1158,7 +1152,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       ) : null}
 
-      {/* 2. PAINEL ELÉTRICO EXPANDIDO (1100px) */}
       <div
         ref={panelRef}
         onMouseMove={handleMouseMovePanel}
@@ -1252,7 +1245,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 boxSizing: 'border-box',
               }}
             >
-              {/* CAIXA DE RENOMEAÇÃO FLUTUANTE EXTERNA */}
               <div style={tagSidebarFloatingBox}>
                 <span style={{ fontSize: '7px', color: '#90a4ae', fontWeight: 'bold' }}>TAG</span>
                 <input
@@ -1266,7 +1258,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 />
               </div>
 
-              {/* REDE DE FORÇA */}
               {isGrid && (
                 <div style={{ ...gridBusStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={compHeaderStyle}>
@@ -1279,7 +1270,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* DISJUNTOR MONOPOLAR WEG MDW-C16 (3D / 2D HÍBRIDO) */}
               {comp.category === 'DISJUNTOR_MONO_WEG_3D' && (
                 <div style={{ ...wegBreakerBodyStyle, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f1f5f9' }}>
                   <div style={compHeaderStyle}>
@@ -1311,7 +1301,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* CHAVE SECCIONADORA LOTO */}
               {isLoto && (
                 <div style={{ ...wegBreakerBodyStyle, borderColor: '#ef5350', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={compHeaderStyle}>
@@ -1336,7 +1325,58 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* DISJUNTORES PADRÃO */}
+              {isTrafo && (
+                <div style={{ ...auxBlockBodyStyle, borderColor: '#00e676', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                  <div style={compHeaderStyle}>
+                    <strong style={{ fontSize: '9px', color: '#2e7d32' }}>TRAFO 24V</strong>
+                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
+                  </div>
+                  <div style={{ textAlign: 'center', margin: '8px 0' }}>
+                    <span style={{ fontSize: '9px', color: '#00e676', fontWeight: 'bold' }}>SELV / PELV (NR-10)</span>
+                  </div>
+                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                </div>
+              )}
+
+              {isSafeRelay && (
+                <div style={{ ...thermalRelayStyle, borderColor: '#ffd600', background: '#fffde7', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                  <div style={compHeaderStyle}>
+                    <strong style={{ fontSize: '9px', color: '#f57f17' }}>RELÉ NR-12</strong>
+                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', margin: '4px 0' }}>
+                    <span style={{ fontSize: '8px', color: comp.tripped ? '#d32f2f' : '#2e7d32', fontWeight: 'bold' }}>
+                      {comp.tripped ? 'EMERGÊNCIA ATUADA' : 'SISTEMA SEGURO'}
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleToggleCompState(comp.id); }}
+                      style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#37474f' }}
+                    >
+                      {comp.tripped ? 'Rearmar Relé' : 'Simular Falha'}
+                    </button>
+                  </div>
+                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                </div>
+              )}
+
+              {isInterlock && (
+                <div style={{ ...auxBlockBodyStyle, borderColor: '#fbc02d', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                  <div style={compHeaderStyle}>
+                    <strong style={{ fontSize: '8px', color: '#f57f17' }}>INTERTRAV.</strong>
+                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0' }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleToggleCompState(comp.id); }}
+                      style={{ ...btnRelayActionStyle, background: comp.state ? '#2e7d32' : '#c62828' }}
+                    >
+                      {comp.state ? 'PORTA FECHADA' : 'PORTA ABERTA'}
+                    </button>
+                  </div>
+                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                </div>
+              )}
+
               {isQ && comp.category !== 'DISJUNTOR_MONO_WEG_3D' && (
                 <div style={{ ...wegBreakerBodyStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={compHeaderStyle}>
@@ -1362,7 +1402,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* CONTATOR TRIPOLAR */}
               {isK && (
                 <div style={{ ...contactorBodyStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={compHeaderStyle}>
@@ -1388,7 +1427,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* RELÉ TÉRMICO */}
               {isF && (
                 <div style={{ ...thermalRelayStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={compHeaderStyle}>
@@ -1427,7 +1465,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* RELÉ FALTA DE FASE */}
               {isRPF && (
                 <div style={{ ...rpfRelayStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={compHeaderStyle}>
@@ -1454,7 +1491,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* BLOCO DE CONTATOS AUXILIARES CONJUGADO */}
               {isAux && (
                 <div style={{ ...auxBlockBodyStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={compHeaderStyle}>
@@ -1471,7 +1507,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* MOTOR 2D REALISTA */}
               {isMotor && (
                 <div style={{ ...motorRealisticWrapperStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={motorFinHousingStyle}>
@@ -1508,7 +1543,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* BOTOEIRA NA */}
               {isBtnNA && (
                 <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div
@@ -1534,7 +1568,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* BOTOEIRA NF DE EMERGÊNCIA */}
               {isBtnNF && (
                 <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div
@@ -1555,7 +1588,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* SINALEIROS CIRCULARES */}
               {isLamp && (
                 <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div
@@ -1573,7 +1605,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {/* PARAFUSOS DE BORNE */}
               {comp.terminals.map((t) => {
                 const isOrigin = wiringOrigin?.compId === comp.id && wiringOrigin?.termId === t.id;
 
@@ -1599,7 +1630,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         })}
       </div>
 
-      {/* 3. VISUALIZADOR MECÂNICO 3D */}
       <div style={bottomVisualizerRowStyle}>
         <div style={{ flex: '1 1 360px' }}>
           <MotorVisualizer loadTorquePercent={25} />
