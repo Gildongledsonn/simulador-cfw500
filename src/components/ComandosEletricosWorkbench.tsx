@@ -1,18 +1,20 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useInverter } from '../context/InverterContext';
 import { MotorVisualizer } from './MotorVisualizer';
-import { DisjuntorWeg3D } from './DisjuntorWeg3D';
 
 export type ComponentCategory =
   | 'REDE_TRIFASICA'
   | 'REDE_MONOFASICA'
+  | 'BARRAMENTO_PENTE'
+  | 'REGUA_BORNES'
   | 'TRANSFORMADOR_ISOLADOR'
   | 'SECCIONADORA_LOTO'
   | 'RELE_SEGURANCA_NR12'
   | 'CHAVE_INTERTRAVAMENTO_NR12'
+  | 'CHAVE_SELETORA_3POS'
+  | 'DISJUNTOR_MONOPOLAR'
   | 'DISJUNTOR_MOTOR'
   | 'DISJUNTOR_BIPOLAR'
-  | 'DISJUNTOR_MONO_WEG_3D'
   | 'CONTATOR_TRIPOLAR'
   | 'BLOCO_AUXILIAR'
   | 'RELE_TERMICO'
@@ -31,6 +33,8 @@ export interface TerminalPole {
   type: 'FORCA' | 'COMANDO' | 'TERRA';
 }
 
+export type LampColor = 'VERDE' | 'VERMELHO' | 'AMARELO' | 'AZUL' | 'BRANCO';
+
 export interface PlacedComponent {
   id: string;
   category: ComponentCategory;
@@ -42,6 +46,9 @@ export interface PlacedComponent {
   height: number;
   state: boolean;
   tripped?: boolean;
+  currentRating?: number;
+  lampColor?: LampColor;
+  selectorPosition?: 'MAN' | '0' | 'AUT';
   terminals: TerminalPole[];
 }
 
@@ -60,15 +67,32 @@ export interface CableConnection {
   customWaypoints?: Point2D[];
 }
 
+export type MultimeterScale = 'V_AC' | 'V_DC' | 'CURRENT_A' | 'CONTINUITY' | 'RESISTANCE_OHM' | 'DIODE';
+
+export interface MeterProbePosition {
+  compId: string;
+  termId: string;
+}
+
 const CABLE_COLORS: Record<string, string> = {
-  FORCA_R: '#d32f2f',
-  FORCA_S: '#f57c00',
-  FORCA_T: '#1976d2',
-  COMANDO_FASE: '#e91e63',
-  COMANDO_NEUTRO: '#00e5ff',
-  TERRA_PE: '#00e676',
-  JUMPER_FECHAMENTO: '#ffd600',
+  FORCA_R: '#ef4444',
+  FORCA_S: '#f97316',
+  FORCA_T: '#3b82f6',
+  COMANDO_FASE: '#ec4899',
+  COMANDO_NEUTRO: '#06b6d4',
+  TERRA_PE: '#10b981',
+  JUMPER_FECHAMENTO: '#eab308',
 };
+
+const LAMP_COLOR_CONFIG: Record<LampColor, { on: string; off: string; glow: string; label: string }> = {
+  VERDE: { on: '#22c55e', off: '#14532d', glow: '0 0 24px #22c55e, inset 0 0 8px #fff', label: 'Verde' },
+  VERMELHO: { on: '#ef4444', off: '#7f1d1d', glow: '0 0 24px #ef4444, inset 0 0 8px #fff', label: 'Vermelho' },
+  AMARELO: { on: '#eab308', off: '#713f12', glow: '0 0 24px #eab308, inset 0 0 8px #fff', label: 'Amarelo' },
+  AZUL: { on: '#38bdf8', off: '#0c4a6e', glow: '0 0 24px #38bdf8, inset 0 0 8px #fff', label: 'Azul' },
+  BRANCO: { on: '#f8fafc', off: '#475569', glow: '0 0 26px #ffffff, inset 0 0 8px #fff', label: 'Branco' },
+};
+
+const AMPERAGE_OPTIONS = [2, 4, 6, 10, 16, 20, 25, 32, 40, 50, 63];
 
 interface CatalogItem {
   category: ComponentCategory;
@@ -79,132 +103,26 @@ interface CatalogItem {
 }
 
 const CATALOG_ITEMS: CatalogItem[] = [
-  {
-    category: 'DISJUNTOR_MONO_WEG_3D',
-    title: 'Disjuntor Monopolar WEG MDW-C16 (3D Realista)',
-    subtitle: 'Minidisjuntor DIN 16A Curva C com alavanca mecânica e inspeção 3D',
-    icon: '⚡',
-    group: 'PROTECAO',
-  },
-  {
-    category: 'REDE_TRIFASICA',
-    title: 'Rede Trifásica 380V (R,S,T,N,PE)',
-    subtitle: 'Fonte de alimentação principal trifásica com neutro e aterramento',
-    icon: '⚡',
-    group: 'ALIMENTACAO',
-  },
-  {
-    category: 'REDE_MONOFASICA',
-    title: 'Rede Monofásica 220V (F,N,PE)',
-    subtitle: 'Alimentação monofásica para circuitos auxiliares e residenciais',
-    icon: '🔌',
-    group: 'ALIMENTACAO',
-  },
-  {
-    category: 'SECCIONADORA_LOTO',
-    title: 'Chave Seccionadora LOTO (NR-10)',
-    subtitle: 'Bloqueio mecânico cadeado para desenergização segura',
-    icon: '🛑',
-    group: 'SEGURANCA',
-  },
-  {
-    category: 'TRANSFORMADOR_ISOLADOR',
-    title: 'Trafo Isolador 220V/24V (NR-10)',
-    subtitle: 'Separação galvânica e Extra Baixa Tensão de Segurança (SELV/PELV)',
-    icon: '⚡',
-    group: 'SEGURANCA',
-  },
-  {
-    category: 'RELE_SEGURANCA_NR12',
-    title: 'Relé de Segurança Duplo Canal (NR-12)',
-    subtitle: 'Monitoramento Categoria 4 / PLe para paradas de emergência',
-    icon: '🛡️',
-    group: 'SEGURANCA',
-  },
-  {
-    category: 'CHAVE_INTERTRAVAMENTO_NR12',
-    title: 'Sensor de Proteção / Intertravamento (NR-12)',
-    subtitle: 'Chave monitora de portas e proteções móveis com contatos 11-12 e 21-22',
-    icon: '🔒',
-    group: 'SEGURANCA',
-  },
-  {
-    category: 'DISJUNTOR_MOTOR',
-    title: 'Disjuntor-Motor WEG MPW',
-    subtitle: 'Proteção termomagnética ajustável para partidas de motores',
-    icon: '🎛️',
-    group: 'PROTECAO',
-  },
-  {
-    category: 'DISJUNTOR_BIPOLAR',
-    title: 'Disjuntor Bipolar MDW 2P',
-    subtitle: 'Proteção de circuitos de comando e comando geral 220V',
-    icon: '⚡',
-    group: 'PROTECAO',
-  },
-  {
-    category: 'RELE_TERMICO',
-    title: 'Relé Térmico de Sobrecarga RW',
-    subtitle: 'Proteção de sobrecorrente com contatos auxiliares 95-96 e 97-98',
-    icon: '🔥',
-    group: 'PROTECAO',
-  },
-  {
-    category: 'RELE_FALTA_FASE',
-    title: 'Relé Falta de Fase RPF',
-    subtitle: 'Monitor de assimetria e presença das três fases R, S, T',
-    icon: '📡',
-    group: 'PROTECAO',
-  },
-  {
-    category: 'CONTATOR_TRIPOLAR',
-    title: 'Contator de Potência WEG CWM',
-    subtitle: 'Chave magnética tripolar para comando de cargas e motores',
-    icon: '🧲',
-    group: 'COMANDO',
-  },
-  {
-    category: 'BLOCO_AUXILIAR',
-    title: 'Bloco de Contatos Auxiliares Frontal',
-    subtitle: 'Contatos extras 13-14 (NA) e 21-22 (NF) conjugados por TAG',
-    icon: '📑',
-    group: 'COMANDO',
-  },
-  {
-    category: 'TEMPORIZADOR_TON',
-    title: 'Relé Temporizador Eletrônico (TON)',
-    subtitle: 'Retardo na energização com contatos comutadores 15-16-18',
-    icon: '⏱️',
-    group: 'COMANDO',
-  },
-  {
-    category: 'BOTOEIRA_PULSO_NA',
-    title: 'Botoeira Pulsadora Liga (Verde NA)',
-    subtitle: 'Botão momentâneo de comando (bornes 3-4 NO)',
-    icon: '🟢',
-    group: 'COMANDO',
-  },
-  {
-    category: 'BOTOEIRA_COGUMELO_NF',
-    title: 'Botoeira de Emergência Cogumelo (Vermelho NF)',
-    subtitle: 'Botão de parada imediata com retenção mecânica',
-    icon: '🔴',
-    group: 'COMANDO',
-  },
-  {
-    category: 'SINALEIRO_LED',
-    title: 'Sinalizador Luminoso LED',
-    subtitle: 'Lâmpada de indicação visual de operação e falha',
-    icon: '💡',
-    group: 'COMANDO',
-  },
-  {
-    category: 'MOTOR_TRIFASICO_6P',
-    title: 'Motor de Indução Trifásico WEG W22 (6 Pontas)',
-    subtitle: 'Motor com caixa de bornes aberta para fechamento Estrela / Triângulo',
-    icon: '⚙️',
-    group: 'CARGAS',
-  },
+  { category: 'DISJUNTOR_MONOPOLAR', title: 'Disjuntor Monopolar DIN', subtitle: 'Ilustração vetorial 2D com corrente nominal ajustável', icon: '⚡', group: 'PROTECAO' },
+  { category: 'DISJUNTOR_BIPOLAR', title: 'Disjuntor Bipolar 2P DIN', subtitle: 'Módulo duplo com corrente configurável', icon: '⚡', group: 'PROTECAO' },
+  { category: 'DISJUNTOR_MOTOR', title: 'Disjuntor-Motor MPW', subtitle: 'Proteção magnética com manopla rotativa', icon: '🎛️', group: 'PROTECAO' },
+  { category: 'RELE_TERMICO', title: 'Relé Térmico RW', subtitle: 'Proteção com botões teste/rearme', icon: '🔥', group: 'PROTECAO' },
+  { category: 'RELE_FALTA_FASE', title: 'Relé Falta de Fase RPF', subtitle: 'LEDs indicadores de status e saída 11-12-14', icon: '📡', group: 'PROTECAO' },
+  { category: 'CHAVE_SELETORA_3POS', title: 'Chave Seletora MAN - 0 - AUT', subtitle: 'Comutação de 3 posições com contatos 13-14 e 23-24', icon: '🔘', group: 'COMANDO' },
+  { category: 'CONTATOR_TRIPOLAR', title: 'Contator de Força CWM', subtitle: 'Chave eletromagnética tripolar estilo Canva', icon: '🧲', group: 'COMANDO' },
+  { category: 'BLOCO_AUXILIAR', title: 'Bloco de Contatos Auxiliares', subtitle: 'Contatos extras 13-14 e 21-22 sincronizados', icon: '📑', group: 'COMANDO' },
+  { category: 'REGUA_BORNES', title: 'Régua de Bornes de Passagem', subtitle: '4 canais isolados para interligação', icon: '🧱', group: 'ALIMENTACAO' },
+  { category: 'BARRAMENTO_PENTE', title: 'Barramento Pente 3F', subtitle: 'Distribuição trifásica de fases', icon: '📶', group: 'ALIMENTACAO' },
+  { category: 'REDE_TRIFASICA', title: 'Rede Trifásica 380V', subtitle: 'Bornes de alimentação R, S, T, N, PE', icon: '⚡', group: 'ALIMENTACAO' },
+  { category: 'REDE_MONOFASICA', title: 'Rede Monofásica 220V', subtitle: 'Fonte de alimentação F, N, PE', icon: '🔌', group: 'ALIMENTACAO' },
+  { category: 'SECCIONADORA_LOTO', title: 'Chave Seccionadora LOTO', subtitle: 'Seccionador com bloqueio mecânico cadeado', icon: '🛑', group: 'SEGURANCA' },
+  { category: 'TRANSFORMADOR_ISOLADOR', title: 'Trafo Isolador 220V/24V', subtitle: 'Extra baixa tensão de segurança galvânica', icon: '⚡', group: 'SEGURANCA' },
+  { category: 'RELE_SEGURANCA_NR12', title: 'Relé de Segurança Cat 4', subtitle: 'Monitoramento redundante de parada imediata', icon: '🛡️', group: 'SEGURANCA' },
+  { category: 'CHAVE_INTERTRAVAMENTO_NR12', title: 'Sensor de Proteção (NR-12)', subtitle: 'Chave de segurança de abertura de porta', icon: '🔒', group: 'SEGURANCA' },
+  { category: 'BOTOEIRA_PULSO_NA', title: 'Botoeira Pulsadora Liga (NA)', subtitle: 'Botão verde com relevo e toque macio', icon: '🟢', group: 'COMANDO' },
+  { category: 'BOTOEIRA_COGUMELO_NF', title: 'Botoeira de Emergência Cogumelo', subtitle: 'Cogumelo vermelho com retenção', icon: '🔴', group: 'COMANDO' },
+  { category: 'SINALEIRO_LED', title: 'Sinalizador LED (Cores Trocáveis)', subtitle: 'Lâmpada estilizada com brilho dinâmico', icon: '💡', group: 'COMANDO' },
+  { category: 'MOTOR_TRIFASICO_6P', title: 'Motor de Indução W22 (6 Pontas)', subtitle: 'Carcaça aletada estilo vetor técnico', icon: '⚙️', group: 'CARGAS' },
 ];
 
 export const ComandosEletricosWorkbench: React.FC = () => {
@@ -218,8 +136,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       name: 'Rede Trifásica 380V',
       x: 30,
       y: 30,
-      width: 140,
-      height: 80,
+      width: 150,
+      height: 85,
       state: true,
       terminals: [
         { id: 'R', name: 'R', relX: 18, relY: 80, type: 'FORCA' },
@@ -230,195 +148,37 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       ],
     },
     {
-      id: 'comp_q_mono',
-      category: 'DISJUNTOR_MONO_WEG_3D',
-      tag: 'Q0',
-      name: 'Disj. WEG C16',
-      x: 30,
-      y: 150,
-      width: 75,
-      height: 160,
+      id: 'comp_grid1p',
+      category: 'REDE_MONOFASICA',
+      tag: 'GRID-1F',
+      name: 'Rede Monofásica 220V',
+      x: 210,
+      y: 30,
+      width: 130,
+      height: 85,
       state: true,
       terminals: [
-        { id: '1', name: '1 (L)', relX: 50, relY: 8, type: 'COMANDO' },
-        { id: '2', name: '2 (Carga)', relX: 50, relY: 92, type: 'COMANDO' },
-      ],
-    },
-    {
-      id: 'comp_q1',
-      category: 'DISJUNTOR_MOTOR',
-      tag: 'Q1',
-      name: 'Disjuntor MPW',
-      x: 30,
-      y: 340,
-      width: 100,
-      height: 170,
-      state: true,
-      terminals: [
-        { id: '1L1', name: '1/L1', relX: 20, relY: 8, type: 'FORCA' },
-        { id: '3L2', name: '3/L2', relX: 50, relY: 8, type: 'FORCA' },
-        { id: '5L3', name: '5/L3', relX: 80, relY: 8, type: 'FORCA' },
-        { id: '2T1', name: '2/T1', relX: 20, relY: 92, type: 'FORCA' },
-        { id: '4T2', name: '4/T2', relX: 50, relY: 92, type: 'FORCA' },
-        { id: '6T3', name: '6/T3', relX: 80, relY: 92, type: 'FORCA' },
-      ],
-    },
-    {
-      id: 'comp_k1',
-      category: 'CONTATOR_TRIPOLAR',
-      tag: 'K1',
-      name: 'Contator CWM25',
-      x: 30,
-      y: 550,
-      width: 110,
-      height: 180,
-      state: false,
-      terminals: [
-        { id: '1L1', name: '1/L1', relX: 18, relY: 8, type: 'FORCA' },
-        { id: '3L2', name: '3/L2', relX: 38, relY: 8, type: 'FORCA' },
-        { id: '5L3', name: '5/L3', relX: 58, relY: 8, type: 'FORCA' },
-        { id: '13NO', name: '13', relX: 82, relY: 8, type: 'COMANDO' },
-        { id: 'A1', name: 'A1', relX: 82, relY: 28, type: 'COMANDO' },
-        { id: '2T1', name: '2/T1', relX: 18, relY: 92, type: 'FORCA' },
-        { id: '4T2', name: '4/T2', relX: 38, relY: 92, type: 'FORCA' },
-        { id: '6T3', name: '6/T3', relX: 58, relY: 92, type: 'FORCA' },
-        { id: '14NO', name: '14', relX: 82, relY: 92, type: 'COMANDO' },
-        { id: 'A2', name: 'A2', relX: 82, relY: 72, type: 'COMANDO' },
-      ],
-    },
-    {
-      id: 'comp_f1',
-      category: 'RELE_TERMICO',
-      tag: 'F1',
-      name: 'Relé Térmico RW',
-      x: 30,
-      y: 770,
-      width: 120,
-      height: 190,
-      state: true,
-      tripped: false,
-      terminals: [
-        { id: '1L1', name: '1/L1', relX: 20, relY: 8, type: 'FORCA' },
-        { id: '3L2', name: '3/L2', relX: 50, relY: 8, type: 'FORCA' },
-        { id: '5L3', name: '5/L3', relX: 80, relY: 8, type: 'FORCA' },
-        { id: '95NC', name: '95', relX: 18, relY: 58, type: 'COMANDO' },
-        { id: '96NC', name: '96', relX: 40, relY: 58, type: 'COMANDO' },
-        { id: '97NO', name: '97', relX: 62, relY: 58, type: 'COMANDO' },
-        { id: '98NO', name: '98', relX: 84, relY: 58, type: 'COMANDO' },
-        { id: '2T1', name: '2/T1', relX: 20, relY: 92, type: 'FORCA' },
-        { id: '4T2', name: '4/T2', relX: 50, relY: 92, type: 'FORCA' },
-        { id: '6T3', name: '6/T3', relX: 80, relY: 92, type: 'FORCA' },
-      ],
-    },
-    {
-      id: 'comp_mot3p',
-      category: 'MOTOR_TRIFASICO_6P',
-      tag: 'M1',
-      name: 'Motor W22 6 Pontas',
-      x: 30,
-      y: 990,
-      width: 170,
-      height: 180,
-      state: false,
-      terminals: [
-        { id: 'U1', name: 'U1', relX: 25, relY: 28, type: 'FORCA' },
-        { id: 'V1', name: 'V1', relX: 50, relY: 28, type: 'FORCA' },
-        { id: 'W1', name: 'W1', relX: 75, relY: 28, type: 'FORCA' },
-        { id: 'W2', name: 'W2', relX: 25, relY: 72, type: 'FORCA' },
-        { id: 'U2', name: 'U2', relX: 50, relY: 72, type: 'FORCA' },
-        { id: 'V2', name: 'V2', relX: 75, relY: 72, type: 'FORCA' },
-      ],
-    },
-    {
-      id: 'comp_rpf',
-      category: 'RELE_FALTA_FASE',
-      tag: 'RPF1',
-      name: 'Relé Falha de Fase',
-      x: 230,
-      y: 170,
-      width: 95,
-      height: 160,
-      state: true,
-      tripped: false,
-      terminals: [
-        { id: 'L1', name: 'L1', relX: 20, relY: 8, type: 'FORCA' },
-        { id: 'L2', name: 'L2', relX: 50, relY: 8, type: 'FORCA' },
-        { id: 'L3', name: 'L3', relX: 80, relY: 8, type: 'FORCA' },
-        { id: '11C', name: '11', relX: 25, relY: 92, type: 'COMANDO' },
-        { id: '12NC', name: '12', relX: 55, relY: 92, type: 'COMANDO' },
-        { id: '14NO', name: '14', relX: 85, relY: 92, type: 'COMANDO' },
-      ],
-    },
-    {
-      id: 'comp_s0',
-      category: 'BOTOEIRA_COGUMELO_NF',
-      tag: 'S0',
-      name: 'Desliga NF',
-      x: 230,
-      y: 390,
-      width: 65,
-      height: 100,
-      state: true,
-      terminals: [
-        { id: '11NC', name: '1', relX: 50, relY: 8, type: 'COMANDO' },
-        { id: '12NC', name: '2', relX: 50, relY: 92, type: 'COMANDO' },
-      ],
-    },
-    {
-      id: 'comp_s1',
-      category: 'BOTOEIRA_PULSO_NA',
-      tag: 'S1',
-      name: 'Liga NA',
-      x: 230,
-      y: 520,
-      width: 65,
-      height: 100,
-      state: false,
-      terminals: [
-        { id: '3NO', name: '3', relX: 50, relY: 8, type: 'COMANDO' },
-        { id: '4NO', name: '4', relX: 50, relY: 92, type: 'COMANDO' },
-      ],
-    },
-    {
-      id: 'comp_h1',
-      category: 'SINALEIRO_LED',
-      tag: 'H1',
-      name: 'Sinalizador',
-      x: 230,
-      y: 650,
-      width: 65,
-      height: 100,
-      state: false,
-      terminals: [
-        { id: 'X1', name: 'X1', relX: 50, relY: 8, type: 'COMANDO' },
-        { id: 'X2', name: 'X2', relX: 50, relY: 92, type: 'COMANDO' },
+        { id: 'F', name: 'F', relX: 25, relY: 80, type: 'COMANDO' },
+        { id: 'N', name: 'N', relX: 55, relY: 80, type: 'COMANDO' },
+        { id: 'PE', name: 'PE', relX: 85, relY: 80, type: 'TERRA' },
       ],
     },
   ]);
 
-  const [cables, setCables] = useState<CableConnection[]>([
-    { id: 'cbl_0a', fromComponentId: 'comp_grid3p', fromTerminalId: 'R', toComponentId: 'comp_q_mono', toTerminalId: '1', cableType: 'COMANDO_FASE' },
-    { id: 'cbl_1', fromComponentId: 'comp_grid3p', fromTerminalId: 'R', toComponentId: 'comp_q1', toTerminalId: '1L1', cableType: 'FORCA_R' },
-    { id: 'cbl_2', fromComponentId: 'comp_grid3p', fromTerminalId: 'S', toComponentId: 'comp_q1', toTerminalId: '3L2', cableType: 'FORCA_S' },
-    { id: 'cbl_3', fromComponentId: 'comp_grid3p', fromTerminalId: 'T', toComponentId: 'comp_q1', toTerminalId: '5L3', cableType: 'FORCA_T' },
-    { id: 'cbl_4', fromComponentId: 'comp_q1', fromTerminalId: '2T1', toComponentId: 'comp_k1', toTerminalId: '1L1', cableType: 'FORCA_R' },
-    { id: 'cbl_5', fromComponentId: 'comp_q1', fromTerminalId: '4T2', toComponentId: 'comp_k1', toTerminalId: '3L2', cableType: 'FORCA_S' },
-    { id: 'cbl_6', fromComponentId: 'comp_q1', fromTerminalId: '6T3', toComponentId: 'comp_k1', toTerminalId: '5L3', cableType: 'FORCA_T' },
-    { id: 'cbl_7', fromComponentId: 'comp_k1', fromTerminalId: '2T1', toComponentId: 'comp_f1', toTerminalId: '1L1', cableType: 'FORCA_R' },
-    { id: 'cbl_8', fromComponentId: 'comp_k1', fromTerminalId: '4T2', toComponentId: 'comp_f1', toTerminalId: '3L2', cableType: 'FORCA_S' },
-    { id: 'cbl_9', fromComponentId: 'comp_k1', fromTerminalId: '6T3', toComponentId: 'comp_f1', toTerminalId: '5L3', cableType: 'FORCA_T' },
-    { id: 'cbl_10', fromComponentId: 'comp_f1', fromTerminalId: '2T1', toComponentId: 'comp_mot3p', toTerminalId: 'U1', cableType: 'FORCA_R' },
-    { id: 'cbl_11', fromComponentId: 'comp_f1', fromTerminalId: '4T2', toComponentId: 'comp_mot3p', toTerminalId: 'V1', cableType: 'FORCA_S' },
-    { id: 'cbl_12', fromComponentId: 'comp_f1', fromTerminalId: '6T3', toComponentId: 'comp_mot3p', toTerminalId: 'W1', cableType: 'FORCA_T' },
-    { id: 'cbl_j1', fromComponentId: 'comp_mot3p', fromTerminalId: 'W2', toComponentId: 'comp_mot3p', toTerminalId: 'U2', cableType: 'JUMPER_FECHAMENTO' },
-    { id: 'cbl_j2', fromComponentId: 'comp_mot3p', fromTerminalId: 'U2', toComponentId: 'comp_mot3p', toTerminalId: 'V2', cableType: 'JUMPER_FECHAMENTO' },
-  ]);
-
+  const [cables, setCables] = useState<CableConnection[]>([]);
   const [selectedCableId, setSelectedCableId] = useState<string | null>(null);
   const [selectedCompId, setSelectedCompId] = useState<string | null>(null);
-  const [inspect3DCompId, setInspect3DCompId] = useState<string | null>(null);
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [catalogFilter, setCatalogFilter] = useState<'ALL' | 'ALIMENTACAO' | 'PROTECAO' | 'COMANDO' | 'SEGURANCA' | 'CARGAS'>('ALL');
+
+  // MULTÍMETRO DIGITAL
+  const [isMeterActive, setIsMeterActive] = useState(false);
+  const [meterScale, setMeterScale] = useState<MultimeterScale>('V_AC');
+  const [redProbe, setRedProbe] = useState<MeterProbePosition | null>(null);
+  const [blackProbe, setBlackProbe] = useState<MeterProbePosition | null>(null);
+  const [activeProbeTarget, setActiveProbeTarget] = useState<'RED' | 'BLACK'>('RED');
+  const [meterReadout, setMeterReadout] = useState<string>('0.0 V');
+  const [isContinuityBuzzer, setIsContinuityBuzzer] = useState(false);
 
   const [activeCableTool, setActiveCableTool] = useState<
     'FORCA_R' | 'FORCA_S' | 'FORCA_T' | 'COMANDO_FASE' | 'COMANDO_NEUTRO' | 'TERRA_PE' | 'JUMPER_FECHAMENTO' | null
@@ -430,17 +190,17 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const getTerminalAbsolutePos = (compId: string, termId: string): Point2D => {
+  const getTerminalAbsolutePos = useCallback((compId: string, termId: string): Point2D => {
     const comp = components.find((c) => c.id === compId);
     if (!comp) return { x: 0, y: 0 };
-    const term = comp.terminals.find((t) => t.id === termId);
+    const term = comp.terminals?.find((t) => t.id === termId);
     if (!term) return { x: comp.x + comp.width / 2, y: comp.y + comp.height / 2 };
 
     return {
       x: comp.x + (comp.width * term.relX) / 100,
       y: comp.y + (comp.height * term.relY) / 100,
     };
-  };
+  }, [components]);
 
   const calculateSmartRoute = (
     fromCompId: string,
@@ -458,8 +218,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
     const fromComp = components.find((c) => c.id === fromCompId);
     const toComp = components.find((c) => c.id === toCompId);
-    const fromTerm = fromComp?.terminals.find((t) => t.id === fromTermId);
-    const toTerm = toComp?.terminals.find((t) => t.id === toTermId);
+    const fromTerm = fromComp?.terminals?.find((t) => t.id === fromTermId);
+    const toTerm = toComp?.terminals?.find((t) => t.id === toTermId);
 
     const fromDirY = fromTerm && fromTerm.relY > 50 ? 1 : -1;
     const toDirY = toTerm && toTerm.relY > 50 ? 1 : -1;
@@ -530,6 +290,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     return d;
   };
 
+  // MOTOR DE CONTINUIDADE (BFS)
   useEffect(() => {
     const adj: Record<string, string[]> = {};
     const addEdge = (u: string, v: string) => {
@@ -550,13 +311,37 @@ export const ComandosEletricosWorkbench: React.FC = () => {
           addEdge(`${comp.id}:3L2`, `${comp.id}:4T2`);
           addEdge(`${comp.id}:5L3`, `${comp.id}:6T3`);
         }
-      } else if (comp.category === 'DISJUNTOR_MONO_WEG_3D') {
+      } else if (comp.category === 'DISJUNTOR_MONOPOLAR') {
         if (comp.state) {
           addEdge(`${comp.id}:1`, `${comp.id}:2`);
         }
+      } else if (comp.category === 'CHAVE_SELETORA_3POS') {
+        if (comp.selectorPosition === 'MAN') {
+          addEdge(`${comp.id}:13`, `${comp.id}:14`);
+        } else if (comp.selectorPosition === 'AUT') {
+          addEdge(`${comp.id}:23`, `${comp.id}:24`);
+        }
+      } else if (comp.category === 'REGUA_BORNES') {
+        addEdge(`${comp.id}:X1_IN`, `${comp.id}:X1_OUT`);
+        addEdge(`${comp.id}:X2_IN`, `${comp.id}:X2_OUT`);
+        addEdge(`${comp.id}:X3_IN`, `${comp.id}:X3_OUT`);
+        addEdge(`${comp.id}:X4_IN`, `${comp.id}:X4_OUT`);
+      } else if (comp.category === 'BARRAMENTO_PENTE') {
+        addEdge(`${comp.id}:R1`, `${comp.id}:R2`);
+        addEdge(`${comp.id}:S1`, `${comp.id}:S2`);
+        addEdge(`${comp.id}:T1`, `${comp.id}:T2`);
       } else if (comp.category === 'TRANSFORMADOR_ISOLADOR') {
         if (comp.state) {
           addEdge(`${comp.id}:SEC_L`, `${comp.id}:SEC_N`);
+        }
+      } else if (comp.category === 'RELE_SEGURANCA_NR12') {
+        if (comp.state && !comp.tripped) {
+          addEdge(`${comp.id}:13NO`, `${comp.id}:14NO`);
+        }
+      } else if (comp.category === 'CHAVE_INTERTRAVAMENTO_NR12') {
+        if (comp.state) {
+          addEdge(`${comp.id}:11NC`, `${comp.id}:12NC`);
+          addEdge(`${comp.id}:21NC`, `${comp.id}:22NC`);
         }
       } else if (comp.category === 'CONTATOR_TRIPOLAR') {
         if (comp.state) {
@@ -580,28 +365,13 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         } else {
           addEdge(`${comp.id}:97NO`, `${comp.id}:98NO`);
         }
-      } else if (comp.category === 'RELE_FALTA_FASE') {
-        if (comp.state && !comp.tripped) {
-          addEdge(`${comp.id}:11C`, `${comp.id}:14NO`);
-        } else {
-          addEdge(`${comp.id}:11C`, `${comp.id}:12NC`);
-        }
-      } else if (comp.category === 'RELE_SEGURANCA_NR12') {
-        if (comp.state && !comp.tripped) {
-          addEdge(`${comp.id}:13NO`, `${comp.id}:14NO`);
-        }
-      } else if (comp.category === 'CHAVE_INTERTRAVAMENTO_NR12') {
+      } else if (comp.category === 'BOTOEIRA_PULSO_NA') {
         if (comp.state) {
-          addEdge(`${comp.id}:11NC`, `${comp.id}:12NC`);
-          addEdge(`${comp.id}:21NC`, `${comp.id}:22NC`);
+          addEdge(`${comp.id}:3NO`, `${comp.id}:4NO`);
         }
       } else if (comp.category === 'BOTOEIRA_COGUMELO_NF') {
         if (comp.state) {
           addEdge(`${comp.id}:11NC`, `${comp.id}:12NC`);
-        }
-      } else if (comp.category === 'BOTOEIRA_PULSO_NA') {
-        if (comp.state) {
-          addEdge(`${comp.id}:3NO`, `${comp.id}:4NO`);
         }
       }
     });
@@ -625,8 +395,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       return false;
     };
 
-    const phaseSources = ['comp_grid3p:R', 'comp_grid3p:S', 'comp_grid3p:T'];
-    const neutralSources = ['comp_grid3p:N'];
+    const phaseSources = ['comp_grid3p:R', 'comp_grid3p:S', 'comp_grid3p:T', 'comp_grid1p:F'];
+    const neutralSources = ['comp_grid3p:N', 'comp_grid1p:N'];
 
     const isNodeEnergizedByPhase = (targetNode: string) =>
       phaseSources.some((src) => hasPath(src, targetNode));
@@ -655,61 +425,114 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       isMot3pPowered = u1HasPhase && v1HasPhase && w1HasPhase && isStarClosed;
     }
 
-    setComponents((prev) =>
-      prev.map((c) => {
-        const cleanTag = c.tag.toUpperCase().trim();
-        const shouldBeActive = energizedTags.has(cleanTag);
+    let stateChanged = false;
+    const updated = components.map((c) => {
+      const cleanTag = c.tag.toUpperCase().trim();
+      const shouldBeActive = energizedTags.has(cleanTag);
 
-        if (c.category === 'CONTATOR_TRIPOLAR' || c.category === 'BLOCO_AUXILIAR') {
+      if (c.category === 'CONTATOR_TRIPOLAR' || c.category === 'BLOCO_AUXILIAR') {
+        if (c.state !== shouldBeActive) {
+          stateChanged = true;
           return { ...c, state: shouldBeActive };
         }
-        if (c.category === 'SINALEIRO_LED') {
-          const x1 = isNodeEnergizedByPhase(`${c.id}:X1`);
-          const x2 = isNodeEnergizedByNeutral(`${c.id}:X2`);
-          return { ...c, state: x1 && x2 };
+      }
+      if (c.category === 'SINALEIRO_LED') {
+        const x1 = isNodeEnergizedByPhase(`${c.id}:X1`);
+        const x2 = isNodeEnergizedByNeutral(`${c.id}:X2`);
+        const lampOn = x1 && x2;
+        if (c.state !== lampOn) {
+          stateChanged = true;
+          return { ...c, state: lampOn };
         }
-        if (c.category === 'MOTOR_TRIFASICO_6P') {
+      }
+      if (c.category === 'MOTOR_TRIFASICO_6P') {
+        if (c.state !== isMot3pPowered) {
+          stateChanged = true;
           return { ...c, state: isMot3pPowered };
         }
-        return c;
-      })
-    );
+      }
+      return c;
+    });
+
+    if (stateChanged) {
+      setComponents(updated);
+    }
 
     if (isMot3pPowered && inverterState.motorStatus !== 'RUNNING') {
       dispatch({ type: 'PRESS_RUN' });
     } else if (!isMot3pPowered && inverterState.motorStatus === 'RUNNING') {
       dispatch({ type: 'PRESS_STOP' });
     }
-  }, [cables, components.map((c) => `${c.id}:${c.tag}:${c.state}:${c.tripped}`).join()]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedCableId) {
-          setCables((prev) => prev.filter((c) => c.id !== selectedCableId));
-          setSelectedCableId(null);
-        } else if (selectedCompId && components.length > 1) {
-          setComponents((prev) => prev.filter((c) => c.id !== selectedCompId));
-          setCables((prev) => prev.filter((cb) => cb.fromComponentId !== selectedCompId && cb.toComponentId !== selectedCompId));
-          setSelectedCompId(null);
+    // MULTÍMETRO READOUT
+    if (redProbe && blackProbe) {
+      const nodeA = `${redProbe.compId}:${redProbe.termId}`;
+      const nodeB = `${blackProbe.compId}:${blackProbe.termId}`;
+
+      const aPhase = isNodeEnergizedByPhase(nodeA);
+      const aNeutral = isNodeEnergizedByNeutral(nodeA);
+      const bPhase = isNodeEnergizedByPhase(nodeB);
+      const bNeutral = isNodeEnergizedByNeutral(nodeB);
+      const hasDirectContinuity = hasPath(nodeA, nodeB);
+
+      if (meterScale === 'V_AC') {
+        if ((aPhase && bNeutral) || (bPhase && aNeutral)) {
+          setMeterReadout('220.4 V~');
+        } else if (aPhase && bPhase && nodeA !== nodeB) {
+          setMeterReadout('380.2 V~');
+        } else {
+          setMeterReadout('0.0 V~');
         }
+        setIsContinuityBuzzer(false);
+      } else if (meterScale === 'V_DC') {
+        const isTrafoSec = (nodeA.includes('SEC_') && nodeB.includes('SEC_'));
+        setMeterReadout(isTrafoSec ? '24.1 V=' : '0.00 V=');
+        setIsContinuityBuzzer(false);
+      } else if (meterScale === 'CONTINUITY') {
+        setMeterReadout(hasDirectContinuity ? '00.2 Ω (BIP)' : 'O.L (Aberto)');
+        setIsContinuityBuzzer(hasDirectContinuity);
+      } else if (meterScale === 'RESISTANCE_OHM') {
+        setMeterReadout(hasDirectContinuity ? '0.4 Ω' : nodeA.includes('mot') && nodeB.includes('mot') ? '18.6 Ω' : 'O.L MΩ');
+        setIsContinuityBuzzer(false);
+      } else if (meterScale === 'DIODE') {
+        setMeterReadout(hasDirectContinuity ? '.001 V' : 'O.L V');
+        setIsContinuityBuzzer(false);
+      } else if (meterScale === 'CURRENT_A') {
+        setMeterReadout(isMot3pPowered && (nodeA.includes('2T1') || nodeA.includes('U1')) ? '6.42 A~' : '0.00 A~');
+        setIsContinuityBuzzer(false);
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedCableId, selectedCompId, components.length]);
+    } else {
+      setMeterReadout(meterScale === 'CONTINUITY' ? 'O.L' : '0.00');
+      setIsContinuityBuzzer(false);
+    }
+  }, [cables, components, redProbe, blackProbe, meterScale, inverterState.motorStatus, dispatch]);
 
-  const handleMouseDownComp = (e: React.MouseEvent, compId: string) => {
-    e.stopPropagation();
+  const handleStartDrag = (clientX: number, clientY: number, compId: string) => {
     const comp = components.find((c) => c.id === compId);
     if (!comp || !panelRef.current) return;
 
     const panelRect = panelRef.current.getBoundingClientRect();
     setDraggingCompId(compId);
     setDragOffset({
-      x: e.clientX - panelRect.left - comp.x,
-      y: e.clientY - panelRect.top - comp.y,
+      x: clientX - panelRect.left - comp.x,
+      y: clientY - panelRect.top - comp.y,
     });
+  };
+
+  const handleMoveDrag = (clientX: number, clientY: number) => {
+    if (!panelRef.current || !draggingCompId) return;
+    const panelRect = panelRef.current.getBoundingClientRect();
+
+    const newX = Math.max(10, Math.min(panelRect.width - 160, clientX - panelRect.left - dragOffset.x));
+    const newY = Math.max(10, Math.min(panelRect.height - 180, clientY - panelRect.top - dragOffset.y));
+
+    setComponents((prev) =>
+      prev.map((c) => (c.id === draggingCompId ? { ...c, x: newX, y: newY } : c))
+    );
+  };
+
+  const handleEndDrag = () => {
+    setDraggingCompId(null);
   };
 
   const handleDoubleClickComp = (e: React.MouseEvent, compId: string) => {
@@ -718,24 +541,20 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     setSelectedCableId(null);
   };
 
-  const handleMouseMovePanel = (e: React.MouseEvent) => {
-    if (!panelRef.current || !draggingCompId) return;
-    const panelRect = panelRef.current.getBoundingClientRect();
-
-    const newX = Math.max(10, Math.min(panelRect.width - 240, e.clientX - panelRect.left - dragOffset.x));
-    const newY = Math.max(10, Math.min(panelRect.height - 200, e.clientY - panelRect.top - dragOffset.y));
-
-    setComponents((prev) =>
-      prev.map((c) => (c.id === draggingCompId ? { ...c, x: newX, y: newY } : c))
-    );
-  };
-
-  const handleMouseUpPanel = () => {
-    setDraggingCompId(null);
-  };
-
-  const handleTerminalClick = (e: React.MouseEvent, compId: string, termId: string) => {
+  const handleTerminalClick = (e: React.MouseEvent | React.TouchEvent, compId: string, termId: string) => {
     e.stopPropagation();
+
+    if (isMeterActive) {
+      if (activeProbeTarget === 'RED') {
+        setRedProbe({ compId, termId });
+        setActiveProbeTarget('BLACK');
+      } else {
+        setBlackProbe({ compId, termId });
+        setActiveProbeTarget('RED');
+      }
+      return;
+    }
+
     if (!activeCableTool) {
       alert('Selecione primeiro uma cor de cabo na barra superior!');
       return;
@@ -769,57 +588,74 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     );
   };
 
+  const handleCurrentRatingChange = (compId: string, rating: number) => {
+    setComponents((prev) =>
+      prev.map((c) => (c.id === compId ? { ...c, currentRating: rating } : c))
+    );
+  };
+
+  const handleLampColorChange = (compId: string, color: LampColor) => {
+    setComponents((prev) =>
+      prev.map((c) => (c.id === compId ? { ...c, lampColor: color } : c))
+    );
+  };
+
+  const handleSelectorToggle = (compId: string) => {
+    setComponents((prev) =>
+      prev.map((c) => {
+        if (c.id !== compId) return c;
+        const nextPos: 'MAN' | '0' | 'AUT' =
+          c.selectorPosition === 'MAN' ? '0' : c.selectorPosition === '0' ? 'AUT' : 'MAN';
+        return { ...c, selectorPosition: nextPos };
+      })
+    );
+  };
+
   const handleInsertComponentToProject = (category: ComponentCategory) => {
     const count = components.length + 1;
     let tag = `C${count}`;
-    let name = 'Módulo Elétrico';
+    let name = 'Módulo';
     let width = 95;
-    let height = 150;
+    let height = 155;
     let terminals: TerminalPole[] = [];
+    let currentRating: number | undefined = undefined;
+    let lampColor: LampColor | undefined = undefined;
 
-    if (category === 'DISJUNTOR_MONO_WEG_3D') {
+    const isBreaker =
+      category === 'DISJUNTOR_MONOPOLAR' ||
+      category === 'DISJUNTOR_BIPOLAR' ||
+      category === 'DISJUNTOR_MOTOR';
+
+    if (isBreaker) {
+      currentRating = 16;
+    }
+
+    if (category === 'DISJUNTOR_MONOPOLAR') {
       tag = `Q${count}`;
-      name = 'Disj. WEG C16 (3D)';
+      name = 'Disj. Mono DIN';
       width = 75;
       height = 160;
       terminals = [
         { id: '1', name: '1 (L)', relX: 50, relY: 8, type: 'COMANDO' },
         { id: '2', name: '2 (Carga)', relX: 50, relY: 92, type: 'COMANDO' },
       ];
-    } else if (category === 'REDE_TRIFASICA') {
-      tag = `GRID${count}`;
-      name = 'Rede Trifásica 380V';
-      width = 140;
-      height = 80;
+    } else if (category === 'DISJUNTOR_BIPOLAR') {
+      tag = `Q${count}`;
+      name = 'Disjuntor MDW 2P';
+      width = 90;
+      height = 160;
       terminals = [
-        { id: 'R', name: 'R', relX: 18, relY: 80, type: 'FORCA' },
-        { id: 'S', name: 'S', relX: 38, relY: 80, type: 'FORCA' },
-        { id: 'T', name: 'T', relX: 58, relY: 80, type: 'FORCA' },
-        { id: 'N', name: 'N', relX: 78, relY: 80, type: 'COMANDO' },
-        { id: 'PE', name: 'PE', relX: 92, relY: 80, type: 'TERRA' },
-      ];
-    } else if (category === 'CONTATOR_TRIPOLAR') {
-      tag = `K${count}`;
-      name = `Contator CWM25 (K${count})`;
-      width = 110;
-      height = 180;
-      terminals = [
-        { id: '1L1', name: '1/L1', relX: 18, relY: 8, type: 'FORCA' },
-        { id: '3L2', name: '3/L2', relX: 38, relY: 8, type: 'FORCA' },
-        { id: '5L3', name: '5/L3', relX: 58, relY: 8, type: 'FORCA' },
-        { id: '13NO', name: '13', relX: 82, relY: 8, type: 'COMANDO' },
-        { id: 'A1', name: 'A1', relX: 82, relY: 28, type: 'COMANDO' },
-        { id: '2T1', name: '2/T1', relX: 18, relY: 92, type: 'FORCA' },
-        { id: '4T2', name: '4/T2', relX: 38, relY: 92, type: 'FORCA' },
-        { id: '6T3', name: '6/T3', relX: 58, relY: 92, type: 'FORCA' },
-        { id: '14NO', name: '14', relX: 82, relY: 92, type: 'COMANDO' },
-        { id: 'A2', name: 'A2', relX: 82, relY: 72, type: 'COMANDO' },
+        { id: '1L1', name: '1', relX: 30, relY: 8, type: 'COMANDO' },
+        { id: '3L2', name: '3', relX: 70, relY: 8, type: 'COMANDO' },
+        { id: '2T1', name: '2', relX: 30, relY: 92, type: 'COMANDO' },
+        { id: '4T2', name: '4', relX: 70, relY: 92, type: 'COMANDO' },
       ];
     } else if (category === 'DISJUNTOR_MOTOR') {
       tag = `Q${count}`;
       name = 'Disjuntor MPW';
-      width = 100;
-      height = 170;
+      width = 105;
+      height = 175;
+      currentRating = 20;
       terminals = [
         { id: '1L1', name: '1/L1', relX: 20, relY: 8, type: 'FORCA' },
         { id: '3L2', name: '3/L2', relX: 50, relY: 8, type: 'FORCA' },
@@ -827,6 +663,120 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         { id: '2T1', name: '2/T1', relX: 20, relY: 92, type: 'FORCA' },
         { id: '4T2', name: '4/T2', relX: 50, relY: 92, type: 'FORCA' },
         { id: '6T3', name: '6/T3', relX: 80, relY: 92, type: 'FORCA' },
+      ];
+    } else if (category === 'SINALEIRO_LED') {
+      tag = `H${count}`;
+      name = 'Sinalizador';
+      width = 70;
+      height = 105;
+      lampColor = 'VERDE';
+      terminals = [
+        { id: 'X1', name: 'X1', relX: 50, relY: 8, type: 'COMANDO' },
+        { id: 'X2', name: 'X2', relX: 50, relY: 92, type: 'COMANDO' },
+      ];
+    } else if (category === 'CHAVE_SELETORA_3POS') {
+      tag = `SA${count}`;
+      name = 'Seletora MAN-0-AUT';
+      width = 90;
+      height = 145;
+      terminals = [
+        { id: '13', name: '13', relX: 30, relY: 10, type: 'COMANDO' },
+        { id: '23', name: '23', relX: 70, relY: 10, type: 'COMANDO' },
+        { id: '14', name: '14', relX: 30, relY: 90, type: 'COMANDO' },
+        { id: '24', name: '24', relX: 70, relY: 90, type: 'COMANDO' },
+      ];
+    } else if (category === 'REGUA_BORNES') {
+      tag = `XT${count}`;
+      name = 'Régua de Bornes';
+      width = 130;
+      height = 135;
+      terminals = [
+        { id: 'X1_IN', name: '1', relX: 20, relY: 10, type: 'FORCA' },
+        { id: 'X2_IN', name: '2', relX: 40, relY: 10, type: 'FORCA' },
+        { id: 'X3_IN', name: '3', relX: 60, relY: 10, type: 'FORCA' },
+        { id: 'X4_IN', name: '4', relX: 80, relY: 10, type: 'COMANDO' },
+        { id: 'X1_OUT', name: '1', relX: 20, relY: 90, type: 'FORCA' },
+        { id: 'X2_OUT', name: '2', relX: 40, relY: 90, type: 'FORCA' },
+        { id: 'X3_OUT', name: '3', relX: 60, relY: 90, type: 'FORCA' },
+        { id: 'X4_OUT', name: '4', relX: 80, relY: 90, type: 'COMANDO' },
+      ];
+    } else if (category === 'BARRAMENTO_PENTE') {
+      tag = `BAR${count}`;
+      name = 'Barramento Pente 3F';
+      width = 130;
+      height = 70;
+      terminals = [
+        { id: 'R1', name: 'R1', relX: 20, relY: 20, type: 'FORCA' },
+        { id: 'S1', name: 'S1', relX: 50, relY: 20, type: 'FORCA' },
+        { id: 'T1', name: 'T1', relX: 80, relY: 20, type: 'FORCA' },
+        { id: 'R2', name: 'R2', relX: 20, relY: 80, type: 'FORCA' },
+        { id: 'S2', name: 'S2', relX: 50, relY: 80, type: 'FORCA' },
+        { id: 'T2', name: 'T2', relX: 80, relY: 80, type: 'FORCA' },
+      ];
+    } else if (category === 'SECCIONADORA_LOTO') {
+      tag = `QS${count}`;
+      name = 'Chave LOTO NR-10';
+      width = 100;
+      height = 155;
+      terminals = [
+        { id: '1L1', name: '1', relX: 25, relY: 8, type: 'FORCA' },
+        { id: '3L2', name: '3', relX: 50, relY: 8, type: 'FORCA' },
+        { id: '5L3', name: '5', relX: 75, relY: 8, type: 'FORCA' },
+        { id: '2T1', name: '2', relX: 25, relY: 92, type: 'FORCA' },
+        { id: '4T2', name: '4', relX: 50, relY: 92, type: 'FORCA' },
+        { id: '6T3', name: '6', relX: 75, relY: 92, type: 'FORCA' },
+      ];
+    } else if (category === 'TRANSFORMADOR_ISOLADOR') {
+      tag = `TR${count}`;
+      name = 'Trafo 220V/24V';
+      width = 105;
+      height = 135;
+      terminals = [
+        { id: 'PRI_L1', name: '220V', relX: 30, relY: 8, type: 'COMANDO' },
+        { id: 'PRI_L2', name: '0V', relX: 70, relY: 8, type: 'COMANDO' },
+        { id: 'SEC_L', name: '+24V', relX: 30, relY: 92, type: 'COMANDO' },
+        { id: 'SEC_N', name: '0V', relX: 70, relY: 92, type: 'COMANDO' },
+      ];
+    } else if (category === 'RELE_SEGURANCA_NR12') {
+      tag = `SR${count}`;
+      name = 'Relé Segurança Cat 4';
+      width = 115;
+      height = 165;
+      terminals = [
+        { id: 'A1', name: 'A1', relX: 20, relY: 8, type: 'COMANDO' },
+        { id: 'A2', name: 'A2', relX: 50, relY: 8, type: 'COMANDO' },
+        { id: 'S11', name: 'S11', relX: 80, relY: 8, type: 'COMANDO' },
+        { id: '13NO', name: '13', relX: 30, relY: 92, type: 'COMANDO' },
+        { id: '14NO', name: '14', relX: 70, relY: 92, type: 'COMANDO' },
+      ];
+    } else if (category === 'CHAVE_INTERTRAVAMENTO_NR12') {
+      tag = `SQ${count}`;
+      name = 'Intertravamento';
+      width = 85;
+      height = 125;
+      terminals = [
+        { id: '11NC', name: '11', relX: 30, relY: 8, type: 'COMANDO' },
+        { id: '21NC', name: '21', relX: 70, relY: 8, type: 'COMANDO' },
+        { id: '12NC', name: '12', relX: 30, relY: 92, type: 'COMANDO' },
+        { id: '22NC', name: '22', relX: 70, relY: 92, type: 'COMANDO' },
+      ];
+    } else if (category === 'BOTOEIRA_PULSO_NA') {
+      tag = `S${count}`;
+      name = 'Botão Liga NA';
+      width = 70;
+      height = 105;
+      terminals = [
+        { id: '3NO', name: '3', relX: 50, relY: 8, type: 'COMANDO' },
+        { id: '4NO', name: '4', relX: 50, relY: 92, type: 'COMANDO' },
+      ];
+    } else if (category === 'BOTOEIRA_COGUMELO_NF') {
+      tag = `S${count}`;
+      name = 'Emergência NF';
+      width = 70;
+      height = 105;
+      terminals = [
+        { id: '11NC', name: '11', relX: 50, relY: 8, type: 'COMANDO' },
+        { id: '12NC', name: '2', relX: 50, relY: 92, type: 'COMANDO' },
       ];
     } else if (category === 'RELE_TERMICO') {
       tag = `F${count}`;
@@ -845,6 +795,23 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         { id: '4T2', name: '4/T2', relX: 50, relY: 92, type: 'FORCA' },
         { id: '6T3', name: '6/T3', relX: 80, relY: 92, type: 'FORCA' },
       ];
+    } else if (category === 'CONTATOR_TRIPOLAR') {
+      tag = `K${count}`;
+      name = `Contator CWM25`;
+      width = 110;
+      height = 180;
+      terminals = [
+        { id: '1L1', name: '1/L1', relX: 18, relY: 8, type: 'FORCA' },
+        { id: '3L2', name: '3/L2', relX: 38, relY: 8, type: 'FORCA' },
+        { id: '5L3', name: '5/L3', relX: 58, relY: 8, type: 'FORCA' },
+        { id: '13NO', name: '13', relX: 82, relY: 8, type: 'COMANDO' },
+        { id: 'A1', name: 'A1', relX: 82, relY: 28, type: 'COMANDO' },
+        { id: '2T1', name: '2/T1', relX: 18, relY: 92, type: 'FORCA' },
+        { id: '4T2', name: '4/T2', relX: 38, relY: 92, type: 'FORCA' },
+        { id: '6T3', name: '6/T3', relX: 58, relY: 92, type: 'FORCA' },
+        { id: '14NO', name: '14', relX: 82, relY: 92, type: 'COMANDO' },
+        { id: 'A2', name: 'A2', relX: 82, relY: 72, type: 'COMANDO' },
+      ];
     } else {
       tag = `C${count}`;
       name = 'Módulo';
@@ -859,11 +826,14 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       category,
       tag,
       name,
-      x: 120 + (components.length % 3) * 40,
-      y: 120 + (components.length % 4) * 30,
+      x: 80 + (components.length % 3) * 30,
+      y: 140 + (components.length % 4) * 30,
       width,
       height,
       state: true,
+      currentRating,
+      lampColor,
+      selectorPosition: '0',
       terminals,
     };
 
@@ -871,32 +841,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     setIsCatalogModalOpen(false);
   };
 
-  const handleToggleCompState = (compId: string) => {
-    setComponents((prev) =>
-      prev.map((c) => {
-        if (c.id !== compId) return c;
-        if (c.category === 'RELE_TERMICO' || c.category === 'RELE_FALTA_FASE' || c.category === 'RELE_SEGURANCA_NR12') {
-          return { ...c, tripped: !c.tripped };
-        }
-        return { ...c, state: !c.state };
-      })
-    );
-  };
-
-  const handlePushButtonPress = (compId: string) => {
-    setComponents((prev) =>
-      prev.map((c) => (c.id === compId ? { ...c, state: true } : c))
-    );
-  };
-
-  const handlePushButtonRelease = (compId: string) => {
-    setComponents((prev) =>
-      prev.map((c) => (c.id === compId ? { ...c, state: false } : c))
-    );
-  };
-
   const handleRemoveSelectedComponent = () => {
-    if (!selectedCompId || components.length <= 1) return;
+    if (!selectedCompId || components.length <= 2) return;
     setComponents((prev) => prev.filter((c) => c.id !== selectedCompId));
     setCables((prev) => prev.filter((cb) => cb.fromComponentId !== selectedCompId && cb.toComponentId !== selectedCompId));
     setSelectedCompId(null);
@@ -904,7 +850,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
   const selectedCableObj = cables.find((c) => c.id === selectedCableId);
   const selectedCompObj = components.find((c) => c.id === selectedCompId);
-  const inspectingComp = components.find((c) => c.id === inspect3DCompId);
 
   const filteredCatalog = CATALOG_ITEMS.filter((item) =>
     catalogFilter === 'ALL' ? true : item.group === catalogFilter
@@ -912,180 +857,140 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
   return (
     <div style={containerStyle}>
+      {/* 1. BARRA SUPERIOR */}
       <div style={topControlBarStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <button
             onClick={() => setIsCatalogModalOpen(true)}
             style={btnOpenCatalogStyle}
-            title="Abrir a biblioteca de dispositivos industriais e de segurança"
           >
-            📦 + Adicionar Componente ao Projeto
+            📦 + Adicionar Componente
+          </button>
+
+          <button
+            onClick={() => setIsMeterActive(!isMeterActive)}
+            style={{
+              ...btnMeterToggleStyle,
+              background: isMeterActive ? '#eab308' : '#1e293b',
+              color: isMeterActive ? '#000' : '#facc15',
+              borderColor: '#eab308',
+            }}
+          >
+            📟 {isMeterActive ? 'Ocultar Multímetro' : 'Multímetro Digital'}
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#00e676' }}>
             🔌 Cabos:
           </span>
 
-          <button
-            onClick={() => { setActiveCableTool('FORCA_R'); setWiringOrigin(null); }}
-            style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_R' ? '#d32f2f' : '#263238', borderColor: '#ef5350', color: '#fff' }}
-          >
-            Fase R
-          </button>
-          <button
-            onClick={() => { setActiveCableTool('FORCA_S'); setWiringOrigin(null); }}
-            style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_S' ? '#f57c00' : '#263238', borderColor: '#ffa726', color: '#fff' }}
-          >
-            Fase S
-          </button>
-          <button
-            onClick={() => { setActiveCableTool('FORCA_T'); setWiringOrigin(null); }}
-            style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_T' ? '#1976d2' : '#263238', borderColor: '#42a5f5', color: '#fff' }}
-          >
-            Fase T
-          </button>
-          <button
-            onClick={() => { setActiveCableTool('COMANDO_FASE'); setWiringOrigin(null); }}
-            style={{ ...btnCableSelectStyle, background: activeCableTool === 'COMANDO_FASE' ? '#e91e63' : '#263238', borderColor: '#f06292', color: '#fff' }}
-          >
-            Comando (Fase)
-          </button>
-          <button
-            onClick={() => { setActiveCableTool('COMANDO_NEUTRO'); setWiringOrigin(null); }}
-            style={{ ...btnCableSelectStyle, background: activeCableTool === 'COMANDO_NEUTRO' ? '#00b4d8' : '#263238', borderColor: '#00e5ff', color: '#fff' }}
-          >
-            Neutro (0V)
-          </button>
-          <button
-            onClick={() => { setActiveCableTool('JUMPER_FECHAMENTO'); setWiringOrigin(null); }}
-            style={{ ...btnCableSelectStyle, background: activeCableTool === 'JUMPER_FECHAMENTO' ? '#fbc02d' : '#263238', borderColor: '#ffd600', color: '#000', fontWeight: 'bold' }}
-          >
-            ⭐/🔺 Jumper Motor
-          </button>
-          <button
-            onClick={() => { setCables([]); setWiringOrigin(null); setSelectedCableId(null); setSelectedCompId(null); }}
-            style={btnClearCablesBtnStyle}
-          >
-            🗑️ Limpar Todos
-          </button>
+          <button onClick={() => { setActiveCableTool('FORCA_R'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_R' ? '#ef4444' : '#263238', borderColor: '#f87171', color: '#fff' }}>R</button>
+          <button onClick={() => { setActiveCableTool('FORCA_S'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_S' ? '#f97316' : '#263238', borderColor: '#fb923c', color: '#fff' }}>S</button>
+          <button onClick={() => { setActiveCableTool('FORCA_T'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_T' ? '#3b82f6' : '#263238', borderColor: '#60a5fa', color: '#fff' }}>T</button>
+          <button onClick={() => { setActiveCableTool('COMANDO_FASE'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'COMANDO_FASE' ? '#ec4899' : '#263238', borderColor: '#f472b6', color: '#fff' }}>Comando</button>
+          <button onClick={() => { setActiveCableTool('COMANDO_NEUTRO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'COMANDO_NEUTRO' ? '#06b6d4' : '#263238', borderColor: '#22d3ee', color: '#fff' }}>0V / Neutro</button>
+          <button onClick={() => { setActiveCableTool('JUMPER_FECHAMENTO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'JUMPER_FECHAMENTO' ? '#eab308' : '#263238', borderColor: '#fde047', color: '#000', fontWeight: 'bold' }}>⭐/🔺 Jumper</button>
+          <button onClick={() => { setCables([]); setWiringOrigin(null); setSelectedCableId(null); setSelectedCompId(null); }} style={btnClearCablesBtnStyle}>🗑️</button>
         </div>
       </div>
 
-      {inspectingComp && (
-        <div style={modalOverlayStyle} onClick={() => setInspect3DCompId(null)}>
-          <div style={{ ...modalCardStyle, maxWidth: '920px' }} onClick={(e) => e.stopPropagation()}>
-            <div style={modalHeaderStyle}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '24px' }}>🔍</span>
-                <div>
-                  <h3 style={{ fontSize: '15px', color: '#fff', margin: 0 }}>
-                    Inspeção e Acionamento 3D: {inspectingComp.name} ({inspectingComp.tag})
-                  </h3>
-                  <span style={{ fontSize: '11px', color: '#90a4ae' }}>
-                    Interaja com a alavanca em 3D, gire o disjuntor com o mouse e teste a proteção
-                  </span>
-                </div>
-              </div>
-              <button onClick={() => setInspect3DCompId(null)} style={btnCloseModalStyle}>
-                ✕
-              </button>
+      {/* MULTÍMETRO DIGITAL */}
+      {isMeterActive && (
+        <div style={multimeterContainerStyle}>
+          <div style={meterDisplayHeader}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#eab308' }}>FLUKE / WEG TRUE RMS</span>
+              {isContinuityBuzzer && (
+                <span style={{ fontSize: '11px', color: '#22c55e' }}>🔊 BEEP!</span>
+              )}
             </div>
-            <div style={{ padding: '16px' }}>
-              <DisjuntorWeg3D
-                initialState={inspectingComp.state}
-                onStateChange={(nextState) => {
-                  setComponents((prev) =>
-                    prev.map((c) => (c.id === inspectingComp.id ? { ...c, state: nextState } : c))
-                  );
+            <span style={{ fontSize: '9px', color: '#94a3b8' }}>CAT III 600V</span>
+          </div>
+
+          <div style={meterLcdDisplayStyle}>
+            <span style={{ fontSize: '11px', color: '#475569', fontWeight: 'bold', position: 'absolute', top: '4px', right: '8px' }}>
+              {meterScale.replace('_', ' ')}
+            </span>
+            <strong style={{ fontSize: '26px', color: '#0f172a', fontFamily: 'monospace' }}>
+              {meterReadout}
+            </strong>
+          </div>
+
+          <div style={meterScaleSelectorRow}>
+            {(['V_AC', 'V_DC', 'CONTINUITY', 'RESISTANCE_OHM', 'DIODE', 'CURRENT_A'] as MultimeterScale[]).map((scale) => (
+              <button
+                key={scale}
+                onClick={() => setMeterScale(scale)}
+                style={{
+                  ...btnMeterScaleStyle,
+                  background: meterScale === scale ? '#eab308' : '#1e293b',
+                  color: meterScale === scale ? '#000' : '#cbd5e1',
+                  fontWeight: meterScale === scale ? 'bold' : 'normal',
                 }}
-              />
-            </div>
+              >
+                {scale === 'V_AC' && 'V~ (AC)'}
+                {scale === 'V_DC' && 'V= (DC)'}
+                {scale === 'CONTINUITY' && '·))) Bip'}
+                {scale === 'RESISTANCE_OHM' && 'Ω Ohm'}
+                {scale === 'DIODE' && '->|- Diodo'}
+                {scale === 'CURRENT_A' && 'A~ Amp'}
+              </button>
+            ))}
+          </div>
+
+          <div style={meterProbesRow}>
+            <button
+              onClick={() => setActiveProbeTarget('RED')}
+              style={{ ...btnProbeSelectStyle, background: '#ef4444', outline: activeProbeTarget === 'RED' ? '3px solid #fff' : 'none' }}
+            >
+              Ponta (+) Vermelha
+            </button>
+            <button
+              onClick={() => setActiveProbeTarget('BLACK')}
+              style={{ ...btnProbeSelectStyle, background: '#1e293b', border: '1px solid #64748b', outline: activeProbeTarget === 'BLACK' ? '3px solid #fff' : 'none' }}
+            >
+              Ponta (-) Preta
+            </button>
+            <button onClick={() => { setRedProbe(null); setBlackProbe(null); }} style={btnResetProbesStyle}>
+              Soltar Pontas
+            </button>
           </div>
         </div>
       )}
 
+      {/* MODAL / BIBLIOTECA */}
       {isCatalogModalOpen && (
         <div style={modalOverlayStyle} onClick={() => setIsCatalogModalOpen(false)}>
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
             <div style={modalHeaderStyle}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '24px' }}>📦</span>
-                <div>
-                  <h3 style={{ fontSize: '16px', color: '#fff', margin: 0 }}>
-                    Biblioteca de Componentes e Dispositivos
-                  </h3>
-                  <span style={{ fontSize: '11px', color: '#90a4ae' }}>
-                    Selecione o equipamento e clique em <strong>➕ Inserir no Painel</strong>
-                  </span>
-                </div>
+                <span style={{ fontSize: '20px' }}>📦</span>
+                <h3 style={{ fontSize: '15px', color: '#fff', margin: 0 }}>Biblioteca de Componentes</h3>
               </div>
-              <button onClick={() => setIsCatalogModalOpen(false)} style={btnCloseModalStyle}>
-                ✕
-              </button>
+              <button onClick={() => setIsCatalogModalOpen(false)} style={btnCloseModalStyle}>✕</button>
             </div>
 
             <div style={filterTabsContainer}>
-              <button
-                onClick={() => setCatalogFilter('ALL')}
-                style={{ ...btnFilterTabStyle, background: catalogFilter === 'ALL' ? '#0288d1' : '#1e293b', color: catalogFilter === 'ALL' ? '#fff' : '#94a3b8' }}
-              >
-                Todos ({CATALOG_ITEMS.length})
-              </button>
-              <button
-                onClick={() => setCatalogFilter('ALIMENTACAO')}
-                style={{ ...btnFilterTabStyle, background: catalogFilter === 'ALIMENTACAO' ? '#0288d1' : '#1e293b', color: catalogFilter === 'ALIMENTACAO' ? '#fff' : '#94a3b8' }}
-              >
-                ⚡ Alimentação
-              </button>
-              <button
-                onClick={() => setCatalogFilter('PROTECAO')}
-                style={{ ...btnFilterTabStyle, background: catalogFilter === 'PROTECAO' ? '#0288d1' : '#1e293b', color: catalogFilter === 'PROTECAO' ? '#fff' : '#94a3b8' }}
-              >
-                🛡️ Proteção & Relés
-              </button>
-              <button
-                onClick={() => setCatalogFilter('COMANDO')}
-                style={{ ...btnFilterTabStyle, background: catalogFilter === 'COMANDO' ? '#0288d1' : '#1e293b', color: catalogFilter === 'COMANDO' ? '#fff' : '#94a3b8' }}
-              >
-                🧲 Comando & Botoeiras
-              </button>
-              <button
-                onClick={() => setCatalogFilter('SEGURANCA')}
-                style={{ ...btnFilterTabStyle, background: catalogFilter === 'SEGURANCA' ? '#0288d1' : '#1e293b', color: catalogFilter === 'SEGURANCA' ? '#fff' : '#94a3b8' }}
-              >
-                🔒 Normas NR-10 / NR-12
-              </button>
-              <button
-                onClick={() => setCatalogFilter('CARGAS')}
-                style={{ ...btnFilterTabStyle, background: catalogFilter === 'CARGAS' ? '#0288d1' : '#1e293b', color: catalogFilter === 'CARGAS' ? '#fff' : '#94a3b8' }}
-              >
-                ⚙️ Motores & Cargas
-              </button>
+              <button onClick={() => setCatalogFilter('ALL')} style={{ ...btnFilterTabStyle, background: catalogFilter === 'ALL' ? '#0288d1' : '#1e293b', color: catalogFilter === 'ALL' ? '#fff' : '#94a3b8' }}>Todos</button>
+              <button onClick={() => setCatalogFilter('PROTECAO')} style={{ ...btnFilterTabStyle, background: catalogFilter === 'PROTECAO' ? '#0288d1' : '#1e293b', color: catalogFilter === 'PROTECAO' ? '#fff' : '#94a3b8' }}>🛡️ Proteção</button>
+              <button onClick={() => setCatalogFilter('COMANDO')} style={{ ...btnFilterTabStyle, background: catalogFilter === 'COMANDO' ? '#0288d1' : '#1e293b', color: catalogFilter === 'COMANDO' ? '#fff' : '#94a3b8' }}>🧲 Comando</button>
+              <button onClick={() => setCatalogFilter('ALIMENTACAO')} style={{ ...btnFilterTabStyle, background: catalogFilter === 'ALIMENTACAO' ? '#0288d1' : '#1e293b', color: catalogFilter === 'ALIMENTACAO' ? '#fff' : '#94a3b8' }}>📶 Bornes</button>
+              <button onClick={() => setCatalogFilter('SEGURANCA')} style={{ ...btnFilterTabStyle, background: catalogFilter === 'SEGURANCA' ? '#0288d1' : '#1e293b', color: catalogFilter === 'SEGURANCA' ? '#fff' : '#94a3b8' }}>🔒 NR-10/12</button>
+              <button onClick={() => setCatalogFilter('CARGAS')} style={{ ...btnFilterTabStyle, background: catalogFilter === 'CARGAS' ? '#0288d1' : '#1e293b', color: catalogFilter === 'CARGAS' ? '#fff' : '#94a3b8' }}>⚙️ Motores</button>
             </div>
 
             <div style={catalogGridStyle}>
               {filteredCatalog.map((item, idx) => (
                 <div key={idx} style={catalogCardItemStyle}>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '28px' }}>{item.icon}</span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '24px' }}>{item.icon}</span>
                     <div style={{ flex: 1 }}>
-                      <strong style={{ fontSize: '13px', color: '#fff', display: 'block' }}>
-                        {item.title}
-                      </strong>
-                      <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 10px 0', lineHeight: '1.4' }}>
-                        {item.subtitle}
-                      </p>
+                      <strong style={{ fontSize: '12px', color: '#fff', display: 'block' }}>{item.title}</strong>
+                      <p style={{ fontSize: '10px', color: '#94a3b8', margin: '3px 0 8px 0', lineHeight: '1.3' }}>{item.subtitle}</p>
                     </div>
                   </div>
-
-                  <button
-                    onClick={() => handleInsertComponentToProject(item.category)}
-                    style={btnInsertItemStyle}
-                  >
-                    ➕ Inserir no Painel
-                  </button>
+                  <button onClick={() => handleInsertComponentToProject(item.category)} style={btnInsertItemStyle}>➕ Inserir no Painel</button>
                 </div>
               ))}
             </div>
@@ -1093,73 +998,43 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       )}
 
+      {/* BARRA DE SELEÇÃO */}
       {selectedCompObj ? (
         <div style={{ ...selectedCableAlertBarStyle, borderColor: '#ffd600', background: 'rgba(255, 214, 0, 0.15)', color: '#fff' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span>
-              📦 <strong>Componente Selecionado:</strong> {selectedCompObj.name} (TAG: <strong>{selectedCompObj.tag}</strong>)
-            </span>
-            {selectedCompObj.category === 'DISJUNTOR_MONO_WEG_3D' && (
-              <button
-                onClick={() => setInspect3DCompId(selectedCompObj.id)}
-                style={btnInspectActionStyle}
-              >
-                🔍 Inspecionar em 3D
-              </button>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={handleRemoveSelectedComponent} style={btnDeleteSingleCableStyle}>
-              ❌ Excluir Componente (Del)
-            </button>
-            <button onClick={() => setSelectedCompId(null)} style={btnDeselectCableStyle}>
-              Desmarcar
-            </button>
+          <span>📦 <strong>Selecionado:</strong> {selectedCompObj.name} ({selectedCompObj.tag})</span>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button onClick={handleRemoveSelectedComponent} style={btnDeleteSingleCableStyle}>❌ Excluir</button>
+            <button onClick={() => setSelectedCompId(null)} style={btnDeselectCableStyle}>Fechar</button>
           </div>
         </div>
       ) : selectedCableObj ? (
         <div style={selectedCableAlertBarStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span>
-              📍 <strong>Cabo Ativo:</strong> {selectedCableObj.cableType} (De{' '}
-              {components.find((c) => c.id === selectedCableObj.fromComponentId)?.tag}[{selectedCableObj.fromTerminalId}] para{' '}
-              {components.find((c) => c.id === selectedCableObj.toComponentId)?.tag}[{selectedCableObj.toTerminalId}])
-            </span>
+          <span>📍 <strong>Cabo:</strong> {selectedCableObj.cableType}</span>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button onClick={() => { setCables((prev) => prev.filter((c) => c.id !== selectedCableObj.id)); setSelectedCableId(null); }} style={btnDeleteSingleCableStyle}>❌ Remover</button>
+            <button onClick={() => setSelectedCableId(null)} style={btnDeselectCableStyle}>Fechar</button>
           </div>
-
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => {
-                setCables((prev) => prev.filter((c) => c.id !== selectedCableObj.id));
-                setSelectedCableId(null);
-              }}
-              style={btnDeleteSingleCableStyle}
-            >
-              ❌ Remover Cabo (Del)
-            </button>
-            <button onClick={() => setSelectedCableId(null)} style={btnDeselectCableStyle}>
-              Desmarcar
-            </button>
-          </div>
+        </div>
+      ) : isMeterActive ? (
+        <div style={{ ...wiringPromptBarStyle, background: 'rgba(234, 179, 8, 0.15)', borderColor: '#eab308', color: '#fef08a' }}>
+          📟 <strong>Multímetro Ativo:</strong> Toque no borne para posicionar a ponta <strong style={{ color: activeProbeTarget === 'RED' ? '#ef4444' : '#fff' }}>{activeProbeTarget === 'RED' ? 'VERMELHA (+)' : 'PRETA (-)'}</strong>.
         </div>
       ) : wiringOrigin ? (
-        <div style={wiringPromptBarStyle}>
-          ⚡ <strong>Passando Cabo:</strong> Origem no borne{' '}
-          <strong style={{ color: '#00e676' }}>
-            {components.find((c) => c.id === wiringOrigin.compId)?.tag} [{wiringOrigin.termId}]
-          </strong>
-          . Clique no borne de destino para fechar a conexão.
-        </div>
+        <div style={wiringPromptBarStyle}>⚡ Toque no <strong>borne de destino</strong> para conectar o cabo.</div>
       ) : null}
 
+      {/* 2. PAINEL DE MONTAGEM (CANVA 2D VECTORIAL) */}
       <div
         ref={panelRef}
-        onMouseMove={handleMouseMovePanel}
-        onMouseUp={handleMouseUpPanel}
-        onClick={() => {
-          setSelectedCableId(null);
-          setSelectedCompId(null);
+        onMouseMove={(e) => handleMoveDrag(e.clientX, e.clientY)}
+        onMouseUp={handleEndDrag}
+        onTouchMove={(e) => {
+          if (e.touches.length > 0) {
+            handleMoveDrag(e.touches[0].clientX, e.touches[0].clientY);
+          }
         }}
+        onTouchEnd={handleEndDrag}
+        onClick={() => { setSelectedCableId(null); setSelectedCompId(null); }}
         style={panelMountStyle}
       >
         <svg style={svgOverlayStyle}>
@@ -1176,36 +1051,10 @@ export const ComandosEletricosWorkbench: React.FC = () => {
             const pathString = renderSmoothPath(routePoints);
 
             return (
-              <g
-                key={cb.id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedCableId(cb.id);
-                  setSelectedCompId(null);
-                }}
-              >
-                <path
-                  d={pathString}
-                  fill="none"
-                  stroke="transparent"
-                  strokeWidth="20"
-                  style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
-                />
-                <path
-                  d={pathString}
-                  fill="none"
-                  stroke={isSelected ? '#00e676' : 'rgba(0,0,0,0.55)'}
-                  strokeWidth={isSelected ? '7' : '5'}
-                  strokeDasharray={isSelected ? '6,4' : 'none'}
-                />
-                <path
-                  d={pathString}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth={isSelected ? '4.5' : '3.5'}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+              <g key={cb.id} onClick={(e) => { e.stopPropagation(); setSelectedCableId(cb.id); setSelectedCompId(null); }}>
+                <path d={pathString} fill="none" stroke="transparent" strokeWidth="24" style={{ cursor: 'pointer', pointerEvents: 'stroke' }} />
+                <path d={pathString} fill="none" stroke={isSelected ? '#00e676' : 'rgba(0,0,0,0.55)'} strokeWidth={isSelected ? '7' : '5'} strokeDasharray={isSelected ? '6,4' : 'none'} />
+                <path d={pathString} fill="none" stroke={color} strokeWidth={isSelected ? '4.5' : '3.5'} strokeLinecap="round" strokeLinejoin="round" />
               </g>
             );
           })}
@@ -1214,24 +1063,32 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         {components.map((comp) => {
           const isSelected = selectedCompId === comp.id;
           const isGrid = comp.category.startsWith('REDE_');
-          const isLoto = comp.category === 'SECCIONADORA_LOTO';
-          const isTrafo = comp.category === 'TRANSFORMADOR_ISOLADOR';
-          const isSafeRelay = comp.category === 'RELE_SEGURANCA_NR12';
-          const isInterlock = comp.category === 'CHAVE_INTERTRAVAMENTO_NR12';
           const isQ = comp.category.startsWith('DISJUNTOR');
           const isK = comp.category === 'CONTATOR_TRIPOLAR';
           const isF = comp.category === 'RELE_TERMICO';
           const isRPF = comp.category === 'RELE_FALTA_FASE';
           const isAux = comp.category === 'BLOCO_AUXILIAR';
           const isMotor = comp.category === 'MOTOR_TRIFASICO_6P';
+          const isSelector = comp.category === 'CHAVE_SELETORA_3POS';
+          const isRegua = comp.category === 'REGUA_BORNES';
+          const isPente = comp.category === 'BARRAMENTO_PENTE';
+          const isLamp = comp.category === 'SINALEIRO_LED';
+          const isTrafo = comp.category === 'TRANSFORMADOR_ISOLADOR';
+          const isLoto = comp.category === 'SECCIONADORA_LOTO';
+          const isSafeRelay = comp.category === 'RELE_SEGURANCA_NR12';
+          const isInterlock = comp.category === 'CHAVE_INTERTRAVAMENTO_NR12';
           const isBtnNA = comp.category === 'BOTOEIRA_PULSO_NA';
           const isBtnNF = comp.category === 'BOTOEIRA_COGUMELO_NF';
-          const isLamp = comp.category === 'SINALEIRO_LED';
 
           return (
             <div
               key={comp.id}
-              onMouseDown={(e) => handleMouseDownComp(e, comp.id)}
+              onMouseDown={(e) => handleStartDrag(e.clientX, e.clientY, comp.id)}
+              onTouchStart={(e) => {
+                if (e.touches.length > 0) {
+                  handleStartDrag(e.touches[0].clientX, e.touches[0].clientY, comp.id);
+                }
+              }}
               onDoubleClick={(e) => handleDoubleClickComp(e, comp.id)}
               style={{
                 position: 'absolute',
@@ -1241,10 +1098,12 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 height: `${comp.height}px`,
                 cursor: 'grab',
                 userSelect: 'none',
+                touchAction: 'none',
                 zIndex: 2,
                 boxSizing: 'border-box',
               }}
             >
+              {/* CAIXA DE CONFIGURAÇÃO FLUTUANTE EXTERNA */}
               <div style={tagSidebarFloatingBox}>
                 <span style={{ fontSize: '7px', color: '#90a4ae', fontWeight: 'bold' }}>TAG</span>
                 <input
@@ -1253,15 +1112,103 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   onChange={(e) => handleTagInputChange(comp.id, e.target.value)}
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   style={tagInputFieldStyle}
-                  title="Digite para renomear."
                 />
+
+                {isQ && comp.currentRating !== undefined && (
+                  <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ fontSize: '6px', color: '#38bdf8', fontWeight: 'bold' }}>AMPERES</span>
+                    <select
+                      value={comp.currentRating}
+                      onChange={(e) => handleCurrentRatingChange(comp.id, Number(e.target.value))}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      style={selectAmperageStyle}
+                    >
+                      {AMPERAGE_OPTIONS.map((amp) => (
+                        <option key={amp} value={amp}>
+                          {String(amp) + ' A'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {isLamp && (
+                  <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ fontSize: '6px', color: '#ffd600', fontWeight: 'bold' }}>COR</span>
+                    <select
+                      value={comp.lampColor || 'VERDE'}
+                      onChange={(e) => handleLampColorChange(comp.id, e.target.value as LampColor)}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      style={{ ...selectAmperageStyle, color: '#facc15' }}
+                    >
+                      <option value="VERDE">🟢 Verde</option>
+                      <option value="VERMELHO">🔴 Vermelho</option>
+                      <option value="AMARELO">🟡 Amarelo</option>
+                      <option value="AZUL">🔵 Azul</option>
+                      <option value="BRANCO">⚪ Branco</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
-              {isGrid && (
-                <div style={{ ...gridBusStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+              {/* BARRAMENTO PENTE ESTILO CANVA */}
+              {isPente && (
+                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#334155' }}>
                   <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '10px', color: '#ffb74d' }}>ALIMENTAÇÃO</strong>
+                    <strong style={{ fontSize: '9px', color: '#38bdf8' }}>PENTE 3F</strong>
+                    <span style={{ fontSize: '8px', color: '#fff' }}>{comp.tag}</span>
+                  </div>
+                  <span style={{ fontSize: '8px', color: '#94a3b8', textAlign: 'center', marginTop: '6px' }}>Barramento R-S-T</span>
+                </div>
+              )}
+
+              {/* RÉGUA DE BORNES ESTILO CANVA */}
+              {isRegua && (
+                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#1e293b' }}>
+                  <div style={compHeaderStyle}>
+                    <strong style={{ fontSize: '9px', color: '#00e676' }}>BORNES DIN</strong>
+                    <span style={{ fontSize: '8px', color: '#94a3b8' }}>{comp.tag}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '8px', color: '#cbd5e1', marginTop: '6px' }}>
+                    <span>X1</span><span>X2</span><span>X3</span><span>X4</span>
+                  </div>
+                </div>
+              )}
+
+              {/* CHAVE SELETORA 3 POSIÇÕES ESTILO CANVA */}
+              {isSelector && (
+                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                  <div style={compHeaderStyle}>
+                    <strong style={{ fontSize: '8px', color: '#0288d1' }}>SELETORA</strong>
+                    <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '8px 0' }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSelectorToggle(comp.id); }}
+                      style={{
+                        ...btnRelayActionStyle,
+                        background: comp.selectorPosition === '0' ? '#475569' : '#0288d1',
+                        padding: '4px 8px',
+                        fontSize: '9px',
+                      }}
+                    >
+                      {comp.selectorPosition === 'MAN' && '👈 MAN'}
+                      {comp.selectorPosition === '0' && '⚪ 0'}
+                      {comp.selectorPosition === 'AUT' && '👉 AUT'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* REDE DE ALIMENTAÇÃO ESTILO CANVA */}
+              {isGrid && (
+                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#263238', borderColor: '#ff9800' }}>
+                  <div style={compHeaderStyle}>
+                    <strong style={{ fontSize: '9px', color: '#ffb74d' }}>ALIMENTAÇÃO</strong>
                     <span style={{ fontSize: '9px', color: '#fff', fontWeight: 'bold' }}>{comp.tag}</span>
                   </div>
                   <span style={{ fontSize: '8px', color: '#cfd8dc', textAlign: 'center', marginTop: '4px' }}>
@@ -1270,16 +1217,119 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 </div>
               )}
 
-              {comp.category === 'DISJUNTOR_MONO_WEG_3D' && (
-                <div style={{ ...wegBreakerBodyStyle, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f1f5f9' }}>
+              {/* TRANSFORMADOR ISOLADOR 24V */}
+              {isTrafo && (
+                <div style={{ ...canvaCardBase, borderColor: '#00e676', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#005ea6' }}>WEG MDW</strong>
-                    <span style={{ fontSize: '8px', color: '#005ea6', fontWeight: 'bold' }}>C16</span>
+                    <strong style={{ fontSize: '8px', color: '#2e7d32' }}>TRAFO 24V</strong>
+                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
+                  </div>
+                  <div style={{ textAlign: 'center', margin: '6px 0' }}>
+                    <span style={{ fontSize: '8px', color: '#00e676', fontWeight: 'bold' }}>SELV / PELV</span>
+                  </div>
+                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                </div>
+              )}
+
+              {/* CHAVE SECCIONADORA LOTO */}
+              {isLoto && (
+                <div style={{ ...canvaCardBase, borderColor: '#ef5350', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                  <div style={compHeaderStyle}>
+                    <strong style={{ fontSize: '8px', color: '#c62828' }}>LOTO NR-10</strong>
+                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
+                  </div>
+                  <div style={wegLeverSlotStyle}>
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setComponents((prev) =>
+                          prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
+                        );
+                      }}
+                      style={{
+                        ...wegLeverHandleStyle,
+                        top: comp.state ? '4px' : '40px',
+                        background: comp.state ? '#2e7d32' : '#c62828',
+                      }}
+                    >
+                      <span style={{ fontSize: '8px', color: '#fff', fontWeight: 'bold' }}>
+                        {comp.state ? 'I ON' : 'O OFF'}
+                      </span>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                </div>
+              )}
+
+              {/* RELÉ DE SEGURANÇA (NR-12) */}
+              {isSafeRelay && (
+                <div style={{ ...canvaCardBase, borderColor: '#ffd600', background: '#fffde7', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                  <div style={compHeaderStyle}>
+                    <strong style={{ fontSize: '8px', color: '#f57f17' }}>RELÉ NR-12</strong>
+                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', margin: '4px 0' }}>
+                    <span style={{ fontSize: '8px', color: comp.tripped ? '#d32f2f' : '#2e7d32', fontWeight: 'bold' }}>
+                      {comp.tripped ? 'EMERGÊNCIA' : 'SEGURO'}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setComponents((prev) =>
+                          prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c))
+                        );
+                      }}
+                      style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#37474f' }}
+                    >
+                      {comp.tripped ? 'Rearmar' : 'Falha'}
+                    </button>
+                  </div>
+                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                </div>
+              )}
+
+              {/* CHAVE DE INTERTRAVAMENTO (NR-12) */}
+              {isInterlock && (
+                <div style={{ ...canvaCardBase, borderColor: '#fbc02d', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                  <div style={compHeaderStyle}>
+                    <strong style={{ fontSize: '8px', color: '#f57f17' }}>INTERTRAV.</strong>
+                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0' }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setComponents((prev) =>
+                          prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
+                        );
+                      }}
+                      style={{ ...btnRelayActionStyle, background: comp.state ? '#2e7d32' : '#c62828' }}
+                    >
+                      {comp.state ? 'FECHADA' : 'ABERTA'}
+                    </button>
+                  </div>
+                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                </div>
+              )}
+
+              {/* DISJUNTORES 2D ESTILO CANVA */}
+              {isQ && (
+                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                  <div style={compHeaderStyle}>
+                    <strong style={{ fontSize: '9px', color: '#005ea6' }}>WEG</strong>
+                    <span style={{ fontSize: '8px', color: '#005ea6', fontWeight: 'bold' }}>
+                      {'C' + String(comp.currentRating || 16)}
+                    </span>
                   </div>
 
                   <div style={wegLeverSlotStyle}>
                     <div
-                      onClick={(e) => { e.stopPropagation(); handleToggleCompState(comp.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setComponents((prev) =>
+                          prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
+                        );
+                      }}
                       style={{
                         ...wegLeverHandleStyle,
                         top: comp.state ? '4px' : '40px',
@@ -1291,121 +1341,17 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                       </span>
                     </div>
                   </div>
-
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setInspect3DCompId(comp.id); }}
-                    style={btnInspectCardThumbStyle}
-                  >
-                    🔍 3D
-                  </button>
+                  <span style={{ fontSize: '8px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>
+                    {comp.name + ' - C' + String(comp.currentRating || 16) + 'A'}
+                  </span>
                 </div>
               )}
 
-              {isLoto && (
-                <div style={{ ...wegBreakerBodyStyle, borderColor: '#ef5350', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#c62828' }}>LOTO NR-10</strong>
-                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-                  <div style={wegLeverSlotStyle}>
-                    <div
-                      onClick={(e) => { e.stopPropagation(); handleToggleCompState(comp.id); }}
-                      style={{
-                        ...wegLeverHandleStyle,
-                        top: comp.state ? '4px' : '40px',
-                        background: comp.state ? '#2e7d32' : '#c62828',
-                      }}
-                    >
-                      <span style={{ fontSize: '8px', color: '#fff', fontWeight: 'bold' }}>
-                        {comp.state ? 'I ON' : 'O OFF'}
-                      </span>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                </div>
-              )}
-
-              {isTrafo && (
-                <div style={{ ...auxBlockBodyStyle, borderColor: '#00e676', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#2e7d32' }}>TRAFO 24V</strong>
-                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-                  <div style={{ textAlign: 'center', margin: '8px 0' }}>
-                    <span style={{ fontSize: '9px', color: '#00e676', fontWeight: 'bold' }}>SELV / PELV (NR-10)</span>
-                  </div>
-                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                </div>
-              )}
-
-              {isSafeRelay && (
-                <div style={{ ...thermalRelayStyle, borderColor: '#ffd600', background: '#fffde7', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#f57f17' }}>RELÉ NR-12</strong>
-                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', margin: '4px 0' }}>
-                    <span style={{ fontSize: '8px', color: comp.tripped ? '#d32f2f' : '#2e7d32', fontWeight: 'bold' }}>
-                      {comp.tripped ? 'EMERGÊNCIA ATUADA' : 'SISTEMA SEGURO'}
-                    </span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleToggleCompState(comp.id); }}
-                      style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#37474f' }}
-                    >
-                      {comp.tripped ? 'Rearmar Relé' : 'Simular Falha'}
-                    </button>
-                  </div>
-                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                </div>
-              )}
-
-              {isInterlock && (
-                <div style={{ ...auxBlockBodyStyle, borderColor: '#fbc02d', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '8px', color: '#f57f17' }}>INTERTRAV.</strong>
-                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0' }}>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleToggleCompState(comp.id); }}
-                      style={{ ...btnRelayActionStyle, background: comp.state ? '#2e7d32' : '#c62828' }}
-                    >
-                      {comp.state ? 'PORTA FECHADA' : 'PORTA ABERTA'}
-                    </button>
-                  </div>
-                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                </div>
-              )}
-
-              {isQ && comp.category !== 'DISJUNTOR_MONO_WEG_3D' && (
-                <div style={{ ...wegBreakerBodyStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '10px', color: '#005ea6' }}>WEG</strong>
-                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-
-                  <div style={wegLeverSlotStyle}>
-                    <div
-                      onClick={(e) => { e.stopPropagation(); handleToggleCompState(comp.id); }}
-                      style={{
-                        ...wegLeverHandleStyle,
-                        top: comp.state ? '4px' : '40px',
-                        background: comp.state ? '#2e7d32' : '#c62828',
-                      }}
-                    >
-                      <span style={{ fontSize: '8px', color: '#fff', fontWeight: 'bold' }}>
-                        {comp.state ? 'I ON' : 'O OFF'}
-                      </span>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: '8px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                </div>
-              )}
-
+              {/* CONTATOR TRIPOLAR ESTILO CANVA */}
               {isK && (
-                <div style={{ ...contactorBodyStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#e2e8f0' }}>
                   <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '10px', color: '#005ea6' }}>WEG</strong>
+                    <strong style={{ fontSize: '9px', color: '#005ea6' }}>WEG</strong>
                     <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
                   </div>
 
@@ -1420,99 +1366,83 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                       }}
                     />
                     <span style={{ fontSize: '8px', color: comp.state ? '#00e676' : '#37474f', fontWeight: 'bold' }}>
-                      {comp.state ? 'ATRACADO' : 'DESENERGIZADO'}
+                      {comp.state ? 'ATRACADO' : 'ABERTO'}
                     </span>
                   </div>
                   <span style={{ fontSize: '8px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
                 </div>
               )}
 
+              {/* RELÉ TÉRMICO ESTILO CANVA */}
               {isF && (
-                <div style={{ ...thermalRelayStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#d32f2f' }}>RELÉ RW27</strong>
+                    <strong style={{ fontSize: '8px', color: '#d32f2f' }}>RW27</strong>
                     <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', margin: '2px 0' }}>
-                    <div style={currentDialKnobStyle}>
-                      <span style={{ fontSize: '7px', color: '#fff', fontWeight: 'bold' }}>4.5A</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleToggleCompState(comp.id); }}
-                        style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#b71c1c' }}
-                      >
-                        TEST
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleToggleCompState(comp.id); }}
-                        style={{ ...btnRelayActionStyle, background: '#0288d1' }}
-                      >
-                        RESET
-                      </button>
-                    </div>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', margin: '6px 0' }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setComponents((prev) =>
+                          prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c))
+                        );
+                      }}
+                      style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#b71c1c' }}
+                    >
+                      {comp.tripped ? 'TRIP' : 'TEST'}
+                    </button>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%', background: '#b0bec5', padding: '1px 0', borderRadius: '2px' }}>
                     <span style={{ fontSize: '7px', color: '#1a237e', fontWeight: 'bold' }}>95 96 NC</span>
                     <span style={{ fontSize: '7px', color: '#b71c1c', fontWeight: 'bold' }}>97 98 NO</span>
                   </div>
-
-                  <span style={{ fontSize: '7px', color: comp.tripped ? '#d32f2f' : '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>
-                    {comp.tripped ? 'TRIP (SOBRECARGA)' : 'NORMAL'}
-                  </span>
                 </div>
               )}
 
+              {/* RELÉ FALTA DE FASE */}
               {isRPF && (
-                <div style={{ ...rpfRelayStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#0288d1' }}>RPF-01</strong>
+                    <strong style={{ fontSize: '8px', color: '#0288d1' }}>RPF-01</strong>
                     <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', margin: '4px 0' }}>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: comp.state && !comp.tripped ? '#00e676' : '#263238', boxShadow: comp.state && !comp.tripped ? '0 0 6px #00e676' : 'none' }} />
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: comp.state && !comp.tripped ? '#00e676' : '#263238' }} />
                       <span style={{ fontSize: '7px', color: '#37474f' }}>PWR</span>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: comp.tripped ? '#ff1744' : '#263238', boxShadow: comp.tripped ? '0 0 6px #ff1744' : 'none' }} />
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: comp.tripped ? '#ff1744' : '#263238' }} />
                       <span style={{ fontSize: '7px', color: '#37474f' }}>FALHA</span>
                     </div>
-
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleToggleCompState(comp.id); }}
-                      style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#37474f', width: '70px', marginTop: '2px' }}
-                    >
-                      {comp.tripped ? 'Restaurar' : 'Simular Queda'}
-                    </button>
                   </div>
-                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
                 </div>
               )}
 
+              {/* BLOCO AUXILIAR */}
               {isAux && (
-                <div style={{ ...auxBlockBodyStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f1f5f9' }}>
                   <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#005ea6' }}>BLOCO AUX</strong>
+                    <strong style={{ fontSize: '8px', color: '#005ea6' }}>BLOCO AUX</strong>
                     <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
                   </div>
-
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', margin: '6px 0' }}>
-                    <span style={{ fontSize: '7px', color: '#455a64' }}>Acoplado com: <strong>{comp.tag}</strong></span>
+                    <span style={{ fontSize: '7px', color: '#455a64' }}>Com {comp.tag}</span>
                     <span style={{ fontSize: '8px', color: comp.state ? '#00e676' : '#90a4ae', fontWeight: 'bold' }}>
-                      {comp.state ? '13-14 ON / 21-22 OFF' : '13-14 OFF / 21-22 ON'}
+                      {comp.state ? '13-14 ON' : '21-22 ON'}
                     </span>
                   </div>
                 </div>
               )}
 
+              {/* MOTOR 2D ESTILO VETORIAL CANVA */}
               {isMotor && (
                 <div style={{ ...motorRealisticWrapperStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div style={motorFinHousingStyle}>
                     <div style={motorSideFinLeft} />
                     <div style={motorSideFinRight} />
-
                     <div style={motorRotorCapStyle}>
                       <div
                         style={{
@@ -1524,7 +1454,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                         }}
                       />
                     </div>
-
                     <div style={motorBaseFeetStyle} />
                   </div>
 
@@ -1536,90 +1465,124 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                       <span style={{ fontSize: '8px', color: '#ffd600', fontWeight: 'bold' }}>W2 U2 V2</span>
                     </div>
                   </div>
-
-                  <span style={motorBadgeLabelStyle}>
-                    {comp.name} {comp.state ? '• GIRANDO (380V)' : '• PARADO'}
-                  </span>
                 </div>
               )}
 
-              {isBtnNA && (
-                <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div
-                    onMouseDown={(e) => { e.stopPropagation(); handlePushButtonPress(comp.id); }}
-                    onMouseUp={(e) => { e.stopPropagation(); handlePushButtonRelease(comp.id); }}
-                    onMouseLeave={(e) => { e.stopPropagation(); handlePushButtonRelease(comp.id); }}
-                    onTouchStart={(e) => { e.stopPropagation(); handlePushButtonPress(comp.id); }}
-                    onTouchEnd={(e) => { e.stopPropagation(); handlePushButtonRelease(comp.id); }}
-                    style={{
-                      ...circularBezelStyle,
-                      background: comp.state ? '#00e676' : '#2e7d32',
-                      transform: comp.state ? 'scale(0.92)' : 'scale(1)',
-                      boxShadow: comp.state
-                        ? '0 0 16px rgba(0,230,118,0.8), inset 0 0 8px rgba(0,0,0,0.6)'
-                        : 'inset 0 0 10px rgba(0,0,0,0.8), 0 4px 10px rgba(0,0,0,0.5)',
-                    }}
-                  >
-                    <span style={{ fontSize: '9px', color: '#fff', fontWeight: 'bold' }}>
-                      LIGA
-                    </span>
-                  </div>
-                  <span style={deviceTagLabel}>{comp.tag}</span>
-                </div>
-              )}
-
-              {isBtnNF && (
-                <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div
-                    onClick={(e) => { e.stopPropagation(); handleToggleCompState(comp.id); }}
-                    style={{
-                      ...circularBezelStyle,
-                      background: comp.state ? '#c62828' : '#37474f',
-                      boxShadow: comp.state
-                        ? '0 0 14px rgba(255,23,68,0.5), inset 0 0 8px rgba(0,0,0,0.6)'
-                        : 'inset 0 0 10px rgba(0,0,0,0.8), 0 4px 10px rgba(0,0,0,0.5)',
-                    }}
-                  >
-                    <span style={{ fontSize: '9px', color: '#fff', fontWeight: 'bold' }}>
-                      {comp.state ? 'STOP' : 'TRAVADO'}
-                    </span>
-                  </div>
-                  <span style={deviceTagLabel}>{comp.tag}</span>
-                </div>
-              )}
-
+              {/* SINALEIRO LED COM TROCA DE CORES */}
               {isLamp && (
                 <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                   <div
                     style={{
                       ...circularBezelStyle,
-                      background: comp.state ? '#00e676' : '#1b5e20',
-                      boxShadow: comp.state ? '0 0 20px #00e676, inset 0 0 6px #fff' : 'inset 0 0 10px rgba(0,0,0,0.8)',
+                      background: comp.state
+                        ? (LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).on
+                        : (LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).off,
+                      boxShadow: comp.state ? (LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).glow : 'inset 0 0 10px rgba(0,0,0,0.8)',
                     }}
                   >
-                    <span style={{ fontSize: '8px', color: comp.state ? '#000' : '#81c784', fontWeight: 'bold' }}>
+                    <span style={{ fontSize: '8px', color: comp.state ? '#000' : '#cbd5e1', fontWeight: 'bold' }}>
                       {comp.state ? 'ON' : 'OFF'}
+                    </span>
+                  </div>
+                  <span style={deviceTagLabel}>{comp.tag} ({(LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).label})</span>
+                </div>
+              )}
+
+              {/* BOTOEIRA NA */}
+              {isBtnNA && (
+                <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                  <div
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: true } : c)));
+                    }}
+                    onMouseUp={(e) => {
+                      e.stopPropagation();
+                      setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: false } : c)));
+                    }}
+                    onTouchStart={(e) => {
+                      e.stopPropagation();
+                      setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: true } : c)));
+                    }}
+                    onTouchEnd={(e) => {
+                      e.stopPropagation();
+                      setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: false } : c)));
+                    }}
+                    style={{
+                      ...circularBezelStyle,
+                      background: comp.state ? '#22c55e' : '#15803d',
+                      transform: comp.state ? 'scale(0.92)' : 'scale(1)',
+                      boxShadow: comp.state
+                        ? '0 0 16px rgba(34,197,94,0.8), inset 0 0 8px rgba(0,0,0,0.6)'
+                        : 'inset 0 0 10px rgba(0,0,0,0.8), 0 4px 10px rgba(0,0,0,0.5)',
+                    }}
+                  >
+                    <span style={{ fontSize: '9px', color: '#fff', fontWeight: 'bold' }}>LIGA</span>
+                  </div>
+                  <span style={deviceTagLabel}>{comp.tag}</span>
+                </div>
+              )}
+
+              {/* BOTOEIRA NF */}
+              {isBtnNF && (
+                <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c)));
+                    }}
+                    style={{
+                      ...circularBezelStyle,
+                      background: comp.state ? '#ef4444' : '#334155',
+                      boxShadow: comp.state
+                        ? '0 0 16px rgba(239,68,68,0.6), inset 0 0 8px rgba(0,0,0,0.6)'
+                        : 'inset 0 0 10px rgba(0,0,0,0.8), 0 4px 10px rgba(0,0,0,0.5)',
+                    }}
+                  >
+                    <span style={{ fontSize: '8px', color: '#fff', fontWeight: 'bold' }}>
+                      {comp.state ? 'STOP' : 'TRAV'}
                     </span>
                   </div>
                   <span style={deviceTagLabel}>{comp.tag}</span>
                 </div>
               )}
 
-              {comp.terminals.map((t) => {
+              {/* BORNES DE CONEXÃO */}
+              {comp.terminals?.map((t) => {
                 const isOrigin = wiringOrigin?.compId === comp.id && wiringOrigin?.termId === t.id;
+                const isRedProbeAttached = redProbe?.compId === comp.id && redProbe?.termId === t.id;
+                const isBlackProbeAttached = blackProbe?.compId === comp.id && blackProbe?.termId === t.id;
 
                 return (
                   <div
                     key={t.id}
                     onClick={(e) => handleTerminalClick(e, comp.id, t.id)}
+                    onTouchEnd={(e) => handleTerminalClick(e, comp.id, t.id)}
                     style={{
                       ...screwPoleStyle,
                       left: `${t.relX}%`,
                       top: `${t.relY}%`,
-                      borderColor: isOrigin ? '#00e676' : '#b0bec5',
-                      background: isOrigin ? '#00e676' : '#37474f',
+                      borderColor: isRedProbeAttached
+                        ? '#ef4444'
+                        : isBlackProbeAttached
+                        ? '#000'
+                        : isOrigin
+                        ? '#00e676'
+                        : '#94a3b8',
+                      background: isRedProbeAttached
+                        ? '#ef4444'
+                        : isBlackProbeAttached
+                        ? '#0f172a'
+                        : isOrigin
+                        ? '#00e676'
+                        : '#334155',
+                      boxShadow: isRedProbeAttached
+                        ? '0 0 10px #ef4444'
+                        : isBlackProbeAttached
+                        ? '0 0 10px #000'
+                        : '0 2px 4px rgba(0,0,0,0.4)',
                     }}
-                    title={`Borne ${t.name} (${t.type})`}
+                    title={`Borne ${t.name}`}
                   >
                     <span style={terminalSubscriptLabel}>{t.name}</span>
                   </div>
@@ -1630,6 +1593,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         })}
       </div>
 
+      {/* 3. VISUALIZADOR MECÂNICO 3D */}
       <div style={bottomVisualizerRowStyle}>
         <div style={{ flex: '1 1 360px' }}>
           <MotorVisualizer loadTorquePercent={25} />
@@ -1637,14 +1601,17 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
         <div style={guideCardStyle}>
           <strong style={{ fontSize: '12px', color: '#00e676' }}>
-            ⚡ Como Usar o Disjuntor WEG 3D e o Catálogo:
+            ⚡ Bancada de Comandos (Estilo Canva 2D):
           </strong>
           <ul style={{ fontSize: '11px', color: '#cfd8dc', margin: '6px 0 0 16px', lineHeight: '1.6' }}>
             <li>
-              <strong>Adicionar Disjuntor WEG MDW:</strong> Abra o botão <strong>📦 + Adicionar Componente</strong> e escolha <strong>Disjuntor Monopolar WEG MDW-C16 (3D Realista)</strong>.
+              <strong>Design Ilustrado e Preciso:</strong> Modelos 2D otimizados para desenho didático vetorial estilo apostila técnica e Canva.
             </li>
             <li>
-              <strong>Inspeção 3D Realista:</strong> Clique duas vezes no disjuntor e pressione <strong>🔍 Inspecionar em 3D</strong> para manipulá-lo em órbita 3D e testar sobrecargas térmicas e magnéticas.
+              <strong>Controle Exclusivo de Amperagem:</strong> Altere a corrente nominal nos disjuntores e troque as cores dos sinaleiros em tempo real.
+            </li>
+            <li>
+              <strong>Multímetro Integrado:</strong> Medições de tensão, corrente e teste de continuidade com bip.
             </li>
           </ul>
         </div>
@@ -1686,8 +1653,85 @@ const btnOpenCatalogStyle: React.CSSProperties = {
   fontSize: '12px',
   fontWeight: 'bold',
   cursor: 'pointer',
-  boxShadow: '0 4px 12px rgba(2, 136, 209, 0.4)',
-  transition: 'all 0.2s ease',
+};
+
+const btnMeterToggleStyle: React.CSSProperties = {
+  border: '1px solid',
+  borderRadius: '6px',
+  padding: '7px 14px',
+  fontSize: '12px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
+};
+
+const multimeterContainerStyle: React.CSSProperties = {
+  background: '#090d16',
+  border: '2px solid #eab308',
+  borderRadius: '10px',
+  padding: '10px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '8px',
+  boxShadow: '0 8px 24px rgba(234, 179, 8, 0.2)',
+};
+
+const meterDisplayHeader: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+};
+
+const meterLcdDisplayStyle: React.CSSProperties = {
+  position: 'relative',
+  background: '#94a3b8',
+  border: '2px solid #475569',
+  borderRadius: '6px',
+  padding: '14px 12px 6px 12px',
+  textAlign: 'center',
+  boxShadow: 'inset 0 0 10px rgba(0,0,0,0.4)',
+};
+
+const meterScaleSelectorRow: React.CSSProperties = {
+  display: 'flex',
+  gap: '6px',
+  flexWrap: 'wrap',
+};
+
+const btnMeterScaleStyle: React.CSSProperties = {
+  border: '1px solid #475569',
+  borderRadius: '4px',
+  padding: '4px 8px',
+  fontSize: '10px',
+  cursor: 'pointer',
+};
+
+const meterProbesRow: React.CSSProperties = {
+  display: 'flex',
+  gap: '12px',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+};
+
+const btnProbeSelectStyle: React.CSSProperties = {
+  border: 'none',
+  borderRadius: '4px',
+  color: '#fff',
+  padding: '4px 8px',
+  fontSize: '10px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+};
+
+const btnResetProbesStyle: React.CSSProperties = {
+  background: '#334155',
+  border: 'none',
+  borderRadius: '4px',
+  color: '#94a3b8',
+  padding: '4px 8px',
+  fontSize: '10px',
+  cursor: 'pointer',
+  marginLeft: 'auto',
 };
 
 const modalOverlayStyle: React.CSSProperties = {
@@ -1702,7 +1746,7 @@ const modalOverlayStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 9999,
-  padding: '16px',
+  padding: '12px',
 };
 
 const modalCardStyle: React.CSSProperties = {
@@ -1711,7 +1755,7 @@ const modalCardStyle: React.CSSProperties = {
   borderRadius: '14px',
   width: '100%',
   maxWidth: '850px',
-  maxHeight: '85vh',
+  maxHeight: '88vh',
   display: 'flex',
   flexDirection: 'column',
   boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8)',
@@ -1722,7 +1766,7 @@ const modalHeaderStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-  padding: '16px 20px',
+  padding: '14px 16px',
   borderBottom: '1px solid #232b36',
   background: '#11151a',
 };
@@ -1739,7 +1783,7 @@ const btnCloseModalStyle: React.CSSProperties = {
 const filterTabsContainer: React.CSSProperties = {
   display: 'flex',
   gap: '6px',
-  padding: '10px 20px',
+  padding: '8px 14px',
   borderBottom: '1px solid #232b36',
   flexWrap: 'wrap',
   background: '#0d1117',
@@ -1748,18 +1792,17 @@ const filterTabsContainer: React.CSSProperties = {
 const btnFilterTabStyle: React.CSSProperties = {
   border: 'none',
   borderRadius: '6px',
-  padding: '6px 12px',
-  fontSize: '11px',
+  padding: '5px 10px',
+  fontSize: '10px',
   fontWeight: 'bold',
   cursor: 'pointer',
-  transition: 'all 0.15s ease',
 };
 
 const catalogGridStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-  gap: '12px',
-  padding: '16px 20px',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+  gap: '10px',
+  padding: '12px 14px',
   overflowY: 'auto',
   maxHeight: 'calc(85vh - 140px)',
 };
@@ -1768,11 +1811,10 @@ const catalogCardItemStyle: React.CSSProperties = {
   background: '#1a202c',
   border: '1px solid #2d3748',
   borderRadius: '10px',
-  padding: '12px',
+  padding: '10px',
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'space-between',
-  transition: 'all 0.2s ease',
 };
 
 const btnInsertItemStyle: React.CSSProperties = {
@@ -1780,12 +1822,11 @@ const btnInsertItemStyle: React.CSSProperties = {
   border: 'none',
   borderRadius: '6px',
   color: '#000',
-  padding: '8px 12px',
+  padding: '7px 10px',
   fontSize: '11px',
   fontWeight: 'bold',
   cursor: 'pointer',
   width: '100%',
-  transition: 'all 0.15s ease',
 };
 
 const selectedCableAlertBarStyle: React.CSSProperties = {
@@ -1800,30 +1841,6 @@ const selectedCableAlertBarStyle: React.CSSProperties = {
   alignItems: 'center',
   flexWrap: 'wrap',
   gap: '8px',
-};
-
-const btnInspectActionStyle: React.CSSProperties = {
-  background: '#0288d1',
-  border: 'none',
-  borderRadius: '4px',
-  color: '#fff',
-  padding: '4px 10px',
-  fontSize: '11px',
-  fontWeight: 'bold',
-  cursor: 'pointer',
-};
-
-const btnInspectCardThumbStyle: React.CSSProperties = {
-  background: '#0288d1',
-  border: 'none',
-  borderRadius: '3px',
-  color: '#fff',
-  padding: '2px',
-  fontSize: '8px',
-  fontWeight: 'bold',
-  cursor: 'pointer',
-  width: '100%',
-  marginTop: '2px',
 };
 
 const btnDeleteSingleCableStyle: React.CSSProperties = {
@@ -1850,11 +1867,10 @@ const btnDeselectCableStyle: React.CSSProperties = {
 const btnCableSelectStyle: React.CSSProperties = {
   border: '1px solid',
   borderRadius: '4px',
-  padding: '5px 8px',
+  padding: '4px 7px',
   fontSize: '10px',
   fontWeight: 'bold',
   cursor: 'pointer',
-  transition: 'all 0.15s ease',
 };
 
 const btnClearCablesBtnStyle: React.CSSProperties = {
@@ -1862,7 +1878,7 @@ const btnClearCablesBtnStyle: React.CSSProperties = {
   border: '1px solid #ef4444',
   color: '#fff',
   borderRadius: '4px',
-  padding: '5px 8px',
+  padding: '4px 8px',
   fontSize: '10px',
   fontWeight: 'bold',
   cursor: 'pointer',
@@ -1887,7 +1903,7 @@ const panelMountStyle: React.CSSProperties = {
   overflowY: 'auto',
   overflowX: 'hidden',
   boxShadow: 'inset 0 0 30px rgba(0,0,0,0.8)',
-  cursor: 'crosshair',
+  touchAction: 'none',
 };
 
 const svgOverlayStyle: React.CSSProperties = {
@@ -1903,112 +1919,54 @@ const svgOverlayStyle: React.CSSProperties = {
 const tagSidebarFloatingBox: React.CSSProperties = {
   position: 'absolute',
   top: '4px',
-  left: 'calc(100% + 6px)',
+  left: 'calc(100% + 4px)',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
   background: '#13171d',
   border: '1px solid #374151',
   borderRadius: '4px',
-  padding: '2px 4px',
+  padding: '2px',
   zIndex: 4,
 };
 
 const tagInputFieldStyle: React.CSSProperties = {
-  width: '42px',
+  width: '38px',
   background: '#0d1117',
   border: '1px solid #0288d1',
   color: '#00e676',
-  fontSize: '9px',
+  fontSize: '8px',
   fontWeight: 'bold',
   borderRadius: '3px',
-  padding: '2px',
+  padding: '1px',
   textAlign: 'center',
   outline: 'none',
 };
 
-const gridBusStyle: React.CSSProperties = {
-  width: '100%',
-  height: '100%',
-  background: '#263238',
-  border: '2px solid #ff9800',
-  borderRadius: '6px',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'space-between',
-  padding: '6px 4px',
-  boxSizing: 'border-box',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
+const selectAmperageStyle: React.CSSProperties = {
+  background: '#0d1117',
+  border: '1px solid #334155',
+  color: '#38bdf8',
+  fontSize: '7px',
+  fontWeight: 'bold',
+  borderRadius: '2px',
+  padding: '1px',
+  outline: 'none',
 };
 
-const wegBreakerBodyStyle: React.CSSProperties = {
+// ESTILO BASE CANVA PARA EQUIPAMENTOS 2D VETORIAIS
+const canvaCardBase: React.CSSProperties = {
   width: '100%',
   height: '100%',
-  background: '#eceff1',
-  border: '2px solid #90a4ae',
-  borderRadius: '6px',
+  background: '#f8fafc',
+  border: '2px solid #cbd5e1',
+  borderRadius: '8px',
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'space-between',
-  padding: '6px 4px',
+  padding: '8px 6px',
   boxSizing: 'border-box',
-  boxShadow: '0 8px 18px rgba(0,0,0,0.5)',
-};
-
-const contactorBodyStyle: React.CSSProperties = {
-  width: '100%',
-  height: '100%',
-  background: '#cfd8dc',
-  border: '2px solid #78909c',
-  borderRadius: '6px',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'space-between',
-  padding: '6px 4px',
-  boxSizing: 'border-box',
-  boxShadow: '0 8px 18px rgba(0,0,0,0.5)',
-};
-
-const thermalRelayStyle: React.CSSProperties = {
-  width: '100%',
-  height: '100%',
-  background: '#eceff1',
-  border: '2px solid #b0bec5',
-  borderRadius: '6px',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'space-between',
-  padding: '6px 4px',
-  boxSizing: 'border-box',
-  boxShadow: '0 8px 18px rgba(0,0,0,0.5)',
-};
-
-const rpfRelayStyle: React.CSSProperties = {
-  width: '100%',
-  height: '100%',
-  background: '#eceff1',
-  border: '2px solid #90a4ae',
-  borderRadius: '6px',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'space-between',
-  padding: '6px 4px',
-  boxSizing: 'border-box',
-  boxShadow: '0 8px 18px rgba(0,0,0,0.5)',
-};
-
-const auxBlockBodyStyle: React.CSSProperties = {
-  width: '100%',
-  height: '100%',
-  background: '#e0e0e0',
-  border: '2px solid #757575',
-  borderRadius: '6px',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'space-between',
-  padding: '6px 4px',
-  boxSizing: 'border-box',
-  boxShadow: '0 6px 14px rgba(0,0,0,0.4)',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
 };
 
 const motorRealisticWrapperStyle: React.CSSProperties = {
@@ -2031,7 +1989,7 @@ const motorFinHousingStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  boxShadow: '0 10px 24px rgba(0,0,0,0.7)',
+  boxShadow: '0 6px 16px rgba(0,0,0,0.5)',
 };
 
 const motorSideFinLeft: React.CSSProperties = {
@@ -2091,34 +2049,14 @@ const motorTerminalBoardStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  boxShadow: '0 4px 10px rgba(0,0,0,0.6)',
-};
-
-const motorBadgeLabelStyle: React.CSSProperties = {
-  fontSize: '9px',
-  fontWeight: 'bold',
-  color: '#00e676',
-  textAlign: 'center',
-  marginTop: '4px',
-};
-
-const currentDialKnobStyle: React.CSSProperties = {
-  width: '24px',
-  height: '24px',
-  borderRadius: '50%',
-  background: '#263238',
-  border: '2px solid #78909c',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
 };
 
 const btnRelayActionStyle: React.CSSProperties = {
   border: 'none',
-  borderRadius: '3px',
+  borderRadius: '4px',
   color: '#fff',
-  padding: '2px 5px',
-  fontSize: '7px',
+  padding: '4px 8px',
+  fontSize: '8px',
   fontWeight: 'bold',
   cursor: 'pointer',
 };
@@ -2135,7 +2073,7 @@ const compHeaderStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-  borderBottom: '1px solid #b0bec5',
+  borderBottom: '1px solid #cbd5e1',
   paddingBottom: '2px',
 };
 
@@ -2143,10 +2081,10 @@ const wegLeverSlotStyle: React.CSSProperties = {
   position: 'relative',
   width: '32px',
   height: '65px',
-  background: '#263238',
+  background: '#334155',
   borderRadius: '4px',
   margin: '0 auto',
-  border: '1px solid #37474f',
+  border: '1px solid #475569',
 };
 
 const wegLeverHandleStyle: React.CSSProperties = {
@@ -2161,7 +2099,7 @@ const wegLeverHandleStyle: React.CSSProperties = {
   justifyContent: 'center',
   cursor: 'pointer',
   transition: 'top 0.15s ease',
-  boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
+  boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
 };
 
 const circularDeviceContainer: React.CSSProperties = {
@@ -2175,10 +2113,10 @@ const circularDeviceContainer: React.CSSProperties = {
 };
 
 const circularBezelStyle: React.CSSProperties = {
-  width: '50px',
-  height: '50px',
+  width: '52px',
+  height: '52px',
   borderRadius: '50%',
-  border: '4px solid #b0bec5',
+  border: '4px solid #cbd5e1',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -2198,8 +2136,8 @@ const deviceTagLabel: React.CSSProperties = {
 const screwPoleStyle: React.CSSProperties = {
   position: 'absolute',
   transform: 'translate(-50%, -50%)',
-  width: '12px',
-  height: '12px',
+  width: '14px',
+  height: '14px',
   borderRadius: '50%',
   border: '2px solid',
   cursor: 'pointer',
