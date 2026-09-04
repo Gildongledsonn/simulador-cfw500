@@ -23,7 +23,10 @@ export type ComponentCategory =
   | 'BOTOEIRA_PULSO_NA'
   | 'BOTOEIRA_COGUMELO_NF'
   | 'SINALEIRO_LED'
-  | 'MOTOR_TRIFASICO_6P';
+  | 'MOTOR_TRIFASICO_6P'
+  | 'MOTOR_MONOFASICO_CAPACITOR'
+  | 'CAPACITOR_ELETROLITICO'
+  | 'RESISTOR_FREINAGEM';
 
 export interface TerminalPole {
   id: string;
@@ -103,30 +106,35 @@ interface CatalogItem {
 }
 
 const CATALOG_ITEMS: CatalogItem[] = [
-  { category: 'DISJUNTOR_MONOPOLAR', title: 'Disjuntor Monopolar DIN', subtitle: 'Ilustração vetorial 2D com corrente nominal ajustável', icon: '⚡', group: 'PROTECAO' },
-  { category: 'DISJUNTOR_BIPOLAR', title: 'Disjuntor Bipolar 2P DIN', subtitle: 'Módulo duplo com corrente configurável', icon: '⚡', group: 'PROTECAO' },
-  { category: 'DISJUNTOR_MOTOR', title: 'Disjuntor-Motor MPW', subtitle: 'Proteção magnética com manopla rotativa', icon: '🎛️', group: 'PROTECAO' },
-  { category: 'RELE_TERMICO', title: 'Relé Térmico RW', subtitle: 'Proteção com botões teste/rearme', icon: '🔥', group: 'PROTECAO' },
-  { category: 'RELE_FALTA_FASE', title: 'Relé Falta de Fase RPF', subtitle: 'LEDs indicadores de status e saída 11-12-14', icon: '📡', group: 'PROTECAO' },
-  { category: 'CHAVE_SELETORA_3POS', title: 'Chave Seletora MAN - 0 - AUT', subtitle: 'Comutação de 3 posições com contatos 13-14 e 23-24', icon: '🔘', group: 'COMANDO' },
-  { category: 'CONTATOR_TRIPOLAR', title: 'Contator de Força CWM', subtitle: 'Chave eletromagnética tripolar estilo Canva', icon: '🧲', group: 'COMANDO' },
-  { category: 'BLOCO_AUXILIAR', title: 'Bloco de Contatos Auxiliares', subtitle: 'Contatos extras 13-14 e 21-22 sincronizados', icon: '📑', group: 'COMANDO' },
-  { category: 'REGUA_BORNES', title: 'Régua de Bornes de Passagem', subtitle: '4 canais isolados para interligação', icon: '🧱', group: 'ALIMENTACAO' },
-  { category: 'BARRAMENTO_PENTE', title: 'Barramento Pente 3F', subtitle: 'Distribuição trifásica de fases', icon: '📶', group: 'ALIMENTACAO' },
-  { category: 'REDE_TRIFASICA', title: 'Rede Trifásica 380V', subtitle: 'Bornes de alimentação R, S, T, N, PE', icon: '⚡', group: 'ALIMENTACAO' },
-  { category: 'REDE_MONOFASICA', title: 'Rede Monofásica 220V', subtitle: 'Fonte de alimentação F, N, PE', icon: '🔌', group: 'ALIMENTACAO' },
-  { category: 'SECCIONADORA_LOTO', title: 'Chave Seccionadora LOTO', subtitle: 'Seccionador com bloqueio mecânico cadeado', icon: '🛑', group: 'SEGURANCA' },
-  { category: 'TRANSFORMADOR_ISOLADOR', title: 'Trafo Isolador 220V/24V', subtitle: 'Extra baixa tensão de segurança galvânica', icon: '⚡', group: 'SEGURANCA' },
-  { category: 'RELE_SEGURANCA_NR12', title: 'Relé de Segurança Cat 4', subtitle: 'Monitoramento redundante de parada imediata', icon: '🛡️', group: 'SEGURANCA' },
-  { category: 'CHAVE_INTERTRAVAMENTO_NR12', title: 'Sensor de Proteção (NR-12)', subtitle: 'Chave de segurança de abertura de porta', icon: '🔒', group: 'SEGURANCA' },
-  { category: 'BOTOEIRA_PULSO_NA', title: 'Botoeira Pulsadora Liga (NA)', subtitle: 'Botão verde com relevo e toque macio', icon: '🟢', group: 'COMANDO' },
-  { category: 'BOTOEIRA_COGUMELO_NF', title: 'Botoeira de Emergência Cogumelo', subtitle: 'Cogumelo vermelho com retenção', icon: '🔴', group: 'COMANDO' },
-  { category: 'SINALEIRO_LED', title: 'Sinalizador LED (Cores Trocáveis)', subtitle: 'Lâmpada estilizada com brilho dinâmico', icon: '💡', group: 'COMANDO' },
-  { category: 'MOTOR_TRIFASICO_6P', title: 'Motor de Indução W22 (6 Pontas)', subtitle: 'Carcaça aletada estilo vetor técnico', icon: '⚙️', group: 'CARGAS' },
+  { category: 'DISJUNTOR_MONOPOLAR', title: 'Disjuntor Monopolar (Padrão Esquemático)', subtitle: 'Estilo gráfico idêntico ao modelo técnico com manopla vermelha', icon: '⚡', group: 'PROTECAO' },
+  { category: 'DISJUNTOR_BIPOLAR', title: 'Disjuntor Bipolar 2P', subtitle: 'Proteção bipolar com amperagem ajustável', icon: '⚡', group: 'PROTECAO' },
+  { category: 'DISJUNTOR_MOTOR', title: 'Disjuntor-Motor MPW', subtitle: 'Proteção termomagnética para motores', icon: '🎛️', group: 'PROTECAO' },
+  { category: 'RELE_TERMICO', title: 'Relé Térmico de Sobrecarga RW', subtitle: 'Proteção com contatos 95-96 e 97-98', icon: '🔥', group: 'PROTECAO' },
+  { category: 'RELE_FALTA_FASE', title: 'Relé Falta de Fase RPF', subtitle: 'Monitor de assimetria 11-12-14', icon: '📡', group: 'PROTECAO' },
+  { category: 'CHAVE_SELETORA_3POS', title: 'Chave Seletora 3 Posições (MAN - 0 - AUT)', subtitle: 'Comutação de modo com contatos 13-14 e 23-24', icon: '🔘', group: 'COMANDO' },
+  { category: 'CONTATOR_TRIPOLAR', title: 'Contator de Potência WEG CWM', subtitle: 'Chave eletromagnética tripolar para motores', icon: '🧲', group: 'COMANDO' },
+  { category: 'BLOCO_AUXILIAR', title: 'Bloco de Contatos Auxiliares Frontal', subtitle: 'Contatos extras 13-14 (NA) e 21-22 (NF) por TAG', icon: '📑', group: 'COMANDO' },
+  { category: 'REGUA_BORNES', title: 'Régua de Bornes de Passagem (DIN)', subtitle: 'Organização de cabos e sinais', icon: '🧱', group: 'ALIMENTACAO' },
+  { category: 'BARRAMENTO_PENTE', title: 'Barramento Pente de Distribuição', subtitle: 'Distribuição trifásica de fases', icon: '📶', group: 'ALIMENTACAO' },
+  { category: 'REDE_TRIFASICA', title: 'Rede Trifásica 380V (R, S, T, N, PE)', subtitle: 'Alimentação principal de força', icon: '⚡', group: 'ALIMENTACAO' },
+  { category: 'REDE_MONOFASICA', title: 'Rede Monofásica 220V (F, N, PE)', subtitle: 'Fonte monofásica auxiliar', icon: '🔌', group: 'ALIMENTACAO' },
+  { category: 'SECCIONADORA_LOTO', title: 'Chave Seccionadora LOTO (NR-10)', subtitle: 'Bloqueio de segurança com cadeado', icon: '🛑', group: 'SEGURANCA' },
+  { category: 'TRANSFORMADOR_ISOLADOR', title: 'Trafo Isolador 220V/24V (NR-10)', subtitle: 'Extra baixa tensão de segurança', icon: '⚡', group: 'SEGURANCA' },
+  { category: 'RELE_SEGURANCA_NR12', title: 'Relé de Segurança Cat 4 (NR-12)', subtitle: 'Duplo canal com redundância', icon: '🛡️', group: 'SEGURANCA' },
+  { category: 'CHAVE_INTERTRAVAMENTO_NR12', title: 'Chave Intertravamento (NR-12)', subtitle: 'Monitoramento de portas e proteções', icon: '🔒', group: 'SEGURANCA' },
+  { category: 'BOTOEIRA_PULSO_NA', title: 'Botoeira Pulsadora Liga (NA)', subtitle: 'Botão verde (3-4 NO)', icon: '🟢', group: 'COMANDO' },
+  { category: 'BOTOEIRA_COGUMELO_NF', title: 'Botoeira de Emergência Cogumelo (NF)', subtitle: 'Botão de parada com trava', icon: '🔴', group: 'COMANDO' },
+  { category: 'SINALEIRO_LED', title: 'Sinalizador Luminoso LED (Cores Trocáveis)', subtitle: 'Lâmpada com opção de alterar a cor', icon: '💡', group: 'COMANDO' },
+  { category: 'MOTOR_TRIFASICO_6P', title: 'Motor Trifásico W22 (6 Pontas)', subtitle: 'Fechamento Estrela / Triângulo', icon: '⚙️', group: 'CARGAS' },
+  { category: 'MOTOR_MONOFASICO_CAPACITOR', title: 'Motor Monofásico com Capacitor', subtitle: 'Motor monofásico com bornes Fase, Neutro e Capacitor', icon: '🌀', group: 'CARGAS' },
+  { category: 'CAPACITOR_ELETROLITICO', title: 'Capacitor de Partida / Correção', subtitle: 'Armazenamento eletrostático e defasagem', icon: '🔋', group: 'PROTECAO' },
+  { category: 'RESISTOR_FREINAGEM', title: 'Resistor de Frenagem (Dynamic Braking)', subtitle: 'Dissipação de energia regenerativa de inversor', icon: '♨️', group: 'PROTECAO' },
 ];
 
 export const ComandosEletricosWorkbench: React.FC = () => {
   const { state: inverterState, dispatch } = useInverter();
+
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(true); // Controle de liberação pelo Administrador
 
   const [components, setComponents] = useState<PlacedComponent[]>([
     {
@@ -136,8 +144,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       name: 'Rede Trifásica 380V',
       x: 30,
       y: 30,
-      width: 150,
-      height: 85,
+      width: 140,
+      height: 80,
       state: true,
       terminals: [
         { id: 'R', name: 'R', relX: 18, relY: 80, type: 'FORCA' },
@@ -152,10 +160,10 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       category: 'REDE_MONOFASICA',
       tag: 'GRID-1F',
       name: 'Rede Monofásica 220V',
-      x: 210,
+      x: 200,
       y: 30,
-      width: 130,
-      height: 85,
+      width: 120,
+      height: 80,
       state: true,
       terminals: [
         { id: 'F', name: 'F', relX: 25, relY: 80, type: 'COMANDO' },
@@ -290,7 +298,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     return d;
   };
 
-  // MOTOR DE CONTINUIDADE (BFS)
+  // MOTOR ELÉTRICO DE CONTINUIDADE (BFS)
   useEffect(() => {
     const adj: Record<string, string[]> = {};
     const addEdge = (u: string, v: string) => {
@@ -373,6 +381,10 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         if (comp.state) {
           addEdge(`${comp.id}:11NC`, `${comp.id}:12NC`);
         }
+      } else if (comp.category === 'CAPACITOR_ELETROLITICO') {
+        addEdge(`${comp.id}:C1`, `${comp.id}:C2`);
+      } else if (comp.category === 'RESISTOR_FREINAGEM') {
+        addEdge(`${comp.id}:B1`, `${comp.id}:B2`);
       }
     });
 
@@ -425,6 +437,15 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       isMot3pPowered = u1HasPhase && v1HasPhase && w1HasPhase && isStarClosed;
     }
 
+    const motMonoComp = components.find((c) => c.category === 'MOTOR_MONOFASICO_CAPACITOR');
+    let isMotMonoPowered = false;
+    if (motMonoComp) {
+      const phaseOnF = isNodeEnergizedByPhase(`${motMonoComp.id}:F`);
+      const neutralOnN = isNodeEnergizedByNeutral(`${motMonoComp.id}:N`) || isNodeEnergizedByPhase(`${motMonoComp.id}:N`);
+      const capConnected = hasPath(`${motMonoComp.id}:C1`, `${motMonoComp.id}:C2`);
+      isMotMonoPowered = phaseOnF && neutralOnN && capConnected;
+    }
+
     let stateChanged = false;
     const updated = components.map((c) => {
       const cleanTag = c.tag.toUpperCase().trim();
@@ -451,6 +472,12 @@ export const ComandosEletricosWorkbench: React.FC = () => {
           return { ...c, state: isMot3pPowered };
         }
       }
+      if (c.category === 'MOTOR_MONOFASICO_CAPACITOR') {
+        if (c.state !== isMotMonoPowered) {
+          stateChanged = true;
+          return { ...c, state: isMotMonoPowered };
+        }
+      }
       return c;
     });
 
@@ -458,9 +485,10 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       setComponents(updated);
     }
 
-    if (isMot3pPowered && inverterState.motorStatus !== 'RUNNING') {
+    const anyRunning = isMot3pPowered || isMotMonoPowered;
+    if (anyRunning && inverterState.motorStatus !== 'RUNNING') {
       dispatch({ type: 'PRESS_RUN' });
-    } else if (!isMot3pPowered && inverterState.motorStatus === 'RUNNING') {
+    } else if (!anyRunning && inverterState.motorStatus === 'RUNNING') {
       dispatch({ type: 'PRESS_STOP' });
     }
 
@@ -498,7 +526,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         setMeterReadout(hasDirectContinuity ? '.001 V' : 'O.L V');
         setIsContinuityBuzzer(false);
       } else if (meterScale === 'CURRENT_A') {
-        setMeterReadout(isMot3pPowered && (nodeA.includes('2T1') || nodeA.includes('U1')) ? '6.42 A~' : '0.00 A~');
+        setMeterReadout(anyRunning && (nodeA.includes('2T1') || nodeA.includes('U1') || nodeA.includes('F')) ? '6.42 A~' : '0.00 A~');
         setIsContinuityBuzzer(false);
       }
     } else {
@@ -615,7 +643,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     const count = components.length + 1;
     let tag = `C${count}`;
     let name = 'Módulo';
-    let width = 95;
+    let width = 75;
     let height = 155;
     let terminals: TerminalPole[] = [];
     let currentRating: number | undefined = undefined;
@@ -632,18 +660,18 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
     if (category === 'DISJUNTOR_MONOPOLAR') {
       tag = `Q${count}`;
-      name = 'Disj. Mono DIN';
-      width = 75;
-      height = 160;
+      name = 'Disjuntor DIN';
+      width = 70;
+      height = 155;
       terminals = [
-        { id: '1', name: '1 (L)', relX: 50, relY: 8, type: 'COMANDO' },
-        { id: '2', name: '2 (Carga)', relX: 50, relY: 92, type: 'COMANDO' },
+        { id: '1', name: '1', relX: 50, relY: 8, type: 'COMANDO' },
+        { id: '2', name: '2', relX: 50, relY: 92, type: 'COMANDO' },
       ];
     } else if (category === 'DISJUNTOR_BIPOLAR') {
       tag = `Q${count}`;
-      name = 'Disjuntor MDW 2P';
-      width = 90;
-      height = 160;
+      name = 'Disjuntor 2P';
+      width = 85;
+      height = 155;
       terminals = [
         { id: '1L1', name: '1', relX: 30, relY: 8, type: 'COMANDO' },
         { id: '3L2', name: '3', relX: 70, relY: 8, type: 'COMANDO' },
@@ -653,8 +681,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     } else if (category === 'DISJUNTOR_MOTOR') {
       tag = `Q${count}`;
       name = 'Disjuntor MPW';
-      width = 105;
-      height = 175;
+      width = 100;
+      height = 165;
       currentRating = 20;
       terminals = [
         { id: '1L1', name: '1/L1', relX: 20, relY: 8, type: 'FORCA' },
@@ -667,8 +695,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     } else if (category === 'SINALEIRO_LED') {
       tag = `H${count}`;
       name = 'Sinalizador';
-      width = 70;
-      height = 105;
+      width = 65;
+      height = 100;
       lampColor = 'VERDE';
       terminals = [
         { id: 'X1', name: 'X1', relX: 50, relY: 8, type: 'COMANDO' },
@@ -677,8 +705,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     } else if (category === 'CHAVE_SELETORA_3POS') {
       tag = `SA${count}`;
       name = 'Seletora MAN-0-AUT';
-      width = 90;
-      height = 145;
+      width = 85;
+      height = 140;
       terminals = [
         { id: '13', name: '13', relX: 30, relY: 10, type: 'COMANDO' },
         { id: '23', name: '23', relX: 70, relY: 10, type: 'COMANDO' },
@@ -688,8 +716,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     } else if (category === 'REGUA_BORNES') {
       tag = `XT${count}`;
       name = 'Régua de Bornes';
-      width = 130;
-      height = 135;
+      width = 120;
+      height = 130;
       terminals = [
         { id: 'X1_IN', name: '1', relX: 20, relY: 10, type: 'FORCA' },
         { id: 'X2_IN', name: '2', relX: 40, relY: 10, type: 'FORCA' },
@@ -716,8 +744,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     } else if (category === 'SECCIONADORA_LOTO') {
       tag = `QS${count}`;
       name = 'Chave LOTO NR-10';
-      width = 100;
-      height = 155;
+      width = 95;
+      height = 150;
       terminals = [
         { id: '1L1', name: '1', relX: 25, relY: 8, type: 'FORCA' },
         { id: '3L2', name: '3', relX: 50, relY: 8, type: 'FORCA' },
@@ -729,8 +757,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     } else if (category === 'TRANSFORMADOR_ISOLADOR') {
       tag = `TR${count}`;
       name = 'Trafo 220V/24V';
-      width = 105;
-      height = 135;
+      width = 95;
+      height = 130;
       terminals = [
         { id: 'PRI_L1', name: '220V', relX: 30, relY: 8, type: 'COMANDO' },
         { id: 'PRI_L2', name: '0V', relX: 70, relY: 8, type: 'COMANDO' },
@@ -740,8 +768,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     } else if (category === 'RELE_SEGURANCA_NR12') {
       tag = `SR${count}`;
       name = 'Relé Segurança Cat 4';
-      width = 115;
-      height = 165;
+      width = 110;
+      height = 160;
       terminals = [
         { id: 'A1', name: 'A1', relX: 20, relY: 8, type: 'COMANDO' },
         { id: 'A2', name: 'A2', relX: 50, relY: 8, type: 'COMANDO' },
@@ -752,8 +780,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     } else if (category === 'CHAVE_INTERTRAVAMENTO_NR12') {
       tag = `SQ${count}`;
       name = 'Intertravamento';
-      width = 85;
-      height = 125;
+      width = 80;
+      height = 120;
       terminals = [
         { id: '11NC', name: '11', relX: 30, relY: 8, type: 'COMANDO' },
         { id: '21NC', name: '21', relX: 70, relY: 8, type: 'COMANDO' },
@@ -763,8 +791,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     } else if (category === 'BOTOEIRA_PULSO_NA') {
       tag = `S${count}`;
       name = 'Botão Liga NA';
-      width = 70;
-      height = 105;
+      width = 65;
+      height = 100;
       terminals = [
         { id: '3NO', name: '3', relX: 50, relY: 8, type: 'COMANDO' },
         { id: '4NO', name: '4', relX: 50, relY: 92, type: 'COMANDO' },
@@ -772,11 +800,11 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     } else if (category === 'BOTOEIRA_COGUMELO_NF') {
       tag = `S${count}`;
       name = 'Emergência NF';
-      width = 70;
-      height = 105;
+      width = 65;
+      height = 100;
       terminals = [
         { id: '11NC', name: '11', relX: 50, relY: 8, type: 'COMANDO' },
-        { id: '12NC', name: '2', relX: 50, relY: 92, type: 'COMANDO' },
+        { id: '12NC', name: '12', relX: 50, relY: 92, type: 'COMANDO' },
       ];
     } else if (category === 'RELE_TERMICO') {
       tag = `F${count}`;
@@ -811,6 +839,48 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         { id: '6T3', name: '6/T3', relX: 58, relY: 92, type: 'FORCA' },
         { id: '14NO', name: '14', relX: 82, relY: 92, type: 'COMANDO' },
         { id: 'A2', name: 'A2', relX: 82, relY: 72, type: 'COMANDO' },
+      ];
+    } else if (category === 'MOTOR_TRIFASICO_6P') {
+      tag = `M${count}`;
+      name = 'Motor W22 6P';
+      width = 170;
+      height = 180;
+      terminals = [
+        { id: 'U1', name: 'U1', relX: 25, relY: 28, type: 'FORCA' },
+        { id: 'V1', name: 'V1', relX: 50, relY: 28, type: 'FORCA' },
+        { id: 'W1', name: 'W1', relX: 75, relY: 28, type: 'FORCA' },
+        { id: 'W2', name: 'W2', relX: 25, relY: 72, type: 'FORCA' },
+        { id: 'U2', name: 'U2', relX: 50, relY: 72, type: 'FORCA' },
+        { id: 'V2', name: 'V2', relX: 75, relY: 72, type: 'FORCA' },
+      ];
+    } else if (category === 'MOTOR_MONOFASICO_CAPACITOR') {
+      tag = `M${count}`;
+      name = 'Motor Mono c/ Capacitor';
+      width = 150;
+      height = 160;
+      terminals = [
+        { id: 'F', name: 'F (Fase)', relX: 30, relY: 15, type: 'FORCA' },
+        { id: 'N', name: 'N (Neutro)', relX: 70, relY: 15, type: 'COMANDO' },
+        { id: 'C1', name: 'C1 (Cap)', relX: 30, relY: 85, type: 'FORCA' },
+        { id: 'C2', name: 'C2 (Cap)', relX: 70, relY: 85, type: 'FORCA' },
+      ];
+    } else if (category === 'CAPACITOR_ELETROLITICO') {
+      tag = `C${count}`;
+      name = 'Capacitor de Partida';
+      width = 80;
+      height = 120;
+      terminals = [
+        { id: 'C1', name: 'C1', relX: 30, relY: 10, type: 'FORCA' },
+        { id: 'C2', name: 'C2', relX: 70, relY: 90, type: 'FORCA' },
+      ];
+    } else if (category === 'RESISTOR_FREINAGEM') {
+      tag = `R${count}`;
+      name = 'Resistor de Frenagem';
+      width = 110;
+      height = 100;
+      terminals = [
+        { id: 'B1', name: 'B1', relX: 25, relY: 50, type: 'FORCA' },
+        { id: 'B2', name: 'B2', relX: 75, relY: 50, type: 'FORCA' },
       ];
     } else {
       tag = `C${count}`;
@@ -857,7 +927,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
   return (
     <div style={containerStyle}>
-      {/* 1. BARRA SUPERIOR */}
+      {/* 1. BARRA SUPERIOR COM BOTÃO DE ADMIN */}
       <div style={topControlBarStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <button
@@ -865,6 +935,18 @@ export const ComandosEletricosWorkbench: React.FC = () => {
             style={btnOpenCatalogStyle}
           >
             📦 + Adicionar Componente
+          </button>
+
+          <button
+            onClick={() => setIsAdminUnlocked(!isAdminUnlocked)}
+            style={{
+              ...btnMeterToggleStyle,
+              background: isAdminUnlocked ? '#166534' : '#991b1b',
+              color: '#fff',
+              borderColor: isAdminUnlocked ? '#22c55e' : '#ef4444',
+            }}
+          >
+            {isAdminUnlocked ? '🔓 Admin: Comandos Livres' : '🔒 Admin: Comandos Bloqueados'}
           </button>
 
           <button
@@ -1023,575 +1105,649 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         <div style={wiringPromptBarStyle}>⚡ Toque no <strong>borne de destino</strong> para conectar o cabo.</div>
       ) : null}
 
-      {/* 2. PAINEL DE MONTAGEM (CANVA 2D VECTORIAL) */}
-      <div
-        ref={panelRef}
-        onMouseMove={(e) => handleMoveDrag(e.clientX, e.clientY)}
-        onMouseUp={handleEndDrag}
-        onTouchMove={(e) => {
-          if (e.touches.length > 0) {
-            handleMoveDrag(e.touches[0].clientX, e.touches[0].clientY);
-          }
-        }}
-        onTouchEnd={handleEndDrag}
-        onClick={() => { setSelectedCableId(null); setSelectedCompId(null); }}
-        style={panelMountStyle}
-      >
-        <svg style={svgOverlayStyle}>
-          {cables.map((cb) => {
-            const routePoints = calculateSmartRoute(
-              cb.fromComponentId,
-              cb.fromTerminalId,
-              cb.toComponentId,
-              cb.toTerminalId,
-              cb.customWaypoints
-            );
-            const color = CABLE_COLORS[cb.cableType] || '#fff';
-            const isSelected = selectedCableId === cb.id;
-            const pathString = renderSmoothPath(routePoints);
+      {/* 2. PAINEL DE MONTAGEM COM BLOQUEIO DE ADMIN */}
+      {isAdminUnlocked ? (
+        <div
+          ref={panelRef}
+          onMouseMove={(e) => handleMoveDrag(e.clientX, e.clientY)}
+          onMouseUp={handleEndDrag}
+          onTouchMove={(e) => {
+            if (e.touches.length > 0) {
+              handleMoveDrag(e.touches[0].clientX, e.touches[0].clientY);
+            }
+          }}
+          onTouchEnd={handleEndDrag}
+          onClick={() => { setSelectedCableId(null); setSelectedCompId(null); }}
+          style={panelMountStyle}
+        >
+          <svg style={svgOverlayStyle}>
+            {cables.map((cb) => {
+              const routePoints = calculateSmartRoute(
+                cb.fromComponentId,
+                cb.fromTerminalId,
+                cb.toComponentId,
+                cb.toTerminalId,
+                cb.customWaypoints
+              );
+              const color = CABLE_COLORS[cb.cableType] || '#fff';
+              const isSelected = selectedCableId === cb.id;
+              const pathString = renderSmoothPath(routePoints);
+
+              return (
+                <g key={cb.id} onClick={(e) => { e.stopPropagation(); setSelectedCableId(cb.id); setSelectedCompId(null); }}>
+                  <path d={pathString} fill="none" stroke="transparent" strokeWidth="24" style={{ cursor: 'pointer', pointerEvents: 'stroke' }} />
+                  <path d={pathString} fill="none" stroke={isSelected ? '#00e676' : 'rgba(0,0,0,0.55)'} strokeWidth={isSelected ? '7' : '5'} strokeDasharray={isSelected ? '6,4' : 'none'} />
+                  <path d={pathString} fill="none" stroke={color} strokeWidth={isSelected ? '4.5' : '3.5'} strokeLinecap="round" strokeLinejoin="round" />
+                </g>
+              );
+            })}
+          </svg>
+
+          {components.map((comp) => {
+            const isSelected = selectedCompId === comp.id;
+            const isGrid = comp.category.startsWith('REDE_');
+            const isQ = comp.category.startsWith('DISJUNTOR');
+            const isK = comp.category === 'CONTATOR_TRIPOLAR';
+            const isF = comp.category === 'RELE_TERMICO';
+            const isRPF = comp.category === 'RELE_FALTA_FASE';
+            const isAux = comp.category === 'BLOCO_AUXILIAR';
+            const isMotor = comp.category === 'MOTOR_TRIFASICO_6P';
+            const isMotorMono = comp.category === 'MOTOR_MONOFASICO_CAPACITOR';
+            const isCapacitor = comp.category === 'CAPACITOR_ELETROLITICO';
+            const isResistor = comp.category === 'RESISTOR_FREINAGEM';
+            const isSelector = comp.category === 'CHAVE_SELETORA_3POS';
+            const isRegua = comp.category === 'REGUA_BORNES';
+            const isPente = comp.category === 'BARRAMENTO_PENTE';
+            const isLamp = comp.category === 'SINALEIRO_LED';
+            const isTrafo = comp.category === 'TRANSFORMADOR_ISOLADOR';
+            const isLoto = comp.category === 'SECCIONADORA_LOTO';
+            const isSafeRelay = comp.category === 'RELE_SEGURANCA_NR12';
+            const isInterlock = comp.category === 'CHAVE_INTERTRAVAMENTO_NR12';
+            const isBtnNA = comp.category === 'BOTOEIRA_PULSO_NA';
+            const isBtnNF = comp.category === 'BOTOEIRA_COGUMELO_NF';
 
             return (
-              <g key={cb.id} onClick={(e) => { e.stopPropagation(); setSelectedCableId(cb.id); setSelectedCompId(null); }}>
-                <path d={pathString} fill="none" stroke="transparent" strokeWidth="24" style={{ cursor: 'pointer', pointerEvents: 'stroke' }} />
-                <path d={pathString} fill="none" stroke={isSelected ? '#00e676' : 'rgba(0,0,0,0.55)'} strokeWidth={isSelected ? '7' : '5'} strokeDasharray={isSelected ? '6,4' : 'none'} />
-                <path d={pathString} fill="none" stroke={color} strokeWidth={isSelected ? '4.5' : '3.5'} strokeLinecap="round" strokeLinejoin="round" />
-              </g>
-            );
-          })}
-        </svg>
+              <div
+                key={comp.id}
+                onMouseDown={(e) => handleStartDrag(e.clientX, e.clientY, comp.id)}
+                onTouchStart={(e) => {
+                  if (e.touches.length > 0) {
+                    handleStartDrag(e.touches[0].clientX, e.touches[0].clientY, comp.id);
+                  }
+                }}
+                onDoubleClick={(e) => handleDoubleClickComp(e, comp.id)}
+                style={{
+                  position: 'absolute',
+                  left: `${comp.x}px`,
+                  top: `${comp.y}px`,
+                  width: `${comp.width}px`,
+                  height: `${comp.height}px`,
+                  cursor: 'grab',
+                  userSelect: 'none',
+                  touchAction: 'none',
+                  zIndex: 2,
+                  boxSizing: 'border-box',
+                }}
+              >
+                {/* CAIXA DE CONFIGURAÇÃO FLUTUANTE EXTERNA */}
+                <div style={tagSidebarFloatingBox}>
+                  <span style={{ fontSize: '7px', color: '#90a4ae', fontWeight: 'bold' }}>TAG</span>
+                  <input
+                    type="text"
+                    value={comp.tag}
+                    onChange={(e) => handleTagInputChange(comp.id, e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    style={tagInputFieldStyle}
+                  />
 
-        {components.map((comp) => {
-          const isSelected = selectedCompId === comp.id;
-          const isGrid = comp.category.startsWith('REDE_');
-          const isQ = comp.category.startsWith('DISJUNTOR');
-          const isK = comp.category === 'CONTATOR_TRIPOLAR';
-          const isF = comp.category === 'RELE_TERMICO';
-          const isRPF = comp.category === 'RELE_FALTA_FASE';
-          const isAux = comp.category === 'BLOCO_AUXILIAR';
-          const isMotor = comp.category === 'MOTOR_TRIFASICO_6P';
-          const isSelector = comp.category === 'CHAVE_SELETORA_3POS';
-          const isRegua = comp.category === 'REGUA_BORNES';
-          const isPente = comp.category === 'BARRAMENTO_PENTE';
-          const isLamp = comp.category === 'SINALEIRO_LED';
-          const isTrafo = comp.category === 'TRANSFORMADOR_ISOLADOR';
-          const isLoto = comp.category === 'SECCIONADORA_LOTO';
-          const isSafeRelay = comp.category === 'RELE_SEGURANCA_NR12';
-          const isInterlock = comp.category === 'CHAVE_INTERTRAVAMENTO_NR12';
-          const isBtnNA = comp.category === 'BOTOEIRA_PULSO_NA';
-          const isBtnNF = comp.category === 'BOTOEIRA_COGUMELO_NF';
+                  {isQ && comp.currentRating !== undefined && (
+                    <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <span style={{ fontSize: '6px', color: '#38bdf8', fontWeight: 'bold' }}>AMP</span>
+                      <select
+                        value={comp.currentRating}
+                        onChange={(e) => handleCurrentRatingChange(comp.id, Number(e.target.value))}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        style={selectAmperageStyle}
+                      >
+                        {AMPERAGE_OPTIONS.map((amp) => (
+                          <option key={amp} value={amp}>
+                            {String(amp) + 'A'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
-          return (
-            <div
-              key={comp.id}
-              onMouseDown={(e) => handleStartDrag(e.clientX, e.clientY, comp.id)}
-              onTouchStart={(e) => {
-                if (e.touches.length > 0) {
-                  handleStartDrag(e.touches[0].clientX, e.touches[0].clientY, comp.id);
-                }
-              }}
-              onDoubleClick={(e) => handleDoubleClickComp(e, comp.id)}
-              style={{
-                position: 'absolute',
-                left: `${comp.x}px`,
-                top: `${comp.y}px`,
-                width: `${comp.width}px`,
-                height: `${comp.height}px`,
-                cursor: 'grab',
-                userSelect: 'none',
-                touchAction: 'none',
-                zIndex: 2,
-                boxSizing: 'border-box',
-              }}
-            >
-              {/* CAIXA DE CONFIGURAÇÃO FLUTUANTE EXTERNA */}
-              <div style={tagSidebarFloatingBox}>
-                <span style={{ fontSize: '7px', color: '#90a4ae', fontWeight: 'bold' }}>TAG</span>
-                <input
-                  type="text"
-                  value={comp.tag}
-                  onChange={(e) => handleTagInputChange(comp.id, e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onTouchStart={(e) => e.stopPropagation()}
-                  style={tagInputFieldStyle}
-                />
+                  {isLamp && (
+                    <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <span style={{ fontSize: '6px', color: '#ffd600', fontWeight: 'bold' }}>COR</span>
+                      <select
+                        value={comp.lampColor || 'VERDE'}
+                        onChange={(e) => handleLampColorChange(comp.id, e.target.value as LampColor)}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        style={{ ...selectAmperageStyle, color: '#facc15' }}
+                      >
+                        <option value="VERDE">🟢 Verde</option>
+                        <option value="VERMELHO">🔴 Vermelho</option>
+                        <option value="AMARELO">🟡 Amarelo</option>
+                        <option value="AZUL">🔵 Azul</option>
+                        <option value="BRANCO">⚪ Branco</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
 
-                {isQ && comp.currentRating !== undefined && (
-                  <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ fontSize: '6px', color: '#38bdf8', fontWeight: 'bold' }}>AMPERES</span>
-                    <select
-                      value={comp.currentRating}
-                      onChange={(e) => handleCurrentRatingChange(comp.id, Number(e.target.value))}
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      style={selectAmperageStyle}
-                    >
-                      {AMPERAGE_OPTIONS.map((amp) => (
-                        <option key={amp} value={amp}>
-                          {String(amp) + ' A'}
-                        </option>
-                      ))}
-                    </select>
+                {isPente && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#334155' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '9px', color: '#38bdf8' }}>PENTE 3F</strong>
+                      <span style={{ fontSize: '8px', color: '#fff' }}>{comp.tag}</span>
+                    </div>
+                    <span style={{ fontSize: '8px', color: '#94a3b8', textAlign: 'center', marginTop: '6px' }}>Barramento R-S-T</span>
                   </div>
                 )}
 
+                {isRegua && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#1e293b' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '9px', color: '#00e676' }}>BORNES DIN</strong>
+                      <span style={{ fontSize: '8px', color: '#94a3b8' }}>{comp.tag}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '8px', color: '#cbd5e1', marginTop: '6px' }}>
+                      <span>X1</span><span>X2</span><span>X3</span><span>X4</span>
+                    </div>
+                  </div>
+                )}
+
+                {isSelector && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '8px', color: '#0288d1' }}>SELETORA</strong>
+                      <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '8px 0' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleSelectorToggle(comp.id); }}
+                        style={{
+                          ...btnRelayActionStyle,
+                          background: comp.selectorPosition === '0' ? '#475569' : '#0288d1',
+                          padding: '4px 8px',
+                          fontSize: '9px',
+                        }}
+                      >
+                        {comp.selectorPosition === 'MAN' && '👈 MAN'}
+                        {comp.selectorPosition === '0' && '⚪ 0'}
+                        {comp.selectorPosition === 'AUT' && '👉 AUT'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {isGrid && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#263238', borderColor: '#ff9800' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '9px', color: '#ffb74d' }}>ALIMENTAÇÃO</strong>
+                      <span style={{ fontSize: '9px', color: '#fff', fontWeight: 'bold' }}>{comp.tag}</span>
+                    </div>
+                    <span style={{ fontSize: '8px', color: '#cfd8dc', textAlign: 'center', marginTop: '4px' }}>
+                      {comp.name}
+                    </span>
+                  </div>
+                )}
+
+                {/* TRANSFORMADOR ISOLADOR 24V */}
+                {isTrafo && (
+                  <div style={{ ...canvaCardBase, borderColor: '#00e676', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '8px', color: '#2e7d32' }}>TRAFO 24V</strong>
+                      <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
+                    </div>
+                    <div style={{ textAlign: 'center', margin: '6px 0' }}>
+                      <span style={{ fontSize: '8px', color: '#00e676', fontWeight: 'bold' }}>SELV / PELV</span>
+                    </div>
+                    <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                  </div>
+                )}
+
+                {/* CHAVE SECCIONADORA LOTO */}
+                {isLoto && (
+                  <div style={{ ...canvaCardBase, borderColor: '#ef5350', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '8px', color: '#c62828' }}>LOTO NR-10</strong>
+                      <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
+                    </div>
+                    <div style={wegLeverSlotStyle}>
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setComponents((prev) =>
+                            prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
+                          );
+                        }}
+                        style={{
+                          ...wegLeverHandleStyle,
+                          top: comp.state ? '4px' : '40px',
+                          background: comp.state ? '#2e7d32' : '#c62828',
+                        }}
+                      >
+                        <span style={{ fontSize: '8px', color: '#fff', fontWeight: 'bold' }}>
+                          {comp.state ? 'I ON' : 'O OFF'}
+                        </span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                  </div>
+                )}
+
+                {/* RELÉ DE SEGURANÇA (NR-12) */}
+                {isSafeRelay && (
+                  <div style={{ ...canvaCardBase, borderColor: '#ffd600', background: '#fffde7', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '8px', color: '#f57f17' }}>RELÉ NR-12</strong>
+                      <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', margin: '4px 0' }}>
+                      <span style={{ fontSize: '8px', color: comp.tripped ? '#d32f2f' : '#2e7d32', fontWeight: 'bold' }}>
+                        {comp.tripped ? 'EMERGÊNCIA' : 'SEGURO'}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setComponents((prev) =>
+                            prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c))
+                          );
+                        }}
+                        style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#37474f' }}
+                      >
+                        {comp.tripped ? 'Rearmar' : 'Falha'}
+                      </button>
+                    </div>
+                    <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                  </div>
+                )}
+
+                {/* CHAVE DE INTERTRAVAMENTO (NR-12) */}
+                {isInterlock && (
+                  <div style={{ ...canvaCardBase, borderColor: '#fbc02d', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '8px', color: '#f57f17' }}>INTERTRAV.</strong>
+                      <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setComponents((prev) =>
+                            prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
+                          );
+                        }}
+                        style={{ ...btnRelayActionStyle, background: comp.state ? '#2e7d32' : '#c62828' }}
+                      >
+                        {comp.state ? 'FECHADA' : 'ABERTA'}
+                      </button>
+                    </div>
+                    <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                  </div>
+                )}
+
+                {/* DISJUNTORES 2D EXATOS DA IMAGEM */}
+                {isQ && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#fdfdfd' }}>
+                    <div style={esquematicoTopTagStyle}>
+                      <span style={{ fontSize: '8px', color: '#ffffff', fontWeight: 'bold', fontFamily: 'monospace' }}>
+                        {'C' + String(comp.currentRating || 16)}
+                      </span>
+                    </div>
+
+                    <div style={esquematicoLeverSlot}>
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setComponents((prev) =>
+                            prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
+                          );
+                        }}
+                        style={{
+                          ...esquematicoRedLeverHandle,
+                          top: comp.state ? '4px' : '38px',
+                        }}
+                        title="Clique para alternar ON/OFF"
+                      />
+                    </div>
+
+                    <div style={esquematicoSymbolBoxStyle}>
+                      <div
+                        style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          background: comp.state ? '#ef4444' : '#22c55e',
+                          margin: '0 auto 2px auto',
+                        }}
+                      />
+                      <span style={{ fontSize: '7px', color: '#475569', fontWeight: 'bold', textAlign: 'center' }}>
+                        {comp.tag}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* CONTATOR TRIPOLAR ESTILO CANVA */}
+                {isK && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#e2e8f0' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '9px', color: '#005ea6' }}>WEG</strong>
+                      <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
+                    </div>
+
+                    <div style={contactorCoreIndicator}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '14px',
+                          background: comp.state ? '#00e676' : '#263238',
+                          borderRadius: '2px',
+                          boxShadow: comp.state ? '0 0 10px #00e676' : 'none',
+                        }}
+                      />
+                      <span style={{ fontSize: '8px', color: comp.state ? '#00e676' : '#37474f', fontWeight: 'bold' }}>
+                        {comp.state ? 'ATRACADO' : 'ABERTO'}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '8px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
+                  </div>
+                )}
+
+                {/* RELÉ TÉRMICO ESTILO CANVA */}
+                {isF && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '8px', color: '#d32f2f' }}>RW27</strong>
+                      <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', margin: '6px 0' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setComponents((prev) =>
+                            prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c))
+                          );
+                        }}
+                        style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#b71c1c' }}
+                      >
+                        {comp.tripped ? 'TRIP' : 'TEST'}
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%', background: '#b0bec5', padding: '1px 0', borderRadius: '2px' }}>
+                      <span style={{ fontSize: '7px', color: '#1a237e', fontWeight: 'bold' }}>95 96 NC</span>
+                      <span style={{ fontSize: '7px', color: '#b71c1c', fontWeight: 'bold' }}>97 98 NO</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* RELÉ FALTA DE FASE */}
+                {isRPF && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '8px', color: '#0288d1' }}>RPF-01</strong>
+                      <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', margin: '4px 0' }}>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: comp.state && !comp.tripped ? '#00e676' : '#263238' }} />
+                        <span style={{ fontSize: '7px', color: '#37474f' }}>PWR</span>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: comp.tripped ? '#ff1744' : '#263238' }} />
+                        <span style={{ fontSize: '7px', color: '#37474f' }}>FALHA</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* BLOCO AUXILIAR */}
+                {isAux && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f1f5f9' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '8px', color: '#005ea6' }}>BLOCO AUX</strong>
+                      <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', margin: '6px 0' }}>
+                      <span style={{ fontSize: '7px', color: '#455a64' }}>Com {comp.tag}</span>
+                      <span style={{ fontSize: '8px', color: comp.state ? '#00e676' : '#90a4ae', fontWeight: 'bold' }}>
+                        {comp.state ? '13-14 ON' : '21-22 ON'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* MOTOR 3D/2D TRIFÁSICO */}
+                {isMotor && (
+                  <div style={{ ...motorRealisticWrapperStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                    <div style={motorFinHousingStyle}>
+                      <div style={motorSideFinLeft} />
+                      <div style={motorSideFinRight} />
+                      <div style={motorRotorCapStyle}>
+                        <div
+                          style={{
+                            ...motorShaftCenterStyle,
+                            background: comp.state
+                              ? 'conic-gradient(from 0deg, #00e676, #004d40, #00e676)'
+                              : '#546e7a',
+                            animation: comp.state ? 'spin 0.5s linear infinite' : 'none',
+                          }}
+                        />
+                      </div>
+                      <div style={motorBaseFeetStyle} />
+                    </div>
+
+                    <div style={motorTerminalBoardStyle}>
+                      <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%' }}>
+                        <span style={{ fontSize: '8px', color: '#81d4fa', fontWeight: 'bold' }}>U1 V1 W1</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%', marginTop: '30px' }}>
+                        <span style={{ fontSize: '8px', color: '#ffd600', fontWeight: 'bold' }}>W2 U2 V2</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* MOTOR MONOFÁSICO COM CAPACITOR */}
+                {isMotorMono && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#1e293b', borderColor: '#38bdf8' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '9px', color: '#38bdf8' }}>MOTOR MONO (CAP)</strong>
+                      <span style={{ fontSize: '8px', color: '#fff' }}>{comp.tag}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 0' }}>
+                      <div
+                        style={{
+                          width: '45px',
+                          height: '45px',
+                          borderRadius: '50%',
+                          background: comp.state ? 'conic-gradient(from 0deg, #38bdf8, #0369a1, #38bdf8)' : '#334155',
+                          border: '3px solid #64748b',
+                          animation: comp.state ? 'spin 0.6s linear infinite' : 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#fff' }} />
+                      </div>
+                      <span style={{ fontSize: '8px', color: comp.state ? '#38bdf8' : '#94a3b8', fontWeight: 'bold', marginTop: '6px' }}>
+                        {comp.state ? '⚡ GIRANDO (220V)' : '⏸️ PARADO'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* CAPACITOR ELETROLÍTICO / DE PARTIDA */}
+                {isCapacitor && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f8fafc', borderColor: '#eab308' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '9px', color: '#ca8a04' }}>CAPACITOR</strong>
+                      <span style={{ fontSize: '8px', color: '#334155' }}>{comp.tag}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '6px' }}>
+                      <div style={{ width: '28px', height: '36px', background: '#1e293b', borderRadius: '6px', border: '2px solid #eab308', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: '8px', color: '#fde047', fontWeight: 'bold' }}>+ C -</span>
+                      </div>
+                      <span style={{ fontSize: '7px', color: '#475569', marginTop: '4px', fontWeight: 'bold' }}>50µF / 250V</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* RESISTOR DE FREINAGEM */}
+                {isResistor && (
+                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f8fafc', borderColor: '#f97316' }}>
+                    <div style={compHeaderStyle}>
+                      <strong style={{ fontSize: '9px', color: '#c2410c' }}>RESISTOR FREIO</strong>
+                      <span style={{ fontSize: '8px', color: '#334155' }}>{comp.tag}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '6px' }}>
+                      <div style={{ width: '60px', height: '18px', background: '#b45309', borderRadius: '3px', border: '1px solid #78350f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: '7px', color: '#fff', fontWeight: 'bold' }}>~~~ 100R / 300W</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* SINALEIRO LED COM TROCA DE CORES */}
                 {isLamp && (
-                  <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ fontSize: '6px', color: '#ffd600', fontWeight: 'bold' }}>COR</span>
-                    <select
-                      value={comp.lampColor || 'VERDE'}
-                      onChange={(e) => handleLampColorChange(comp.id, e.target.value as LampColor)}
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      style={{ ...selectAmperageStyle, color: '#facc15' }}
-                    >
-                      <option value="VERDE">🟢 Verde</option>
-                      <option value="VERMELHO">🔴 Vermelho</option>
-                      <option value="AMARELO">🟡 Amarelo</option>
-                      <option value="AZUL">🔵 Azul</option>
-                      <option value="BRANCO">⚪ Branco</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-
-              {/* BARRAMENTO PENTE ESTILO CANVA */}
-              {isPente && (
-                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#334155' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#38bdf8' }}>PENTE 3F</strong>
-                    <span style={{ fontSize: '8px', color: '#fff' }}>{comp.tag}</span>
-                  </div>
-                  <span style={{ fontSize: '8px', color: '#94a3b8', textAlign: 'center', marginTop: '6px' }}>Barramento R-S-T</span>
-                </div>
-              )}
-
-              {/* RÉGUA DE BORNES ESTILO CANVA */}
-              {isRegua && (
-                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#1e293b' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#00e676' }}>BORNES DIN</strong>
-                    <span style={{ fontSize: '8px', color: '#94a3b8' }}>{comp.tag}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '8px', color: '#cbd5e1', marginTop: '6px' }}>
-                    <span>X1</span><span>X2</span><span>X3</span><span>X4</span>
-                  </div>
-                </div>
-              )}
-
-              {/* CHAVE SELETORA 3 POSIÇÕES ESTILO CANVA */}
-              {isSelector && (
-                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '8px', color: '#0288d1' }}>SELETORA</strong>
-                    <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '8px 0' }}>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleSelectorToggle(comp.id); }}
+                  <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                    <div
                       style={{
-                        ...btnRelayActionStyle,
-                        background: comp.selectorPosition === '0' ? '#475569' : '#0288d1',
-                        padding: '4px 8px',
-                        fontSize: '9px',
+                        ...circularBezelStyle,
+                        background: comp.state
+                          ? (LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).on
+                          : (LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).off,
+                        boxShadow: comp.state ? (LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).glow : 'inset 0 0 10px rgba(0,0,0,0.8)',
                       }}
                     >
-                      {comp.selectorPosition === 'MAN' && '👈 MAN'}
-                      {comp.selectorPosition === '0' && '⚪ 0'}
-                      {comp.selectorPosition === 'AUT' && '👉 AUT'}
-                    </button>
+                      <span style={{ fontSize: '8px', color: comp.state ? '#000' : '#cbd5e1', fontWeight: 'bold' }}>
+                        {comp.state ? 'ON' : 'OFF'}
+                      </span>
+                    </div>
+                    <span style={deviceTagLabel}>{comp.tag} ({(LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).label})</span>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* REDE DE ALIMENTAÇÃO ESTILO CANVA */}
-              {isGrid && (
-                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#263238', borderColor: '#ff9800' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#ffb74d' }}>ALIMENTAÇÃO</strong>
-                    <span style={{ fontSize: '9px', color: '#fff', fontWeight: 'bold' }}>{comp.tag}</span>
+                {/* BOTOEIRA NA */}
+                {isBtnNA && (
+                  <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: true } : c)));
+                      }}
+                      onMouseUp={(e) => {
+                        e.stopPropagation();
+                        setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: false } : c)));
+                      }}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                        setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: true } : c)));
+                      }}
+                      onTouchEnd={(e) => {
+                        e.stopPropagation();
+                        setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: false } : c)));
+                      }}
+                      style={{
+                        ...circularBezelStyle,
+                        background: comp.state ? '#22c55e' : '#15803d',
+                        transform: comp.state ? 'scale(0.92)' : 'scale(1)',
+                        boxShadow: comp.state
+                          ? '0 0 16px rgba(34,197,94,0.8), inset 0 0 8px rgba(0,0,0,0.6)'
+                          : 'inset 0 0 10px rgba(0,0,0,0.8), 0 4px 10px rgba(0,0,0,0.5)',
+                      }}
+                    >
+                      <span style={{ fontSize: '9px', color: '#fff', fontWeight: 'bold' }}>LIGA</span>
+                    </div>
+                    <span style={deviceTagLabel}>{comp.tag}</span>
                   </div>
-                  <span style={{ fontSize: '8px', color: '#cfd8dc', textAlign: 'center', marginTop: '4px' }}>
-                    {comp.name}
-                  </span>
-                </div>
-              )}
+                )}
 
-              {/* TRANSFORMADOR ISOLADOR 24V */}
-              {isTrafo && (
-                <div style={{ ...canvaCardBase, borderColor: '#00e676', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '8px', color: '#2e7d32' }}>TRAFO 24V</strong>
-                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-                  <div style={{ textAlign: 'center', margin: '6px 0' }}>
-                    <span style={{ fontSize: '8px', color: '#00e676', fontWeight: 'bold' }}>SELV / PELV</span>
-                  </div>
-                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                </div>
-              )}
-
-              {/* CHAVE SECCIONADORA LOTO */}
-              {isLoto && (
-                <div style={{ ...canvaCardBase, borderColor: '#ef5350', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '8px', color: '#c62828' }}>LOTO NR-10</strong>
-                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-                  <div style={wegLeverSlotStyle}>
+                {/* BOTOEIRA NF */}
+                {isBtnNF && (
+                  <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                     <div
                       onClick={(e) => {
                         e.stopPropagation();
-                        setComponents((prev) =>
-                          prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
-                        );
+                        setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c)));
                       }}
                       style={{
-                        ...wegLeverHandleStyle,
-                        top: comp.state ? '4px' : '40px',
-                        background: comp.state ? '#2e7d32' : '#c62828',
+                        ...circularBezelStyle,
+                        background: comp.state ? '#ef4444' : '#334155',
+                        boxShadow: comp.state
+                          ? '0 0 16px rgba(239,68,68,0.6), inset 0 0 8px rgba(0,0,0,0.6)'
+                          : 'inset 0 0 10px rgba(0,0,0,0.8), 0 4px 10px rgba(0,0,0,0.5)',
                       }}
                     >
                       <span style={{ fontSize: '8px', color: '#fff', fontWeight: 'bold' }}>
-                        {comp.state ? 'I ON' : 'O OFF'}
+                        {comp.state ? 'STOP' : 'TRAV'}
                       </span>
                     </div>
+                    <span style={deviceTagLabel}>{comp.tag}</span>
                   </div>
-                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                </div>
-              )}
+                )}
 
-              {/* RELÉ DE SEGURANÇA (NR-12) */}
-              {isSafeRelay && (
-                <div style={{ ...canvaCardBase, borderColor: '#ffd600', background: '#fffde7', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '8px', color: '#f57f17' }}>RELÉ NR-12</strong>
-                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', margin: '4px 0' }}>
-                    <span style={{ fontSize: '8px', color: comp.tripped ? '#d32f2f' : '#2e7d32', fontWeight: 'bold' }}>
-                      {comp.tripped ? 'EMERGÊNCIA' : 'SEGURO'}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setComponents((prev) =>
-                          prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c))
-                        );
-                      }}
-                      style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#37474f' }}
-                    >
-                      {comp.tripped ? 'Rearmar' : 'Falha'}
-                    </button>
-                  </div>
-                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                </div>
-              )}
+                {/* BORNES DE CONEXÃO */}
+                {comp.terminals?.map((t) => {
+                  const isOrigin = wiringOrigin?.compId === comp.id && wiringOrigin?.termId === t.id;
+                  const isRedProbeAttached = redProbe?.compId === comp.id && redProbe?.termId === t.id;
+                  const isBlackProbeAttached = blackProbe?.compId === comp.id && blackProbe?.termId === t.id;
 
-              {/* CHAVE DE INTERTRAVAMENTO (NR-12) */}
-              {isInterlock && (
-                <div style={{ ...canvaCardBase, borderColor: '#fbc02d', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '8px', color: '#f57f17' }}>INTERTRAV.</strong>
-                    <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0' }}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setComponents((prev) =>
-                          prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
-                        );
-                      }}
-                      style={{ ...btnRelayActionStyle, background: comp.state ? '#2e7d32' : '#c62828' }}
-                    >
-                      {comp.state ? 'FECHADA' : 'ABERTA'}
-                    </button>
-                  </div>
-                  <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                </div>
-              )}
-
-              {/* DISJUNTORES 2D ESTILO CANVA */}
-              {isQ && (
-                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#005ea6' }}>WEG</strong>
-                    <span style={{ fontSize: '8px', color: '#005ea6', fontWeight: 'bold' }}>
-                      {'C' + String(comp.currentRating || 16)}
-                    </span>
-                  </div>
-
-                  <div style={wegLeverSlotStyle}>
+                  return (
                     <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setComponents((prev) =>
-                          prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
-                        );
-                      }}
+                      key={t.id}
+                      onClick={(e) => handleTerminalClick(e, comp.id, t.id)}
+                      onTouchEnd={(e) => handleTerminalClick(e, comp.id, t.id)}
                       style={{
-                        ...wegLeverHandleStyle,
-                        top: comp.state ? '4px' : '40px',
-                        background: comp.state ? '#22c55e' : '#ef4444',
+                        ...screwPoleStyle,
+                        left: `${t.relX}%`,
+                        top: `${t.relY}%`,
+                        borderColor: isRedProbeAttached
+                          ? '#ef4444'
+                          : isBlackProbeAttached
+                          ? '#000'
+                          : isOrigin
+                          ? '#00e676'
+                          : '#94a3b8',
+                        background: isRedProbeAttached
+                          ? '#ef4444'
+                          : isBlackProbeAttached
+                          ? '#0f172a'
+                          : isOrigin
+                          ? '#00e676'
+                          : '#334155',
+                        boxShadow: isRedProbeAttached
+                          ? '0 0 10px #ef4444'
+                          : isBlackProbeAttached
+                          ? '0 0 10px #000'
+                          : '0 2px 4px rgba(0,0,0,0.4)',
                       }}
+                      title={`Borne ${t.name}`}
                     >
-                      <span style={{ fontSize: '7px', color: '#fff', fontWeight: 'bold' }}>
-                        {comp.state ? 'I ON' : 'O OFF'}
-                      </span>
+                      <span style={terminalSubscriptLabel}>{t.name}</span>
                     </div>
-                  </div>
-                  <span style={{ fontSize: '8px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>
-                    {comp.name + ' - C' + String(comp.currentRating || 16) + 'A'}
-                  </span>
-                </div>
-              )}
-
-              {/* CONTATOR TRIPOLAR ESTILO CANVA */}
-              {isK && (
-                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#e2e8f0' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '9px', color: '#005ea6' }}>WEG</strong>
-                    <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-
-                  <div style={contactorCoreIndicator}>
-                    <div
-                      style={{
-                        width: '36px',
-                        height: '14px',
-                        background: comp.state ? '#00e676' : '#263238',
-                        borderRadius: '2px',
-                        boxShadow: comp.state ? '0 0 10px #00e676' : 'none',
-                      }}
-                    />
-                    <span style={{ fontSize: '8px', color: comp.state ? '#00e676' : '#37474f', fontWeight: 'bold' }}>
-                      {comp.state ? 'ATRACADO' : 'ABERTO'}
-                    </span>
-                  </div>
-                  <span style={{ fontSize: '8px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                </div>
-              )}
-
-              {/* RELÉ TÉRMICO ESTILO CANVA */}
-              {isF && (
-                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '8px', color: '#d32f2f' }}>RW27</strong>
-                    <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', margin: '6px 0' }}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setComponents((prev) =>
-                          prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c))
-                        );
-                      }}
-                      style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#b71c1c' }}
-                    >
-                      {comp.tripped ? 'TRIP' : 'TEST'}
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%', background: '#b0bec5', padding: '1px 0', borderRadius: '2px' }}>
-                    <span style={{ fontSize: '7px', color: '#1a237e', fontWeight: 'bold' }}>95 96 NC</span>
-                    <span style={{ fontSize: '7px', color: '#b71c1c', fontWeight: 'bold' }}>97 98 NO</span>
-                  </div>
-                </div>
-              )}
-
-              {/* RELÉ FALTA DE FASE */}
-              {isRPF && (
-                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '8px', color: '#0288d1' }}>RPF-01</strong>
-                    <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', margin: '4px 0' }}>
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: comp.state && !comp.tripped ? '#00e676' : '#263238' }} />
-                      <span style={{ fontSize: '7px', color: '#37474f' }}>PWR</span>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: comp.tripped ? '#ff1744' : '#263238' }} />
-                      <span style={{ fontSize: '7px', color: '#37474f' }}>FALHA</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* BLOCO AUXILIAR */}
-              {isAux && (
-                <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f1f5f9' }}>
-                  <div style={compHeaderStyle}>
-                    <strong style={{ fontSize: '8px', color: '#005ea6' }}>BLOCO AUX</strong>
-                    <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', margin: '6px 0' }}>
-                    <span style={{ fontSize: '7px', color: '#455a64' }}>Com {comp.tag}</span>
-                    <span style={{ fontSize: '8px', color: comp.state ? '#00e676' : '#90a4ae', fontWeight: 'bold' }}>
-                      {comp.state ? '13-14 ON' : '21-22 ON'}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* MOTOR 2D ESTILO VETORIAL CANVA */}
-              {isMotor && (
-                <div style={{ ...motorRealisticWrapperStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div style={motorFinHousingStyle}>
-                    <div style={motorSideFinLeft} />
-                    <div style={motorSideFinRight} />
-                    <div style={motorRotorCapStyle}>
-                      <div
-                        style={{
-                          ...motorShaftCenterStyle,
-                          background: comp.state
-                            ? 'conic-gradient(from 0deg, #00e676, #004d40, #00e676)'
-                            : '#546e7a',
-                          animation: comp.state ? 'spin 0.5s linear infinite' : 'none',
-                        }}
-                      />
-                    </div>
-                    <div style={motorBaseFeetStyle} />
-                  </div>
-
-                  <div style={motorTerminalBoardStyle}>
-                    <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%' }}>
-                      <span style={{ fontSize: '8px', color: '#81d4fa', fontWeight: 'bold' }}>U1 V1 W1</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%', marginTop: '30px' }}>
-                      <span style={{ fontSize: '8px', color: '#ffd600', fontWeight: 'bold' }}>W2 U2 V2</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SINALEIRO LED COM TROCA DE CORES */}
-              {isLamp && (
-                <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div
-                    style={{
-                      ...circularBezelStyle,
-                      background: comp.state
-                        ? (LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).on
-                        : (LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).off,
-                      boxShadow: comp.state ? (LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).glow : 'inset 0 0 10px rgba(0,0,0,0.8)',
-                    }}
-                  >
-                    <span style={{ fontSize: '8px', color: comp.state ? '#000' : '#cbd5e1', fontWeight: 'bold' }}>
-                      {comp.state ? 'ON' : 'OFF'}
-                    </span>
-                  </div>
-                  <span style={deviceTagLabel}>{comp.tag} ({(LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'] || LAMP_COLOR_CONFIG.VERDE).label})</span>
-                </div>
-              )}
-
-              {/* BOTOEIRA NA */}
-              {isBtnNA && (
-                <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: true } : c)));
-                    }}
-                    onMouseUp={(e) => {
-                      e.stopPropagation();
-                      setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: false } : c)));
-                    }}
-                    onTouchStart={(e) => {
-                      e.stopPropagation();
-                      setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: true } : c)));
-                    }}
-                    onTouchEnd={(e) => {
-                      e.stopPropagation();
-                      setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: false } : c)));
-                    }}
-                    style={{
-                      ...circularBezelStyle,
-                      background: comp.state ? '#22c55e' : '#15803d',
-                      transform: comp.state ? 'scale(0.92)' : 'scale(1)',
-                      boxShadow: comp.state
-                        ? '0 0 16px rgba(34,197,94,0.8), inset 0 0 8px rgba(0,0,0,0.6)'
-                        : 'inset 0 0 10px rgba(0,0,0,0.8), 0 4px 10px rgba(0,0,0,0.5)',
-                    }}
-                  >
-                    <span style={{ fontSize: '9px', color: '#fff', fontWeight: 'bold' }}>LIGA</span>
-                  </div>
-                  <span style={deviceTagLabel}>{comp.tag}</span>
-                </div>
-              )}
-
-              {/* BOTOEIRA NF */}
-              {isBtnNF && (
-                <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c)));
-                    }}
-                    style={{
-                      ...circularBezelStyle,
-                      background: comp.state ? '#ef4444' : '#334155',
-                      boxShadow: comp.state
-                        ? '0 0 16px rgba(239,68,68,0.6), inset 0 0 8px rgba(0,0,0,0.6)'
-                        : 'inset 0 0 10px rgba(0,0,0,0.8), 0 4px 10px rgba(0,0,0,0.5)',
-                    }}
-                  >
-                    <span style={{ fontSize: '8px', color: '#fff', fontWeight: 'bold' }}>
-                      {comp.state ? 'STOP' : 'TRAV'}
-                    </span>
-                  </div>
-                  <span style={deviceTagLabel}>{comp.tag}</span>
-                </div>
-              )}
-
-              {/* BORNES DE CONEXÃO */}
-              {comp.terminals?.map((t) => {
-                const isOrigin = wiringOrigin?.compId === comp.id && wiringOrigin?.termId === t.id;
-                const isRedProbeAttached = redProbe?.compId === comp.id && redProbe?.termId === t.id;
-                const isBlackProbeAttached = blackProbe?.compId === comp.id && blackProbe?.termId === t.id;
-
-                return (
-                  <div
-                    key={t.id}
-                    onClick={(e) => handleTerminalClick(e, comp.id, t.id)}
-                    onTouchEnd={(e) => handleTerminalClick(e, comp.id, t.id)}
-                    style={{
-                      ...screwPoleStyle,
-                      left: `${t.relX}%`,
-                      top: `${t.relY}%`,
-                      borderColor: isRedProbeAttached
-                        ? '#ef4444'
-                        : isBlackProbeAttached
-                        ? '#000'
-                        : isOrigin
-                        ? '#00e676'
-                        : '#94a3b8',
-                      background: isRedProbeAttached
-                        ? '#ef4444'
-                        : isBlackProbeAttached
-                        ? '#0f172a'
-                        : isOrigin
-                        ? '#00e676'
-                        : '#334155',
-                      boxShadow: isRedProbeAttached
-                        ? '0 0 10px #ef4444'
-                        : isBlackProbeAttached
-                        ? '0 0 10px #000'
-                        : '0 2px 4px rgba(0,0,0,0.4)',
-                    }}
-                    title={`Borne ${t.name}`}
-                  >
-                    <span style={terminalSubscriptLabel}>{t.name}</span>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{ padding: '50px', textAlign: 'center', color: '#94a3b8', background: '#13171d', borderRadius: '10px', border: '1px dashed #334155' }}>
+          🔒 <strong>Painel de comandos bloqueado pelo Administrador.</strong> Clique no botão no topo para liberar a bancada.
+        </div>
+      )}
 
       {/* 3. VISUALIZADOR MECÂNICO 3D */}
       <div style={bottomVisualizerRowStyle}>
@@ -1601,17 +1757,14 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
         <div style={guideCardStyle}>
           <strong style={{ fontSize: '12px', color: '#00e676' }}>
-            ⚡ Bancada de Comandos (Estilo Canva 2D):
+            ⚡ Bancada com Controle de Admin e Novos Cargas:
           </strong>
           <ul style={{ fontSize: '11px', color: '#cfd8dc', margin: '6px 0 0 16px', lineHeight: '1.6' }}>
             <li>
-              <strong>Design Ilustrado e Preciso:</strong> Modelos 2D otimizados para desenho didático vetorial estilo apostila técnica e Canva.
+              <strong>Modo Administrador:</strong> Use o botão verde/vermelho no topo para bloquear ou liberar a visualização da bancada para os alunos.
             </li>
             <li>
-              <strong>Controle Exclusivo de Amperagem:</strong> Altere a corrente nominal nos disjuntores e troque as cores dos sinaleiros em tempo real.
-            </li>
-            <li>
-              <strong>Multímetro Integrado:</strong> Medições de tensão, corrente e teste de continuidade com bip.
+              <strong>Capacitores e Resistores:</strong> Adicione componentes de frenagem e correção de fator de potência pelo catálogo.
             </li>
           </ul>
         </div>
@@ -1954,7 +2107,6 @@ const selectAmperageStyle: React.CSSProperties = {
   outline: 'none',
 };
 
-// ESTILO BASE CANVA PARA EQUIPAMENTOS 2D VETORIAIS
 const canvaCardBase: React.CSSProperties = {
   width: '100%',
   height: '100%',
@@ -1967,6 +2119,53 @@ const canvaCardBase: React.CSSProperties = {
   padding: '8px 6px',
   boxSizing: 'border-box',
   boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+};
+
+const esquematicoTopTagStyle: React.CSSProperties = {
+  width: '100%',
+  height: '18px',
+  background: '#dc2626',
+  borderRadius: '3px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+};
+
+const esquematicoLeverSlot: React.CSSProperties = {
+  position: 'relative',
+  width: '26px',
+  height: '60px',
+  background: '#e2e8f0',
+  borderRadius: '4px',
+  margin: '0 auto',
+  border: '1px solid #cbd5e1',
+  boxShadow: 'inset 0 0 6px rgba(0,0,0,0.15)',
+};
+
+const esquematicoRedLeverHandle: React.CSSProperties = {
+  position: 'absolute',
+  left: '2px',
+  width: '20px',
+  height: '18px',
+  borderRadius: '3px',
+  background: '#ef4444',
+  border: '1px solid #b91c1c',
+  cursor: 'pointer',
+  transition: 'top 0.15s ease',
+  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+};
+
+const esquematicoSymbolBoxStyle: React.CSSProperties = {
+  width: '100%',
+  background: '#ffffff',
+  border: '1px solid #e2e8f0',
+  borderRadius: '4px',
+  padding: '4px 2px',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
 };
 
 const motorRealisticWrapperStyle: React.CSSProperties = {
@@ -1989,7 +2188,6 @@ const motorFinHousingStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  boxShadow: '0 6px 16px rgba(0,0,0,0.5)',
 };
 
 const motorSideFinLeft: React.CSSProperties = {
@@ -2053,7 +2251,7 @@ const motorTerminalBoardStyle: React.CSSProperties = {
 
 const btnRelayActionStyle: React.CSSProperties = {
   border: 'none',
-  borderRadius: '4px',
+  borderRadius: '3px',
   color: '#fff',
   padding: '4px 8px',
   fontSize: '8px',
@@ -2099,7 +2297,6 @@ const wegLeverHandleStyle: React.CSSProperties = {
   justifyContent: 'center',
   cursor: 'pointer',
   transition: 'top 0.15s ease',
-  boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
 };
 
 const circularDeviceContainer: React.CSSProperties = {
@@ -2113,8 +2310,8 @@ const circularDeviceContainer: React.CSSProperties = {
 };
 
 const circularBezelStyle: React.CSSProperties = {
-  width: '52px',
-  height: '52px',
+  width: '50px',
+  height: '50px',
   borderRadius: '50%',
   border: '4px solid #cbd5e1',
   display: 'flex',
@@ -2174,3 +2371,4 @@ const guideCardStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
 };
+
