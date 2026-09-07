@@ -10,6 +10,20 @@ import {
   RealisticEmergencyButton,
   RealisticSelectorSwitch,
   RealisticPilotLight,
+  RealisticPhaseFailureRelay,
+  RealisticSafetyRelay,
+  RealisticLotoSwitch,
+  RealisticAuxBlock,
+  RealisticTransformer,
+  RealisticTerminalBlock,
+  RealisticBusbar,
+  RealisticGrid3P,
+  RealisticGrid1P,
+  RealisticInterlockSwitch,
+  RealisticMotor3Phase,
+  RealisticMotorSingle,
+  RealisticCapacitor,
+  RealisticBrakingResistor,
 } from './RealisticComponents';
 
 export type ComponentCategory =
@@ -879,6 +893,52 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 110;
       height = 100;
       terminals = [tPole('B1', 'B1', 25, 50, 'FORCA'), tPole('B2', 'B2', 75, 50, 'FORCA')];
+    } else if (category === 'REDE_TRIFASICA') {
+      tag = `GRID3-${count}`;
+      name = 'Rede Trifásica 380V';
+      width = 140;
+      height = 80;
+      terminals = [
+        tPole('R', 'R', 18, 80, 'FORCA'),
+        tPole('S', 'S', 38, 80, 'FORCA'),
+        tPole('T', 'T', 58, 80, 'FORCA'),
+        tPole('N', 'N', 78, 80),
+        tPole('PE', 'PE', 92, 80, 'TERRA'),
+      ];
+    } else if (category === 'REDE_MONOFASICA') {
+      tag = `GRID1-${count}`;
+      name = 'Rede Monofásica 220V';
+      width = 120;
+      height = 80;
+      terminals = [
+        tPole('F', 'F', 25, 80),
+        tPole('N', 'N', 55, 80),
+        tPole('PE', 'PE', 85, 80, 'TERRA'),
+      ];
+    } else if (category === 'RELE_FALTA_FASE') {
+      tag = `RPF${count}`;
+      name = 'Relé Falta de Fase RPF-01';
+      width = 65;
+      height = 135;
+      terminals = [
+        tPole('R', 'R', 25, 8, 'FORCA'),
+        tPole('S', 'S', 50, 8, 'FORCA'),
+        tPole('T', 'T', 75, 8, 'FORCA'),
+        tPole('95', '95', 25, 92),
+        tPole('96', '96', 50, 92),
+        tPole('98', '98', 75, 92),
+      ];
+    } else if (category === 'BLOCO_AUXILIAR') {
+      tag = `KA${count}`;
+      name = 'Bloco de Contatos Auxiliares';
+      width = 85;
+      height = 95;
+      terminals = [
+        tPole('13', '13', 30, 10),
+        tPole('14', '14', 70, 10),
+        tPole('21', '21', 30, 90),
+        tPole('22', '22', 70, 90),
+      ];
     } else {
       tag = `C${count}`;
       name = 'Módulo';
@@ -1365,249 +1425,145 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                 )}
 
                 {isPente && (
-                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#334155' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '9px', color: '#38bdf8' }}>PENTE 3F</strong>
-                      <span style={{ fontSize: '8px', color: '#fff' }}>{comp.tag}</span>
-                    </div>
-                    <span style={{ fontSize: '8px', color: '#94a3b8', textAlign: 'center', marginTop: '6px' }}>Barramento R-S-T</span>
-                  </div>
+                  <RealisticBusbar
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    isSelected={isSelected}
+                  />
                 )}
 
                 {isRegua && (
-                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#1e293b' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '9px', color: '#00e676' }}>BORNES DIN</strong>
-                      <span style={{ fontSize: '8px', color: '#94a3b8' }}>{comp.tag}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '8px', color: '#cbd5e1', marginTop: '6px' }}>
-                      <span>X1</span><span>X2</span><span>X3</span><span>X4</span>
-                    </div>
-                  </div>
+                  <RealisticTerminalBlock
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    isSelected={isSelected}
+                  />
                 )}
 
-                {isGrid && (
-                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#263238', borderColor: '#ff9800' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '9px', color: '#ffb74d' }}>ALIMENTAÇÃO</strong>
-                      <span style={{ fontSize: '9px', color: '#fff', fontWeight: 'bold' }}>{comp.tag}</span>
-                    </div>
-                    <span style={{ fontSize: '8px', color: '#cfd8dc', textAlign: 'center', marginTop: '4px' }}>
-                      {comp.name}
-                    </span>
-                  </div>
+                {isGrid && comp.category === 'REDE_TRIFASICA' && (
+                  <RealisticGrid3P
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    name={comp.name}
+                    isSelected={isSelected}
+                  />
+                )}
+
+                {isGrid && comp.category === 'REDE_MONOFASICA' && (
+                  <RealisticGrid1P
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    name={comp.name}
+                    isSelected={isSelected}
+                  />
                 )}
 
                 {isTrafo && (
-                  <div style={{ ...canvaCardBase, borderColor: '#00e676', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '8px', color: '#2e7d32' }}>TRAFO 24V</strong>
-                      <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                    </div>
-                    <div style={{ textAlign: 'center', margin: '6px 0' }}>
-                      <span style={{ fontSize: '8px', color: '#00e676', fontWeight: 'bold' }}>SELV / PELV</span>
-                    </div>
-                    <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                  </div>
+                  <RealisticTransformer
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    isSelected={isSelected}
+                  />
                 )}
 
                 {isLoto && (
-                  <div style={{ ...canvaCardBase, borderColor: '#ef5350', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '8px', color: '#c62828' }}>LOTO NR-10</strong>
-                      <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                    </div>
-                    <div style={wegLeverSlotStyle}>
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setComponents((prev) =>
-                            prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
-                          );
-                        }}
-                        style={{
-                          ...wegLeverHandleStyle,
-                          top: comp.state ? '4px' : '40px',
-                          background: comp.state ? '#2e7d32' : '#c62828',
-                        }}
-                      >
-                        <span style={{ fontSize: '8px', color: '#fff', fontWeight: 'bold' }}>
-                          {comp.state ? 'I ON' : 'O OFF'}
-                        </span>
-                      </div>
-                    </div>
-                    <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                  </div>
+                  <RealisticLotoSwitch
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    state={comp.state}
+                    isSelected={isSelected}
+                    onToggle={() => setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c)))}
+                  />
                 )}
 
                 {isSafeRelay && (
-                  <div style={{ ...canvaCardBase, borderColor: '#ffd600', background: '#fffde7', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '8px', color: '#f57f17' }}>RELÉ NR-12</strong>
-                      <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', margin: '4px 0' }}>
-                      <span style={{ fontSize: '8px', color: comp.tripped ? '#d32f2f' : '#2e7d32', fontWeight: 'bold' }}>
-                        {comp.tripped ? 'EMERGÊNCIA' : 'SEGURO'}
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setComponents((prev) =>
-                            prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c))
-                          );
-                        }}
-                        style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#37474f' }}
-                      >
-                        {comp.tripped ? 'Rearmar' : 'Falha'}
-                      </button>
-                    </div>
-                    <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                  </div>
+                  <RealisticSafetyRelay
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    state={comp.state}
+                    tripped={comp.tripped}
+                    isSelected={isSelected}
+                    onTripToggle={() => setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c)))}
+                  />
                 )}
 
                 {isInterlock && (
-                  <div style={{ ...canvaCardBase, borderColor: '#fbc02d', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '8px', color: '#f57f17' }}>INTERTRAV.</strong>
-                      <span style={{ fontSize: '9px', color: '#455a64', fontWeight: 'bold' }}>{comp.tag}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0' }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setComponents((prev) =>
-                            prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
-                          );
-                        }}
-                        style={{ ...btnRelayActionStyle, background: comp.state ? '#2e7d32' : '#c62828' }}
-                      >
-                        {comp.state ? 'FECHADA' : 'ABERTA'}
-                      </button>
-                    </div>
-                    <span style={{ fontSize: '7px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                  </div>
+                  <RealisticInterlockSwitch
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    state={comp.state}
+                    isSelected={isSelected}
+                    onToggle={() => setComponents((prev) => prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c)))}
+                  />
                 )}
 
                 {isRPF && (
-                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '8px', color: '#0288d1' }}>RPF-01</strong>
-                      <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', margin: '4px 0' }}>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: comp.state && !comp.tripped ? '#00e676' : '#263238' }} />
-                        <span style={{ fontSize: '7px', color: '#37474f' }}>PWR</span>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: comp.tripped ? '#ff1744' : '#263238' }} />
-                        <span style={{ fontSize: '7px', color: '#37474f' }}>FALHA</span>
-                      </div>
-                    </div>
-                  </div>
+                  <RealisticPhaseFailureRelay
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    state={comp.state}
+                    tripped={comp.tripped}
+                    isSelected={isSelected}
+                  />
                 )}
 
                 {isAux && (
-                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f1f5f9' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '8px', color: '#005ea6' }}>BLOCO AUX</strong>
-                      <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', margin: '6px 0' }}>
-                      <span style={{ fontSize: '7px', color: '#455a64' }}>Com {comp.tag}</span>
-                      <span style={{ fontSize: '8px', color: comp.state ? '#00e676' : '#90a4ae', fontWeight: 'bold' }}>
-                        {comp.state ? '13-14 ON' : '21-22 ON'}
-                      </span>
-                    </div>
-                  </div>
+                  <RealisticAuxBlock
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    state={comp.state}
+                    isSelected={isSelected}
+                  />
                 )}
 
                 {isMotor && (
-                  <div style={{ ...motorRealisticWrapperStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                    <div style={motorFinHousingStyle}>
-                      <div style={motorSideFinLeft} />
-                      <div style={motorSideFinRight} />
-                      <div style={motorRotorCapStyle}>
-                        <div
-                          style={{
-                            ...motorShaftCenterStyle,
-                            background: comp.state
-                              ? 'conic-gradient(from 0deg, #00e676, #004d40, #00e676)'
-                              : '#546e7a',
-                            animation: comp.state ? 'spin 0.5s linear infinite' : 'none',
-                          }}
-                        />
-                      </div>
-                      <div style={motorBaseFeetStyle} />
-                    </div>
-
-                    <div style={motorTerminalBoardStyle}>
-                      <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%' }}>
-                        <span style={{ fontSize: '8px', color: '#81d4fa', fontWeight: 'bold' }}>U1 V1 W1</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%', marginTop: '30px' }}>
-                        <span style={{ fontSize: '8px', color: '#ffd600', fontWeight: 'bold' }}>W2 U2 V2</span>
-                      </div>
-                    </div>
-                  </div>
+                  <RealisticMotor3Phase
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    name={comp.name}
+                    state={comp.state}
+                    isSelected={isSelected}
+                  />
                 )}
 
                 {isMotorMono && (
-                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#1e293b', borderColor: '#38bdf8' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '9px', color: '#38bdf8' }}>MOTOR MONO (CAP)</strong>
-                      <span style={{ fontSize: '8px', color: '#fff' }}>{comp.tag}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 0' }}>
-                      <div
-                        style={{
-                          width: '45px',
-                          height: '45px',
-                          borderRadius: '50%',
-                          background: comp.state ? 'conic-gradient(from 0deg, #38bdf8, #0369a1, #38bdf8)' : '#334155',
-                          border: '3px solid #64748b',
-                          animation: comp.state ? 'spin 0.6s linear infinite' : 'none',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#fff' }} />
-                      </div>
-                      <span style={{ fontSize: '8px', color: comp.state ? '#38bdf8' : '#94a3b8', fontWeight: 'bold', marginTop: '6px' }}>
-                        {comp.state ? '⚡ GIRANDO (220V)' : '⏸️ PARADO'}
-                      </span>
-                    </div>
-                  </div>
+                  <RealisticMotorSingle
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    name={comp.name}
+                    state={comp.state}
+                    isSelected={isSelected}
+                  />
                 )}
 
                 {isCapacitor && (
-                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f8fafc', borderColor: '#eab308' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '9px', color: '#ca8a04' }}>CAPACITOR</strong>
-                      <span style={{ fontSize: '8px', color: '#334155' }}>{comp.tag}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '6px' }}>
-                      <div style={{ width: '28px', height: '36px', background: '#1e293b', borderRadius: '6px', border: '2px solid #eab308', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: '8px', color: '#fde047', fontWeight: 'bold' }}>+ C -</span>
-                      </div>
-                      <span style={{ fontSize: '7px', color: '#475569', marginTop: '4px', fontWeight: 'bold' }}>50µF / 250V</span>
-                    </div>
-                  </div>
+                  <RealisticCapacitor
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    isSelected={isSelected}
+                  />
                 )}
 
                 {isResistor && (
-                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f8fafc', borderColor: '#f97316' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '9px', color: '#c2410c' }}>RESISTOR FREIO</strong>
-                      <span style={{ fontSize: '8px', color: '#334155' }}>{comp.tag}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '6px' }}>
-                      <div style={{ width: '60px', height: '18px', background: '#b45309', borderRadius: '3px', border: '1px solid #78350f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: '7px', color: '#fff', fontWeight: 'bold' }}>~~~ 100R / 300W</span>
-                      </div>
-                    </div>
-                  </div>
+                  <RealisticBrakingResistor
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    isSelected={isSelected}
+                  />
                 )}
 
                 {/* BORNES DE CONEXÃO */}
@@ -2017,143 +1973,6 @@ const selectAmperageStyle: React.CSSProperties = {
   borderRadius: '2px',
   padding: '1px',
   outline: 'none',
-};
-
-const canvaCardBase: React.CSSProperties = {
-  width: '100%',
-  height: '100%',
-  background: '#f8fafc',
-  border: '2px solid #cbd5e1',
-  borderRadius: '8px',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'space-between',
-  padding: '8px 6px',
-  boxSizing: 'border-box',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
-};
-
-const motorRealisticWrapperStyle: React.CSSProperties = {
-  width: '100%',
-  height: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  position: 'relative',
-};
-
-const motorFinHousingStyle: React.CSSProperties = {
-  position: 'relative',
-  width: '120px',
-  height: '110px',
-  borderRadius: '50%',
-  background: '#2b3644',
-  border: '5px solid #005ea6',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
-
-const motorSideFinLeft: React.CSSProperties = {
-  position: 'absolute',
-  left: '-12px',
-  top: '20px',
-  bottom: '20px',
-  width: '10px',
-  background: 'repeating-linear-gradient(0deg, #005ea6, #005ea6 4px, #1a237e 4px, #1a237e 8px)',
-  borderRadius: '3px 0 0 3px',
-};
-
-const motorSideFinRight: React.CSSProperties = {
-  position: 'absolute',
-  right: '-12px',
-  top: '20px',
-  bottom: '20px',
-  width: '10px',
-  background: 'repeating-linear-gradient(0deg, #005ea6, #005ea6 4px, #1a237e 4px, #1a237e 8px)',
-  borderRadius: '0 3px 3px 0',
-};
-
-const motorRotorCapStyle: React.CSSProperties = {
-  width: '60px',
-  height: '60px',
-  borderRadius: '50%',
-  background: '#37474f',
-  border: '3px solid #78909c',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
-
-const motorShaftCenterStyle: React.CSSProperties = {
-  width: '24px',
-  height: '24px',
-  borderRadius: '50%',
-  border: '2px solid #fff',
-};
-
-const motorBaseFeetStyle: React.CSSProperties = {
-  position: 'absolute',
-  bottom: '-8px',
-  width: '100px',
-  height: '10px',
-  background: '#1e293b',
-  border: '2px solid #005ea6',
-  borderRadius: '3px',
-};
-
-const motorTerminalBoardStyle: React.CSSProperties = {
-  width: '140px',
-  background: '#0d1117',
-  border: '2px solid #30363d',
-  borderRadius: '6px',
-  padding: '6px 4px',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-};
-
-const btnRelayActionStyle: React.CSSProperties = {
-  border: 'none',
-  borderRadius: '3px',
-  color: '#fff',
-  padding: '4px 8px',
-  fontSize: '8px',
-  fontWeight: 'bold',
-  cursor: 'pointer',
-};
-
-const compHeaderStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  borderBottom: '1px solid #cbd5e1',
-  paddingBottom: '2px',
-};
-
-const wegLeverSlotStyle: React.CSSProperties = {
-  position: 'relative',
-  width: '32px',
-  height: '65px',
-  background: '#334155',
-  borderRadius: '4px',
-  margin: '0 auto',
-  border: '1px solid #475569',
-};
-
-const wegLeverHandleStyle: React.CSSProperties = {
-  position: 'absolute',
-  left: '2px',
-  width: '26px',
-  height: '22px',
-  borderRadius: '3px',
-  border: '1px solid #fff',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  cursor: 'pointer',
-  transition: 'top 0.15s ease',
 };
 
 const screwPoleStyle: React.CSSProperties = {

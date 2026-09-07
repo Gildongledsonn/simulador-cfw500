@@ -970,3 +970,356 @@ export const RealisticBusbar: React.FC<{
     </svg>
   );
 };
+
+// ============================================================================
+// 16. QUADRO DE ALIMENTAÇÃO REDE TRIFÁSICA 380V (140x80)
+// Terminais apenas na base: R, S, T, N, PE (relY 80%)
+// ============================================================================
+export const RealisticGrid3P: React.FC<{
+  width?: number; height?: number; tag?: string; name?: string; isSelected?: boolean;
+}> = ({ width = 140, height = 80, tag = 'GRID-3F', isSelected = false }) => {
+  const termX = [width * 0.18, width * 0.38, width * 0.58, width * 0.78, width * 0.92];
+  const termColor = ['#78350f', '#78350f', '#78350f', '#1d4ed8', '#15803d'];
+  const termFace = ['#d97706', '#d97706', '#d97706', '#3b82f6', '#22c55e'];
+  const labels = ['R', 'S', 'T', 'N', 'PE'];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      {/* Quadro metálico com faixa de risco */}
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="5" fill="#1e293b" stroke="#334155" strokeWidth="1.5" />
+      <rect x="2" y="2" width={width - 4} height="8" fill="url(#hazard3p)" />
+      <defs>
+        <pattern id="hazard3p" width="10" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="10" height="8" fill="#facc15" />
+          <rect width="5" height="8" fill="#0f172a" />
+        </pattern>
+      </defs>
+
+      {/* Cabo de entrada estilizado */}
+      <rect x={width / 2 - 8} y="8" width="16" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      <text x={width / 2} y="30" textAnchor="middle" fill="#f87171" fontSize="8" fontWeight="900">⚡ 380V</text>
+      <text x={width / 2} y="40" textAnchor="middle" fill="#94a3b8" fontSize="6" fontFamily="monospace">REDE TRIFÁSICA CA</text>
+
+      {/* Sinaleiros de fase R-S-T */}
+      {[width * 0.3, width * 0.5, width * 0.7].map((cx, i) => (
+        <circle key={`ph-${i}`} cx={cx} cy="48" r="4.5" fill="#facc15" stroke="#ca8a04" strokeWidth="1" />
+      ))}
+      <text x={width / 2} y="62" textAnchor="middle" fill="#00e676" fontSize="7.5" fontWeight="bold" fontFamily="monospace">{tag}</text>
+
+      {/* Bornes de saída R S T N PE */}
+      <rect x="6" y={height * 0.72} width={width - 12} height={height * 0.26} rx="3" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      {termX.map((tx, i) => (
+        <g key={`grid3-${i}`}>
+          <circle cx={tx} cy={height * 0.8} r="5" fill={termFace[i]} stroke={termColor[i]} strokeWidth="1" />
+          <line x1={tx - 3} y1={height * 0.8} x2={tx + 3} y2={height * 0.8} stroke="#0f172a" strokeWidth="1" />
+          <text x={tx} y={height * 0.72 - 2} textAnchor="middle" fill="#cbd5e1" fontSize="6" fontWeight="bold">{labels[i]}</text>
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+// ============================================================================
+// 17. QUADRO DE ALIMENTAÇÃO REDE MONOFÁSICA 220V (120x80)
+// Terminais apenas na base: F, N, PE (relY 80%)
+// ============================================================================
+export const RealisticGrid1P: React.FC<{
+  width?: number; height?: number; tag?: string; name?: string; isSelected?: boolean;
+}> = ({ width = 120, height = 80, tag = 'GRID-1F', isSelected = false }) => {
+  const termX = [width * 0.25, width * 0.55, width * 0.85];
+  const termColor = ['#78350f', '#1d4ed8', '#15803d'];
+  const termFace = ['#d97706', '#3b82f6', '#22c55e'];
+  const labels = ['F', 'N', 'PE'];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="5" fill="#1e293b" stroke="#334155" strokeWidth="1.5" />
+      <rect x="2" y="2" width={width - 4} height="8" fill="url(#hazard1p)" />
+      <defs>
+        <pattern id="hazard1p" width="10" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="10" height="8" fill="#facc15" />
+          <rect width="5" height="8" fill="#0f172a" />
+        </pattern>
+      </defs>
+
+      <rect x={width / 2 - 8} y="8" width="16" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      <text x={width / 2} y="30" textAnchor="middle" fill="#38bdf8" fontSize="8" fontWeight="900">🔌 220V</text>
+      <text x={width / 2} y="40" textAnchor="middle" fill="#94a3b8" fontSize="6" fontFamily="monospace">REDE MONOFÁSICA CA</text>
+
+      <circle cx={width / 2} cy="48" r="4.5" fill="#facc15" stroke="#ca8a04" strokeWidth="1" />
+      <text x={width / 2} y="62" textAnchor="middle" fill="#00e676" fontSize="7.5" fontWeight="bold" fontFamily="monospace">{tag}</text>
+
+      <rect x="6" y={height * 0.72} width={width - 12} height={height * 0.26} rx="3" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      {termX.map((tx, i) => (
+        <g key={`grid1-${i}`}>
+          <circle cx={tx} cy={height * 0.8} r="5" fill={termFace[i]} stroke={termColor[i]} strokeWidth="1" />
+          <line x1={tx - 3} y1={height * 0.8} x2={tx + 3} y2={height * 0.8} stroke="#0f172a" strokeWidth="1" />
+          <text x={tx} y={height * 0.72 - 2} textAnchor="middle" fill="#cbd5e1" fontSize="6" fontWeight="bold">{labels[i]}</text>
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+// ============================================================================
+// 18. CHAVE DE INTERTRAVAMENTO DE SEGURANÇA NR-12 (80x120)
+// Bornes: 11/21 no topo (8%), 12/22 na base (92%)
+// ============================================================================
+export const RealisticInterlockSwitch: React.FC<{
+  width?: number; height?: number; tag?: string; state: boolean; onToggle?: () => void; isSelected?: boolean;
+}> = ({ width = 80, height = 120, tag = 'SQ', state, onToggle, isSelected = false }) => {
+  const cx = width / 2;
+  const termX = [width * 0.3, width * 0.7];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="5" fill="#facc15" stroke="#ca8a04" strokeWidth="1.5" />
+
+      {/* Bornes superiores 11 / 21 */}
+      {termX.map((tx, i) => (
+        <g key={`itl-t-${i}`}>
+          <rect x={tx - 6} y="4" width="12" height="13" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy="10.5" r="3.8" fill="#94a3b8" />
+          <line x1={tx - 2.5} y1="10.5" x2={tx + 2.5} y2="10.5" stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+      <text x={termX[0]} y="26" textAnchor="middle" fill="#7c2d12" fontSize="5.5" fontWeight="bold">11</text>
+      <text x={termX[1]} y="26" textAnchor="middle" fill="#7c2d12" fontSize="5.5" fontWeight="bold">21</text>
+
+      {/* Corpo escuro central com atuador tipo chave/lingueta */}
+      <rect x="8" y="30" width={width - 16} height={height - 60} rx="4" fill="#1e293b" stroke="#0f172a" strokeWidth="1" />
+      <text x={cx} y="42" textAnchor="middle" fill="#facc15" fontSize="6" fontWeight="900">NR-12</text>
+      <text x={cx} y="50" textAnchor="middle" fill="#94a3b8" fontSize="5" fontFamily="monospace">CHAVE PORTA</text>
+
+      {/* Ranhura e lingueta de acionamento (porta fechada = state true) */}
+      <rect x={cx - 14} y="58" width="28" height="16" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      <g onClick={onToggle} style={{ cursor: 'pointer' }}>
+        <rect
+          x={state ? cx - 3 : cx - 16}
+          y="60"
+          width="20"
+          height="12"
+          rx="2"
+          fill={state ? '#22c55e' : '#dc2626'}
+          stroke={state ? '#166534' : '#7f1d1d'}
+          strokeWidth="1"
+          style={{ transition: 'x 0.15s ease' }}
+        />
+      </g>
+      <text x={cx} y="86" textAnchor="middle" fill="#e2e8f0" fontSize="5.5" fontWeight="bold">
+        {state ? 'PORTA FECHADA' : 'PORTA ABERTA'}
+      </text>
+
+      <text x={cx} y={height - 24} textAnchor="middle" fill="#0f172a" fontSize="7.5" fontWeight="900" fontFamily="monospace">{tag}</text>
+
+      {/* Bornes inferiores 12 / 22 */}
+      {termX.map((tx, i) => (
+        <g key={`itl-b-${i}`}>
+          <rect x={tx - 6} y={height - 17} width="12" height="13" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy={height - 10.5} r="3.8" fill="#94a3b8" />
+          <line x1={tx - 2.5} y1={height - 10.5} x2={tx + 2.5} y2={height - 10.5} stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+      <text x={termX[0]} y={height - 20} textAnchor="middle" fill="#7c2d12" fontSize="5.5" fontWeight="bold">12</text>
+      <text x={termX[1]} y={height - 20} textAnchor="middle" fill="#7c2d12" fontSize="5.5" fontWeight="bold">22</text>
+    </svg>
+  );
+};
+
+// ============================================================================
+// 19. MOTOR TRIFÁSICO W22 6 PONTAS (170x180)
+// Caixa de bornes centralizada: U1V1W1 em 28%, W2U2V2 em 72%
+// ============================================================================
+export const RealisticMotor3Phase: React.FC<{
+  width?: number; height?: number; tag?: string; name?: string; state: boolean; isSelected?: boolean;
+}> = ({ width = 170, height = 180, tag = 'M', state, isSelected = false }) => {
+  const cx = width / 2;
+  const topY = height * 0.28;
+  const botY = height * 0.72;
+  const termX = [width * 0.25, width * 0.5, width * 0.75];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '6px', userSelect: 'none' }}>
+      {/* Carcaça cilíndrica nervurada */}
+      <rect x="8" y="6" width={width - 16} height={height - 12} rx="18" fill="#0f172a" stroke="#334155" strokeWidth="1.5" />
+      {Array.from({ length: 9 }).map((_, i) => (
+        <line key={`fin-${i}`} x1={14 + i * ((width - 28) / 8)} y1="10" x2={14 + i * ((width - 28) / 8)} y2={height - 10} stroke="#1e293b" strokeWidth="3" opacity="0.7" />
+      ))}
+
+      {/* Tampa dianteira / eixo */}
+      <circle cx="8" cy={height / 2} r="14" fill="#334155" stroke="#1e293b" strokeWidth="1.5" />
+      <circle
+        cx="8"
+        cy={height / 2}
+        r="6"
+        fill={state ? '#00e676' : '#64748b'}
+        style={state ? { animation: 'spin 0.4s linear infinite', transformOrigin: `8px ${height / 2}px` } : {}}
+      />
+
+      {/* Etiqueta WEG W22 */}
+      <rect x={width * 0.32} y="14" width={width * 0.36} height="16" rx="3" fill="#005ea6" stroke="#003b66" strokeWidth="1" />
+      <text x={cx} y="26" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="900" fontFamily="Arial, sans-serif">Шeg W22</text>
+
+      {/* Caixa de ligação central com bornes U1 V1 W1 (topo) / W2 U2 V2 (base) */}
+      <rect x={width * 0.22} y={topY - 14} width={width * 0.56} height={botY - topY + 28} rx="4" fill="#1e293b" stroke="#475569" strokeWidth="1" />
+
+      {termX.map((tx, i) => (
+        <g key={`m3-top-${i}`}>
+          <rect x={tx - 7} y={topY - 8} width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy={topY - 1} r="4" fill="#94a3b8" />
+          <line x1={tx - 3} y1={topY - 1} x2={tx + 3} y2={topY - 1} stroke="#0f172a" strokeWidth="1" />
+        </g>
+      ))}
+      <text x={termX[0]} y={topY - 12} textAnchor="middle" fill="#93c5fd" fontSize="6" fontWeight="bold">U1</text>
+      <text x={termX[1]} y={topY - 12} textAnchor="middle" fill="#93c5fd" fontSize="6" fontWeight="bold">V1</text>
+      <text x={termX[2]} y={topY - 12} textAnchor="middle" fill="#93c5fd" fontSize="6" fontWeight="bold">W1</text>
+
+      <text x={cx} y={(topY + botY) / 2 + 4} textAnchor="middle" fill="#facc15" fontSize="6.5" fontWeight="900" fontFamily="monospace">Y / Δ</text>
+
+      {termX.map((tx, i) => (
+        <g key={`m3-bot-${i}`}>
+          <rect x={tx - 7} y={botY - 6} width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy={botY + 1} r="4" fill="#94a3b8" />
+          <line x1={tx - 3} y1={botY + 1} x2={tx + 3} y2={botY + 1} stroke="#0f172a" strokeWidth="1" />
+        </g>
+      ))}
+      <text x={termX[0]} y={botY + 20} textAnchor="middle" fill="#fde68a" fontSize="6" fontWeight="bold">W2</text>
+      <text x={termX[1]} y={botY + 20} textAnchor="middle" fill="#fde68a" fontSize="6" fontWeight="bold">U2</text>
+      <text x={termX[2]} y={botY + 20} textAnchor="middle" fill="#fde68a" fontSize="6" fontWeight="bold">V2</text>
+
+      <text x={cx} y={height - 8} textAnchor="middle" fill="#00e676" fontSize="8" fontWeight="900" fontFamily="monospace">{tag}</text>
+      <text x={width - 14} y={height / 2} textAnchor="middle" fill={state ? '#22c55e' : '#64748b'} fontSize="6" fontWeight="bold">{state ? 'GIRANDO' : 'PARADO'}</text>
+    </svg>
+  );
+};
+
+// ============================================================================
+// 20. MOTOR MONOFÁSICO COM CAPACITOR (150x160)
+// Bornes: F, N no topo (15%), C1, C2 na base (85%)
+// ============================================================================
+export const RealisticMotorSingle: React.FC<{
+  width?: number; height?: number; tag?: string; name?: string; state: boolean; isSelected?: boolean;
+}> = ({ width = 150, height = 160, tag = 'M', state, isSelected = false }) => {
+  const cx = width * 0.42;
+  const topY = height * 0.15;
+  const botY = height * 0.85;
+  const topX = [width * 0.3, width * 0.7];
+  const botX = [width * 0.3, width * 0.7];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '6px', userSelect: 'none' }}>
+      {/* Corpo do motor */}
+      <rect x="6" y="18" width={width - 44} height={height - 36} rx="16" fill="#0f172a" stroke="#334155" strokeWidth="1.5" />
+      {Array.from({ length: 6 }).map((_, i) => (
+        <line key={`mf-${i}`} x1={12 + i * ((width - 56) / 5)} y1="22" x2={12 + i * ((width - 56) / 5)} y2={height - 22} stroke="#1e293b" strokeWidth="3" opacity="0.7" />
+      ))}
+      <circle cx={cx} cy={height / 2} r="10" fill={state ? '#38bdf8' : '#64748b'} style={state ? { animation: 'spin 0.5s linear infinite', transformOrigin: `${cx}px ${height / 2}px` } : {}} />
+
+      {/* Capacitor de partida externo (cilindro anexado ao topo) */}
+      <rect x={width - 40} y="4" width="30" height="46" rx="8" fill="#334155" stroke="#1e293b" strokeWidth="1.5" />
+      <text x={width - 25} y="24" textAnchor="middle" fill="#fde047" fontSize="6" fontWeight="900">CAP</text>
+      <text x={width - 25} y="34" textAnchor="middle" fill="#cbd5e1" fontSize="5">μF</text>
+
+      {/* Bornes F/N no topo do motor */}
+      {topX.map((tx, i) => (
+        <g key={`ms-top-${i}`}>
+          <rect x={tx - 7} y={topY - 7} width="14" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy={topY} r="4" fill="#94a3b8" />
+          <line x1={tx - 3} y1={topY} x2={tx + 3} y2={topY} stroke="#0f172a" strokeWidth="1" />
+        </g>
+      ))}
+      <text x={topX[0]} y={topY - 10} textAnchor="middle" fill="#38bdf8" fontSize="6" fontWeight="bold">F</text>
+      <text x={topX[1]} y={topY - 10} textAnchor="middle" fill="#38bdf8" fontSize="6" fontWeight="bold">N</text>
+
+      {/* Bornes C1/C2 na base (ligação do capacitor) */}
+      {botX.map((tx, i) => (
+        <g key={`ms-bot-${i}`}>
+          <rect x={tx - 7} y={botY - 7} width="14" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy={botY} r="4" fill="#94a3b8" />
+          <line x1={tx - 3} y1={botY} x2={tx + 3} y2={botY} stroke="#0f172a" strokeWidth="1" />
+        </g>
+      ))}
+      <text x={botX[0]} y={botY + 16} textAnchor="middle" fill="#fde047" fontSize="6" fontWeight="bold">C1</text>
+      <text x={botX[1]} y={botY + 16} textAnchor="middle" fill="#fde047" fontSize="6" fontWeight="bold">C2</text>
+
+      <text x={cx} y={height - 4} textAnchor="middle" fill="#00e676" fontSize="7.5" fontWeight="900" fontFamily="monospace">{tag}</text>
+    </svg>
+  );
+};
+
+// ============================================================================
+// 21. CAPACITOR DE PARTIDA / CORREÇÃO (80x120)
+// Bornes: C1 no topo (relX 30, relY 10), C2 na base (relX 70, relY 90)
+// ============================================================================
+export const RealisticCapacitor: React.FC<{
+  width?: number; height?: number; tag?: string; isSelected?: boolean;
+}> = ({ width = 80, height = 120, tag = 'C', isSelected = false }) => {
+  const cx = width / 2;
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="4" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
+
+      {/* Borne C1 (topo, relX 30%) */}
+      <rect x={width * 0.3 - 7} y="4" width="14" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+      <circle cx={width * 0.3} cy="11" r="4" fill="#94a3b8" />
+      <line x1={width * 0.3 - 3} y1="11" x2={width * 0.3 + 3} y2="11" stroke="#0f172a" strokeWidth="1" />
+      <text x={width * 0.3} y="26" textAnchor="middle" fill="#dc2626" fontSize="6" fontWeight="900">+ C1</text>
+
+      {/* Corpo cilíndrico de alumínio */}
+      <rect x={cx - 22} y="30" width="44" height="62" rx="12" fill="#94a3b8" stroke="#64748b" strokeWidth="1.2" />
+      <rect x={cx - 22} y="30" width="14" height="62" rx="8" fill="#cbd5e1" opacity="0.6" />
+      <rect x={cx - 16} y="40" width="32" height="18" rx="2" fill="#1e293b" />
+      <text x={cx} y="52" textAnchor="middle" fill="#fde047" fontSize="6.5" fontWeight="900">50µF</text>
+      <text x={cx} y="70" textAnchor="middle" fill="#334155" fontSize="5.5" fontWeight="bold">250V ~</text>
+      <text x={cx} y="82" textAnchor="middle" fill="#64748b" fontSize="5">MPP</text>
+
+      <text x={cx} y="104" textAnchor="middle" fill="#0f172a" fontSize="7" fontWeight="900" fontFamily="monospace">{tag}</text>
+
+      {/* Borne C2 (base, relX 70%) */}
+      <rect x={width * 0.7 - 7} y={height - 15} width="14" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+      <circle cx={width * 0.7} cy={height * 0.92} r="4" fill="#94a3b8" />
+      <line x1={width * 0.7 - 3} y1={height * 0.92} x2={width * 0.7 + 3} y2={height * 0.92} stroke="#0f172a" strokeWidth="1" />
+      <text x={width * 0.7} y={height - 20} textAnchor="middle" fill="#0284c7" fontSize="6" fontWeight="900">C2 −</text>
+    </svg>
+  );
+};
+
+// ============================================================================
+// 22. RESISTOR DE FRENAGEM DINÂMICA (110x100)
+// Bornes: B1 (relX 25, relY 50) e B2 (relX 75, relY 50) — laterais, meia-altura
+// ============================================================================
+export const RealisticBrakingResistor: React.FC<{
+  width?: number; height?: number; tag?: string; isSelected?: boolean;
+}> = ({ width = 110, height = 100, tag = 'R', isSelected = false }) => {
+  const cy = height / 2;
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="4" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="1.5" />
+
+      {/* Borne B1 (esquerda, meia altura) */}
+      <rect x="2" y={cy - 7} width="14" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+      <circle cx="9" cy={cy} r="4" fill="#94a3b8" />
+      <line x1="6" y1={cy} x2="12" y2={cy} stroke="#0f172a" strokeWidth="1" />
+      <text x="9" y={cy - 12} textAnchor="middle" fill="#c2410c" fontSize="6" fontWeight="900">B1</text>
+
+      {/* Corpo do resistor com aletas dissipadoras */}
+      <rect x="20" y={cy - 26} width={width - 40} height="52" rx="4" fill="#b45309" stroke="#78350f" strokeWidth="1.2" />
+      {Array.from({ length: 6 }).map((_, i) => (
+        <line key={`res-fin-${i}`} x1={26 + i * ((width - 52) / 5)} y1={cy - 26} x2={26 + i * ((width - 52) / 5)} y2={cy + 26} stroke="#92400e" strokeWidth="2" opacity="0.8" />
+      ))}
+      <rect x={width / 2 - 20} y={cy - 8} width="40" height="16" rx="2" fill="#1e293b" />
+      <text x={width / 2} y={cy + 3.5} textAnchor="middle" fill="#fde047" fontSize="6.5" fontWeight="900" fontFamily="monospace">100Ω</text>
+      <text x={width / 2} y={cy - 32} textAnchor="middle" fill="#7c2d12" fontSize="5.5" fontWeight="bold">DYNAMIC BRAKE 300W</text>
+
+      <text x={width / 2} y={height - 6} textAnchor="middle" fill="#0f172a" fontSize="7" fontWeight="900" fontFamily="monospace">{tag}</text>
+
+      {/* Borne B2 (direita, meia altura) */}
+      <rect x={width - 16} y={cy - 7} width="14" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+      <circle cx={width - 9} cy={cy} r="4" fill="#94a3b8" />
+      <line x1={width - 12} y1={cy} x2={width - 6} y2={cy} stroke="#0f172a" strokeWidth="1" />
+      <text x={width - 9} y={cy - 12} textAnchor="middle" fill="#c2410c" fontSize="6" fontWeight="900">B2</text>
+    </svg>
+  );
+};
