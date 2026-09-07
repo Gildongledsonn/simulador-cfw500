@@ -722,3 +722,250 @@ export const RealisticPilotLight: React.FC<{
     </svg>
   );
 };
+// ============================================================================
+// 9. RELÉ FALTA DE FASE WEG RPF-01 (65x135)
+// ============================================================================
+export const RealisticPhaseFailureRelay: React.FC<{
+  width?: number; height?: number; tag?: string; state: boolean; tripped?: boolean; isSelected?: boolean;
+}> = ({ width = 65, height = 135, tag = 'RPF', state, tripped = false, isSelected = false }) => {
+  const cx = width / 2;
+  const termX = [width * 0.25, width * 0.5, width * 0.75];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      <rect x="1" y="1" width={width - 2} height={height - 2} rx="4" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="1.5" />
+      {termX.map((tx, i) => (
+        <g key={`rpf-t-${i}`}>
+          <rect x={tx - 6} y="4" width="12" height="13" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy="10.5" r="3.8" fill="#94a3b8" />
+          <line x1={tx - 2.5} y1="10.5" x2={tx + 2.5} y2="10.5" stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+      <text x={cx} y="28" textAnchor="middle" fill="#005ea6" fontSize="7" fontWeight="900" fontFamily="Arial">Шeg</text>
+      <text x={cx} y="36" textAnchor="middle" fill="#334155" fontSize="6.5" fontWeight="bold" fontFamily="monospace">RPF-01</text>
+      <rect x={cx - 18} y="44" width="36" height="24" rx="3" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      <circle cx={cx - 8} cy="53" r="3.5" fill={state && !tripped ? '#22c55e' : '#14532d'} />
+      <text x={cx - 8} y="62" textAnchor="middle" fill="#94a3b8" fontSize="4.5" fontWeight="bold">PWR</text>
+      <circle cx={cx + 8} cy="53" r="3.5" fill={tripped ? '#ef4444' : '#7f1d1d'} />
+      <text x={cx + 8} y="62" textAnchor="middle" fill="#94a3b8" fontSize="4.5" fontWeight="bold">TRIP</text>
+      <g transform={`translate(${cx - 12}, 74)`}>
+        <circle cx="12" cy="12" r="10" fill="#cbd5e1" stroke="#64748b" strokeWidth="1" />
+        <line x1="12" y1="5" x2="12" y2="10" stroke="#dc2626" strokeWidth="1.5" />
+        <text x="12" y="27" textAnchor="middle" fill="#475569" fontSize="5" fontWeight="bold">ASYM %</text>
+      </g>
+      <text x={cx} y="112" textAnchor="middle" fill="#00e676" fontSize="6.5" fontWeight="bold" fontFamily="monospace">{tag}</text>
+      {termX.map((tx, i) => (
+        <g key={`rpf-b-${i}`}>
+          <rect x={tx - 6} y={height - 17} width="12" height="13" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy={height - 10.5} r="3.8" fill="#94a3b8" />
+          <line x1={tx - 2.5} y1={height - 10.5} x2={tx + 2.5} y2={height - 10.5} stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+// ============================================================================
+// 10. RELÉ DE SEGURANÇA CAT 4 NR-12 (110x160)
+// ============================================================================
+export const RealisticSafetyRelay: React.FC<{
+  width?: number; height?: number; tag?: string; state: boolean; tripped?: boolean; onTripToggle?: () => void; isSelected?: boolean;
+}> = ({ width = 110, height = 160, tag = 'SR', state, tripped = false, onTripToggle, isSelected = false }) => {
+  const cx = width / 2;
+  const topX = [width * 0.2, width * 0.5, width * 0.8];
+  const botX = [width * 0.3, width * 0.7];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="5" fill="#facc15" stroke="#ca8a04" strokeWidth="1.5" />
+      {topX.map((tx, i) => (
+        <g key={`sr-t-${i}`}>
+          <rect x={tx - 6} y="4" width="12" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy="11" r="4" fill="#94a3b8" /><line x1={tx - 3} y1="11" x2={tx + 3} y2="11" stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+      <rect x="6" y="26" width={width - 12} height="20" rx="3" fill="#0f172a" />
+      <text x={cx} y="36" textAnchor="middle" fill="#facc15" fontSize="7" fontWeight="900">SAFETY RELAY • CAT 4</text>
+      <text x={cx} y="43" textAnchor="middle" fill="#94a3b8" fontSize="5" fontFamily="monospace">NBR 14153 / NR-12</text>
+      <rect x="10" y="52" width={width - 20} height="42" rx="3" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+      <circle cx={cx - 24} cy="66" r="4" fill={state ? '#22c55e' : '#14532d'} /><text x={cx - 24} y="78" textAnchor="middle" fill="#cbd5e1" fontSize="5">PWR</text>
+      <circle cx={cx - 8} cy="66" r="4" fill={state && !tripped ? '#22c55e' : '#14532d'} /><text x={cx - 8} y="78" textAnchor="middle" fill="#cbd5e1" fontSize="5">CH1</text>
+      <circle cx={cx + 8} cy="66" r="4" fill={state && !tripped ? '#22c55e' : '#14532d'} /><text x={cx + 8} y="78" textAnchor="middle" fill="#cbd5e1" fontSize="5">CH2</text>
+      <circle cx={cx + 24} cy="66" r="4" fill={tripped ? '#ef4444' : '#7f1d1d'} /><text x={cx + 24} y="78" textAnchor="middle" fill="#cbd5e1" fontSize="5">FAULT</text>
+      <g onClick={onTripToggle} style={{ cursor: 'pointer' }}>
+        <rect x={cx - 22} y="100" width="44" height="18" rx="3" fill={tripped ? '#dc2626' : '#0284c7'} stroke="#0369a1" strokeWidth="1" />
+        <text x={cx} y="112" textAnchor="middle" fill="#ffffff" fontSize="6.5" fontWeight="bold">{tripped ? 'REARMAR' : 'FALHA'}</text>
+      </g>
+      <text x={cx} y="132" textAnchor="middle" fill="#0f172a" fontSize="7.5" fontWeight="900" fontFamily="monospace">{tag}</text>
+      {botX.map((bx, i) => (
+        <g key={`sr-b-${i}`}>
+          <rect x={bx - 6} y={height - 18} width="12" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={bx} cy={height - 11} r="4" fill="#94a3b8" /><line x1={bx - 3} y1={height - 11} x2={bx + 3} y2={height - 11} stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+// ============================================================================
+// 11. CHAVE SECCIONADORA LOTO NR-10 (95x150)
+// ============================================================================
+export const RealisticLotoSwitch: React.FC<{
+  width?: number; height?: number; tag?: string; state: boolean; onToggle?: () => void; isSelected?: boolean;
+}> = ({ width = 95, height = 150, tag = 'QS', state, onToggle, isSelected = false }) => {
+  const cx = width / 2;
+  const cy = height / 2;
+  const termX = [width * 0.25, width * 0.5, width * 0.75];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="5" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
+      {termX.map((tx, i) => (
+        <g key={`loto-t-${i}`}>
+          <rect x={tx - 6} y="4" width="12" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy="11" r="4" fill="#94a3b8" /><line x1={tx - 3} y1="11" x2={tx + 3} y2="11" stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+      <circle cx={cx} cy={cy} r="32" fill="#facc15" stroke="#ca8a04" strokeWidth="1.5" />
+      <text x={cx} y={cy - 20} textAnchor="middle" fill="#dc2626" fontSize="5.5" fontWeight="900">LOTO NR-10</text>
+      <text x={cx - 18} y={cy + 3} textAnchor="middle" fill="#0f172a" fontSize="7" fontWeight="bold">0</text>
+      <text x={cx + 18} y={cy + 3} textAnchor="middle" fill="#0f172a" fontSize="7" fontWeight="bold">I</text>
+      <g onClick={onToggle} style={{ cursor: 'pointer' }}>
+        <g transform={`rotate(${state ? 45 : -45}, ${cx}, ${cy})`} style={{ transition: 'transform 0.15s ease' }}>
+          <rect x={cx - 6} y={cy - 22} width="12" height="44" rx="4" fill="#dc2626" stroke="#991b1b" strokeWidth="1" />
+          <circle cx={cx} cy={cy - 12} r="2.5" fill="#facc15" />
+        </g>
+      </g>
+      <text x={cx} y={height - 24} textAnchor="middle" fill="#005ea6" fontSize="7.5" fontWeight="bold" fontFamily="monospace">{tag}</text>
+      {termX.map((tx, i) => (
+        <g key={`loto-b-${i}`}>
+          <rect x={tx - 6} y={height - 18} width="12" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy={height - 11} r="4" fill="#94a3b8" /><line x1={tx - 3} y1={height - 11} x2={tx + 3} y2={height - 11} stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+// ============================================================================
+// 12. BLOCO AUXILIAR FRONTAL WEG (85x95)
+// ============================================================================
+export const RealisticAuxBlock: React.FC<{
+  width?: number; height?: number; tag?: string; state: boolean; isSelected?: boolean;
+}> = ({ width = 85, height = 95, tag = 'KA', state, isSelected = false }) => {
+  const cx = width / 2;
+  const termX = [width * 0.3, width * 0.7];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="4" fill="#f1f5f9" stroke="#94a3b8" strokeWidth="1.5" />
+      {termX.map((tx, i) => (
+        <g key={`auxb-t-${i}`}>
+          <rect x={tx - 6} y="4" width="12" height="12" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy="10" r="3.5" fill="#94a3b8" /><line x1={tx - 2.5} y1="10" x2={tx + 2.5} y2="10" stroke="#0f172a" strokeWidth="1" />
+        </g>
+      ))}
+      <rect x="6" y="24" width={width - 12} height="46" rx="3" fill="#005ea6" />
+      <text x={cx} y="36" textAnchor="middle" fill="#ffffff" fontSize="7" fontWeight="bold">BLOCO AUX</text>
+      <rect x={cx - 18} y="42" width="36" height="14" rx="2" fill="#0f172a" />
+      <text x={cx} y="52" textAnchor="middle" fill={state ? '#00e676' : '#94a3b8'} fontSize="6" fontWeight="bold" fontFamily="monospace">
+        {state ? '13-14 ON' : '21-22 ON'}
+      </text>
+      <text x={cx} y="64" textAnchor="middle" fill="#e0f2fe" fontSize="5.5">Com {tag}</text>
+      {termX.map((tx, i) => (
+        <g key={`auxb-b-${i}`}>
+          <rect x={tx - 6} y={height - 16} width="12" height="12" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy={height - 10} r="3.5" fill="#94a3b8" /><line x1={tx - 2.5} y1={height - 10} x2={tx + 2.5} y2={height - 10} stroke="#0f172a" strokeWidth="1" />
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+// ============================================================================
+// 13. TRANSFORMADOR ISOLADOR 220V/24V (95x130)
+// ============================================================================
+export const RealisticTransformer: React.FC<{
+  width?: number; height?: number; tag?: string; isSelected?: boolean;
+}> = ({ width = 95, height = 130, tag = 'TR', isSelected = false }) => {
+  const cx = width / 2;
+  const termX = [width * 0.3, width * 0.7];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="5" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
+      {termX.map((tx, i) => (
+        <g key={`tr-t-${i}`}>
+          <rect x={tx - 6} y="4" width="12" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy="11" r="4" fill="#94a3b8" /><line x1={tx - 3} y1="11" x2={tx + 3} y2="11" stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+      <rect x="12" y="28" width={width - 24} height="68" rx="3" fill="#334155" stroke="#475569" strokeWidth="1" />
+      <rect x="22" y="34" width={width - 44} height="56" rx="2" fill="#b45309" stroke="#78350f" strokeWidth="1" />
+      <text x={cx} y="54" textAnchor="middle" fill="#fef3c7" fontSize="7" fontWeight="bold">PRI: 220V</text>
+      <text x={cx} y="66" textAnchor="middle" fill="#86efac" fontSize="7" fontWeight="bold">SEC: 24V</text>
+      <text x={cx} y="78" textAnchor="middle" fill="#ffffff" fontSize="5.5">50VA SELV</text>
+      <text x={cx} y="110" textAnchor="middle" fill="#00e676" fontSize="7.5" fontWeight="bold" fontFamily="monospace">{tag}</text>
+      {termX.map((tx, i) => (
+        <g key={`tr-b-${i}`}>
+          <rect x={tx - 6} y={height - 18} width="12" height="14" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy={height - 11} r="4" fill="#94a3b8" /><line x1={tx - 3} y1={height - 11} x2={tx + 3} y2={height - 11} stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+// ============================================================================
+// 14. RÉGUA DE BORNES DE PASSAGEM DIN (120x130)
+// ============================================================================
+export const RealisticTerminalBlock: React.FC<{
+  width?: number; height?: number; tag?: string; isSelected?: boolean;
+}> = ({ width = 120, height = 130, tag = 'XT', isSelected = false }) => {
+  const termX = [width * 0.2, width * 0.4, width * 0.6, width * 0.8];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="4" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+      {termX.map((tx, i) => (
+        <g key={`xt-t-${i}`}>
+          <rect x={tx - 6} y="6" width="12" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy="13" r="4" fill="#94a3b8" /><line x1={tx - 3} y1="13" x2={tx + 3} y2="13" stroke="#0f172a" strokeWidth="1.2" />
+          <text x={tx} y="32" textAnchor="middle" fill="#cbd5e1" fontSize="6.5" fontWeight="bold">{`X${i + 1}`}</text>
+        </g>
+      ))}
+      <rect x="6" y="44" width={width - 12} height="38" rx="2" fill="#334155" />
+      <text x={width / 2} y="62" textAnchor="middle" fill="#00e676" fontSize="8" fontWeight="bold">BORNES DIN</text>
+      <text x={width / 2} y="72" textAnchor="middle" fill="#94a3b8" fontSize="6" fontFamily="monospace">{tag}</text>
+      {termX.map((tx, i) => (
+        <g key={`xt-b-${i}`}>
+          <rect x={tx - 6} y={height - 20} width="12" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy={height - 13} r="4" fill="#94a3b8" /><line x1={tx - 3} y1={height - 13} x2={tx + 3} y2={height - 13} stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+// ============================================================================
+// 15. BARRAMENTO PENTE 3F (130x70)
+// ============================================================================
+export const RealisticBusbar: React.FC<{
+  width?: number; height?: number; tag?: string; isSelected?: boolean;
+}> = ({ width = 130, height = 70, tag = 'BAR', isSelected = false }) => {
+  const termX = [width * 0.2, width * 0.5, width * 0.8];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '100%', display: 'block', outline: isSelected ? '2px solid #00e676' : 'none', borderRadius: '4px', userSelect: 'none' }}>
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="4" fill="#334155" stroke="#475569" strokeWidth="1.5" />
+      <rect x="8" y="22" width={width - 16} height="26" rx="2" fill="#d97706" stroke="#78350f" strokeWidth="1" />
+      <text x={width / 2} y="38" textAnchor="middle" fill="#ffffff" fontSize="7.5" fontWeight="bold">PENTE R-S-T</text>
+      {termX.map((tx, i) => (
+        <g key={`bar-t-${i}`}>
+          <circle cx={tx} cy="14" r="4" fill="#fef3c7" stroke="#78350f" strokeWidth="1" />
+          <circle cx={tx} cy={height - 14} r="4" fill="#fef3c7" stroke="#78350f" strokeWidth="1" />
+        </g>
+      ))}
+    </svg>
+  );
+};

@@ -275,7 +275,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
   const renderSmoothPath = (pts: Point2D[]): string => {
     if (pts.length < 2) return '';
     if (pts.length === 2) {
-      return `M ${pts[0].x} ${pts[0].y} L ${pts.x} ${pts.y}`;
+      return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`;
     }
 
     let d = `M ${pts[0].x} ${pts[0].y}`;
