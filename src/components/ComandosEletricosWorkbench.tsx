@@ -2234,14 +2234,6 @@ const btnRelayActionStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const contactorCoreIndicator: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '4px',
-};
-
 const compHeaderStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
