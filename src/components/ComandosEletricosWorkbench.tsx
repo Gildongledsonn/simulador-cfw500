@@ -467,9 +467,14 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         }
       }
       if (c.category === 'SINALEIRO_LED') {
-        const x1 = isNodeEnergizedByPhase(`${c.id}:X1`);
-        const x2 = isNodeEnergizedByNeutral(`${c.id}:X2`);
-        const lampOn = x1 && x2;
+        const nodeX1 = `${c.id}:X1`;
+        const nodeX2 = `${c.id}:X2`;
+        const x1Phase = isNodeEnergizedByPhase(nodeX1);
+        const x1Neutral = isNodeEnergizedByNeutral(nodeX1);
+        const x2Phase = isNodeEnergizedByPhase(nodeX2);
+        const x2Neutral = isNodeEnergizedByNeutral(nodeX2);
+        // Acende com fase+neutro (qualquer lado) OU fase+fase (ex: sinaleiro ligado direto entre R-S)
+        const lampOn = (x1Phase && x2Neutral) || (x2Phase && x1Neutral) || (x1Phase && x2Phase);
         if (c.state !== lampOn) {
           stateChanged = true;
           return { ...c, state: lampOn };
@@ -880,6 +885,11 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       terminals = [tPole('1', '1', 50, 10), tPole('2', '2', 50, 90)];
     }
 
+    // Disjuntores, contatores e a botoeira NF (não pressionada) nascem "fechados".
+    // A botoeira NA (start) e o sinaleiro LED nascem "desligados" e são controlados
+    // pelo usuário/simulação a partir daí.
+    const initialState = category !== 'BOTOEIRA_PULSO_NA' && category !== 'SINALEIRO_LED';
+
     const newComp: PlacedComponent = {
       id: `comp_${Date.now()}`,
       category,
@@ -889,7 +899,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       y: 140 + (components.length % 4) * 30,
       width,
       height,
-      state: true,
+      state: initialState,
       currentRating,
       lampColor,
       selectorPosition: '0',
@@ -1212,20 +1222,37 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
                   {isLamp && (
                     <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <span style={{ fontSize: '6px', color: '#ffd600', fontWeight: 'bold' }}>COR</span>
-                      <select
-                        value={comp.lampColor || 'VERDE'}
-                        onChange={(e) => handleLampColorChange(comp.id, e.target.value as LampColor)}
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        style={{ ...selectAmperageStyle, color: '#facc15' }}
-                      >
-                        <option value="VERDE">🟢 Verde</option>
-                        <option value="VERMELHO">🔴 Vermelho</option>
-                        <option value="AMARELO">🟡 Amarelo</option>
-                        <option value="AZUL">🔵 Azul</option>
-                        <option value="BRANCO">⚪ Branco</option>
-                      </select>
+                      <span style={{ fontSize: '6px', color: '#ffd600', fontWeight: 'bold' }}>
+                        COR {comp.state ? `(${LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'].label} ACESO)` : ''}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                        <span
+                          title={comp.state ? 'Energizado' : 'Desenergizado'}
+                          style={{
+                            width: '7px',
+                            height: '7px',
+                            borderRadius: '50%',
+                            flexShrink: 0,
+                            backgroundColor: comp.state
+                              ? LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'].on
+                              : LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'].off,
+                            boxShadow: comp.state ? LAMP_COLOR_CONFIG[comp.lampColor || 'VERDE'].glow : 'none',
+                          }}
+                        />
+                        <select
+                          value={comp.lampColor || 'VERDE'}
+                          onChange={(e) => handleLampColorChange(comp.id, e.target.value as LampColor)}
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          style={{ ...selectAmperageStyle, color: '#facc15' }}
+                        >
+                          <option value="VERDE">🟢 Verde</option>
+                          <option value="VERMELHO">🔴 Vermelho</option>
+                          <option value="AMARELO">🟡 Amarelo</option>
+                          <option value="AZUL">🔵 Azul</option>
+                          <option value="BRANCO">⚪ Branco</option>
+                        </select>
+                      </div>
                     </div>
                   )}
                 </div>

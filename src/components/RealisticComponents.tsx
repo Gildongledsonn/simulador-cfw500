@@ -960,6 +960,7 @@ export const RealisticBusbar: React.FC<{
       <rect x="2" y="2" width={width - 4} height={height - 4} rx="4" fill="#334155" stroke="#475569" strokeWidth="1.5" />
       <rect x="8" y="22" width={width - 16} height="26" rx="2" fill="#d97706" stroke="#78350f" strokeWidth="1" />
       <text x={width / 2} y="38" textAnchor="middle" fill="#ffffff" fontSize="7.5" fontWeight="bold">PENTE R-S-T</text>
+      <text x={width / 2} y={height - 4} textAnchor="middle" fill="#00e676" fontSize="6" fontWeight="bold" fontFamily="monospace">{tag}</text>
       {termX.map((tx, i) => (
         <g key={`bar-t-${i}`}>
           <circle cx={tx} cy="14" r="4" fill="#fef3c7" stroke="#78350f" strokeWidth="1" />
