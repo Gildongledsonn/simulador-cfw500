@@ -405,3 +405,320 @@ export const RealisticMotorBreaker: React.FC<MotorBreakerProps> = ({
     </svg>
   );
 };
+// ============================================================================
+// 5. BOTOEIRA DE PULSO Ø22mm (VERDE NA - CONTATOS 3-4)
+// Dimensões: width: 65, height: 100
+// ============================================================================
+export const RealisticPushButton: React.FC<{
+  width?: number;
+  height?: number;
+  tag?: string;
+  state: boolean; // true = pressionado
+  onPress?: () => void;
+  onRelease?: () => void;
+  isSelected?: boolean;
+}> = ({ width = 65, height = 100, tag = 'S', state, onPress, onRelease, isSelected = false }) => {
+  const cx = width / 2;
+  const cy = height / 2;
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        outline: isSelected ? '2px solid #00e676' : 'none',
+        borderRadius: '4px',
+        userSelect: 'none',
+      }}
+    >
+      {/* Placa base traseira com borne superior (borne 3) e inferior (borne 4) */}
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="6" fill="#1e293b" stroke="#475569" strokeWidth="1.2" />
+
+      {/* Parafuso borne 3 (relY: 8% -> 8px) */}
+      <rect x={cx - 7} y="1" width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      <circle cx={cx} cy="8" r="4" fill="#94a3b8" />
+      <line x1={cx - 3} y1="8" x2={cx + 3} y2="8" stroke="#0f172a" strokeWidth="1.2" />
+
+      {/* Aro metálico frontal cromado Ø22mm */}
+      <circle cx={cx} cy={cy} r="25" fill="#cbd5e1" stroke="#64748b" strokeWidth="1.5" />
+      <circle cx={cx} cy={cy} r="21" fill="#334155" stroke="#1e293b" strokeWidth="1" />
+
+      {/* Atuador de pulso verde com efeito de profundidade ao pressionar */}
+      <g
+        onMouseDown={onPress}
+        onMouseUp={onRelease}
+        onTouchStart={onPress}
+        onTouchEnd={onRelease}
+        style={{ cursor: 'pointer' }}
+      >
+        <circle
+          cx={cx}
+          cy={cy}
+          r={state ? 16 : 18}
+          fill={state ? '#15803d' : '#22c55e'}
+          stroke={state ? '#166534' : '#4ade80'}
+          strokeWidth="1.5"
+          style={{ transition: 'all 0.08s ease' }}
+        />
+        <circle cx={cx} cy={cy} r="13" fill="none" stroke="#ffffff" strokeWidth="0.8" opacity="0.4" />
+        <text
+          x={cx}
+          y={cy + 3}
+          textAnchor="middle"
+          fill="#ffffff"
+          fontSize="7.5"
+          fontWeight="900"
+          fontFamily="Arial, sans-serif"
+        >
+          {state ? 'ON' : 'LIGA'}
+        </text>
+      </g>
+
+      {/* TAG de identificação */}
+      <text x={cx} y={height - 18} textAnchor="middle" fill="#00e676" fontSize="7" fontWeight="bold" fontFamily="monospace">
+        {tag}
+      </text>
+
+      {/* Parafuso borne 4 (relY: 92% -> 92px) */}
+      <rect x={cx - 7} y={height - 15} width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      <circle cx={cx} cy={height * 0.92} r="4" fill="#94a3b8" />
+      <line x1={cx - 3} y1={height * 0.92} x2={cx + 3} y2={height * 0.92} stroke="#0f172a" strokeWidth="1.2" />
+    </svg>
+  );
+};
+
+// ============================================================================
+// 6. BOTOEIRA DE EMERGÊNCIA TIPO COGUMELO (VERMELHA NF - CONTATOS 11-12)
+// Dimensões: width: 65, height: 100
+// ============================================================================
+export const RealisticEmergencyButton: React.FC<{
+  width?: number;
+  height?: number;
+  tag?: string;
+  state: boolean; // true = fechado/pronto, false = acionado/travado
+  onToggle?: () => void;
+  isSelected?: boolean;
+}> = ({ width = 65, height = 100, tag = 'S', state, onToggle, isSelected = false }) => {
+  const cx = width / 2;
+  const cy = height / 2;
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        outline: isSelected ? '2px solid #00e676' : 'none',
+        borderRadius: '4px',
+        userSelect: 'none',
+      }}
+    >
+      {/* Placa base */}
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="6" fill="#1e293b" stroke="#475569" strokeWidth="1.2" />
+
+      {/* Borne superior 11 (8px) */}
+      <rect x={cx - 7} y="1" width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      <circle cx={cx} cy="8" r="4" fill="#94a3b8" />
+      <line x1={cx - 3} y1="8" x2={cx + 3} y2="8" stroke="#0f172a" strokeWidth="1.2" />
+
+      {/* Plaqueta amarela de advertência de emergência (NR-12) */}
+      <circle cx={cx} cy={cy} r="26" fill="#facc15" stroke="#ca8a04" strokeWidth="1.2" />
+      <text x={cx} y={cy - 19} textAnchor="middle" fill="#0f172a" fontSize="4.5" fontWeight="bold">EMERGENCY</text>
+
+      {/* Cabeçote cogumelo vermelho com setas de destravamento */}
+      <g onClick={onToggle} style={{ cursor: 'pointer' }}>
+        <circle
+          cx={cx}
+          cy={cy}
+          r={!state ? 20 : 22}
+          fill={!state ? '#b91c1c' : '#dc2626'}
+          stroke={!state ? '#7f1d1d' : '#ef4444'}
+          strokeWidth="2"
+          style={{ transition: 'all 0.12s ease' }}
+        />
+        {/* Setas curvas brancas de rotação para destravar */}
+        <circle cx={cx} cy={cy} r="14" fill="none" stroke="#ffffff" strokeWidth="1" strokeDasharray="6,4" opacity="0.85" />
+        <text
+          x={cx}
+          y={cy + 3}
+          textAnchor="middle"
+          fill="#ffffff"
+          fontSize="6.5"
+          fontWeight="900"
+          fontFamily="Arial, sans-serif"
+        >
+          {!state ? 'TRAV' : 'PARADA'}
+        </text>
+      </g>
+
+      <text x={cx} y={height - 18} textAnchor="middle" fill="#00e676" fontSize="7" fontWeight="bold" fontFamily="monospace">
+        {tag}
+      </text>
+
+      {/* Borne inferior 12 (92px) */}
+      <rect x={cx - 7} y={height - 15} width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      <circle cx={cx} cy={height * 0.92} r="4" fill="#94a3b8" />
+      <line x1={cx - 3} y1={height * 0.92} x2={cx + 3} y2={height * 0.92} stroke="#0f172a" strokeWidth="1.2" />
+    </svg>
+  );
+};
+
+// ============================================================================
+// 7. CHAVE SELETORA 3 POSIÇÕES (MAN - 0 - AUT)
+// Dimensões: width: 85, height: 140
+// ============================================================================
+export const RealisticSelectorSwitch: React.FC<{
+  width?: number;
+  height?: number;
+  tag?: string;
+  position?: 'MAN' | '0' | 'AUT';
+  onToggle?: () => void;
+  isSelected?: boolean;
+}> = ({ width = 85, height = 140, tag = 'SA', position = '0', onToggle, isSelected = false }) => {
+  const cx = width / 2;
+  const cy = height / 2;
+  const rotationDeg = position === 'MAN' ? -45 : position === 'AUT' ? 45 : 0;
+
+  // Bornes: 13 e 23 (topo relX: 30%, 70%), 14 e 24 (base relX: 30%, 70%)
+  const termX = [width * 0.3, width * 0.7];
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        outline: isSelected ? '2px solid #00e676' : 'none',
+        borderRadius: '4px',
+        userSelect: 'none',
+      }}
+    >
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="6" fill="#1e293b" stroke="#475569" strokeWidth="1.2" />
+
+      {/* Bornes superiores 13 e 23 (10% -> 14px) */}
+      {termX.map((tx, i) => (
+        <g key={`sel-top-${i}`}>
+          <rect x={tx - 7} y="7" width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy="14" r="4" fill="#94a3b8" />
+          <line x1={tx - 3} y1="14" x2={tx + 3} y2="14" stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+
+      {/* Aro metálico e marcações angulares MAN - 0 - AUT */}
+      <circle cx={cx} cy={cy} r="32" fill="#334155" stroke="#64748b" strokeWidth="1.5" />
+      <text x={cx - 20} y={cy - 16} textAnchor="middle" fill={position === 'MAN' ? '#38bdf8' : '#94a3b8'} fontSize="6.5" fontWeight="bold">MAN</text>
+      <text x={cx} y={cy - 24} textAnchor="middle" fill={position === '0' ? '#ffffff' : '#94a3b8'} fontSize="7" fontWeight="bold">0</text>
+      <text x={cx + 20} y={cy - 16} textAnchor="middle" fill={position === 'AUT' ? '#38bdf8' : '#94a3b8'} fontSize="6.5" fontWeight="bold">AUT</text>
+
+      {/* Manopla rotativa com ponteiro indicador */}
+      <g onClick={onToggle} style={{ cursor: 'pointer' }}>
+        <circle cx={cx} cy={cy} r="18" fill="#0f172a" stroke="#475569" strokeWidth="1.5" />
+        <g transform={`rotate(${rotationDeg}, ${cx}, ${cy})`} style={{ transition: 'transform 0.15s ease' }}>
+          <rect x={cx - 4} y={cy - 22} width="8" height="28" rx="3" fill="#0284c7" stroke="#38bdf8" strokeWidth="1" />
+          <line x1={cx} y1={cy - 20} x2={cx} y2={cy - 10} stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
+        </g>
+      </g>
+
+      <text x={cx} y={height - 24} textAnchor="middle" fill="#00e676" fontSize="7.5" fontWeight="bold" fontFamily="monospace">{tag}</text>
+
+      {/* Bornes inferiores 14 e 24 (90% -> 126px) */}
+      {termX.map((tx, i) => (
+        <g key={`sel-bot-${i}`}>
+          <rect x={tx - 7} y={height * 0.9 - 7} width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={tx} cy={height * 0.9} r="4" fill="#94a3b8" />
+          <line x1={tx - 3} y1={height * 0.9} x2={tx + 3} y2={height * 0.9} stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+// ============================================================================
+// 8. SINALEIRO LED Ø22mm (LENTE PRISMÁTICA E CORES TROCÁVEIS)
+// Dimensões: width: 65, height: 100
+// ============================================================================
+const LAMP_PALETTE: Record<string, { on: string; off: string; core: string }> = {
+  VERDE: { on: '#22c55e', off: '#14532d', core: '#86efac' },
+  VERMELHO: { on: '#ef4444', off: '#7f1d1d', core: '#fca5a5' },
+  AMARELO: { on: '#eab308', off: '#713f12', core: '#fde047' },
+  AZUL: { on: '#38bdf8', off: '#0c4a6e', core: '#bae6fd' },
+  BRANCO: { on: '#f8fafc', off: '#475569', core: '#ffffff' },
+};
+
+export const RealisticPilotLight: React.FC<{
+  width?: number;
+  height?: number;
+  tag?: string;
+  state: boolean; // true = aceso
+  color?: string;
+  isSelected?: boolean;
+}> = ({ width = 65, height = 100, tag = 'H', state, color = 'VERDE', isSelected = false }) => {
+  const cx = width / 2;
+  const cy = height / 2;
+  const palette = LAMP_PALETTE[color] || LAMP_PALETTE.VERDE;
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        outline: isSelected ? '2px solid #00e676' : 'none',
+        borderRadius: '4px',
+        userSelect: 'none',
+      }}
+    >
+      {/* Placa base */}
+      <rect x="2" y="2" width={width - 4} height={height - 4} rx="6" fill="#1e293b" stroke="#475569" strokeWidth="1.2" />
+
+      {/* Borne superior X1 (8px) */}
+      <rect x={cx - 7} y="1" width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      <circle cx={cx} cy="8" r="4" fill="#94a3b8" />
+      <line x1={cx - 3} y1="8" x2={cx + 3} y2="8" stroke="#0f172a" strokeWidth="1.2" />
+
+      {/* Aro cromado frontal Ø22mm */}
+      <circle cx={cx} cy={cy} r="25" fill="#cbd5e1" stroke="#64748b" strokeWidth="1.5" />
+      <circle cx={cx} cy={cy} r="22" fill="#0f172a" />
+
+      {/* Lente prismática translúcida */}
+      <circle cx={cx} cy={cy} r="18" fill={state ? palette.on : palette.off} />
+
+      {/* Efeito prismático concêntrico e reflexo de brilho */}
+      <circle cx={cx} cy={cy} r="14" fill="none" stroke="#ffffff" strokeWidth="0.6" opacity={state ? 0.6 : 0.2} />
+      <circle cx={cx} cy={cy} r="10" fill="none" stroke="#ffffff" strokeWidth="0.6" opacity={state ? 0.7 : 0.25} />
+      <circle cx={cx} cy={cy} r="6" fill={state ? palette.core : 'transparent'} opacity={state ? 0.85 : 0} />
+
+      {/* Arco de reflexo do domo de vidro */}
+      <path
+        d={`M ${cx - 12} ${cy - 8} A 14 14 0 0 1 ${cx + 8} ${cy - 12}`}
+        fill="none"
+        stroke="#ffffff"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        opacity={state ? 0.9 : 0.4}
+      />
+
+      <text x={cx} y={height - 18} textAnchor="middle" fill="#00e676" fontSize="7" fontWeight="bold" fontFamily="monospace">
+        {tag}
+      </text>
+
+      {/* Borne inferior X2 (92px) */}
+      <rect x={cx - 7} y={height - 15} width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+      <circle cx={cx} cy={height * 0.92} r="4" fill="#94a3b8" />
+      <line x1={cx - 3} y1={height * 0.92} x2={cx + 3} y2={height * 0.92} stroke="#0f172a" strokeWidth="1.2" />
+    </svg>
+  );
+};
