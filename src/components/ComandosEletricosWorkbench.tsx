@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useInverter } from '../context/InverterContext';
 import { MotorVisualizer } from './MotorVisualizer';
-import { RealisticContactor, RealisticThermalRelay } from './RealisticComponents';
 
 export type ComponentCategory =
   | 'REDE_TRIFASICA'
@@ -107,9 +106,9 @@ interface CatalogItem {
 }
 
 const CATALOG_ITEMS: CatalogItem[] = [
-  { category: 'DISJUNTOR_MONOPOLAR', title: 'Disjuntor Monopolar (Padrão Esquemático)', subtitle: 'Estilo gráfico idêntico ao modelo técnico com manopla vermelha', icon: '⚡', group: 'PROTECAO' },
-  { category: 'DISJUNTOR_BIPOLAR', title: 'Disjuntor Bipolar 2P', subtitle: 'Proteção bipolar com amperagem ajustável', icon: '⚡', group: 'PROTECAO' },
-  { category: 'DISJUNTOR_MOTOR', title: 'Disjuntor-Motor MPW', subtitle: 'Proteção termomagnética para motores', icon: '🎛️', group: 'PROTECAO' },
+  { category: 'DISJUNTOR_MONOPOLAR', title: 'Disjuntor Monopolar (WEG MDW 1P)', subtitle: 'Proteção DIN 1P modular com curva C ajustável', icon: '⚡', group: 'PROTECAO' },
+  { category: 'DISJUNTOR_BIPOLAR', title: 'Disjuntor Bipolar (WEG MDW 2P)', subtitle: 'Proteção DIN 2P com dois polos simétricos', icon: '⚡', group: 'PROTECAO' },
+  { category: 'DISJUNTOR_MOTOR', title: 'Disjuntor-Motor MPW', subtitle: 'Proteção termomagnética para motores WEG', icon: '🎛️', group: 'PROTECAO' },
   { category: 'RELE_TERMICO', title: 'Relé Térmico de Sobrecarga RW', subtitle: 'Proteção com contatos 95-96 e 97-98', icon: '🔥', group: 'PROTECAO' },
   { category: 'RELE_FALTA_FASE', title: 'Relé Falta de Fase RPF', subtitle: 'Monitor de assimetria 11-12-14', icon: '📡', group: 'PROTECAO' },
   { category: 'CHAVE_SELETORA_3POS', title: 'Chave Seletora 3 Posições (MAN - 0 - AUT)', subtitle: 'Comutação de modo com contatos 13-14 e 23-24', icon: '🔘', group: 'COMANDO' },
@@ -132,10 +131,313 @@ const CATALOG_ITEMS: CatalogItem[] = [
   { category: 'RESISTOR_FREINAGEM', title: 'Resistor de Frenagem (Dynamic Braking)', subtitle: 'Dissipação de energia regenerativa de inversor', icon: '♨️', group: 'PROTECAO' },
 ];
 
+// ============================================================================
+// COMPONENTES REALISTAS INTEGRADOS (SVG EMBEDDED)
+// ============================================================================
+
+const SvgContactor: React.FC<{
+  width: number;
+  height: number;
+  tag: string;
+  state: boolean;
+  isSelected?: boolean;
+}> = ({ width, height, tag, state, isSelected }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 110 180"
+    style={{
+      width: '100%',
+      height: '100%',
+      display: 'block',
+      outline: isSelected ? '2px solid #00e676' : 'none',
+      borderRadius: '4px',
+      userSelect: 'none',
+    }}
+  >
+    <rect x="2" y="2" width="106" height="176" rx="6" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="1.5" />
+    <rect x="6" y="5" width="98" height="26" rx="3" fill="#cbd5e1" opacity="0.6" />
+    {[19.8, 41.8, 63.8, 90.2].map((cx, i) => (
+      <g key={`c-top-${i}`}>
+        <rect x={cx - 7} y="6.4" width="14" height="15" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+        <circle cx={cx} cy="14" r="4.5" fill="#94a3b8" />
+        <line x1={cx - 3} y1="14" x2={cx + 3} y2="14" stroke="#0f172a" strokeWidth="1" />
+      </g>
+    ))}
+    <g>
+      <rect x="83.2" y="43" width="14" height="15" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+      <circle cx="90.2" cy="50.4" r="4.5" fill="#94a3b8" />
+      <line x1="87.2" y1="50.4" x2="93.2" y2="50.4" stroke="#0f172a" strokeWidth="1" />
+    </g>
+    <rect x="6" y="38" width="76" height="98" rx="4" fill="#005ea6" stroke="#003b66" strokeWidth="1" />
+    <text x="14" y="54" fill="#ffffff" fontSize="9" fontWeight="900" fontFamily="Arial">Шeg</text>
+    <text x="40" y="54" fill="#ffffff" fontSize="8" fontWeight="bold" fontFamily="monospace">CWM25</text>
+    <text x="14" y="64" fill="#e0f2fe" fontSize="5.5" fontFamily="Arial">Ui 1000V • AC-3 25A</text>
+    <rect x="22" y="76" width="44" height="34" rx="3" fill="#0f172a" stroke="#334155" strokeWidth="1" />
+    <rect
+      x="25"
+      y={state ? 81 : 78}
+      width="38"
+      height="28"
+      rx="2"
+      fill={state ? '#134e4a' : '#334155'}
+      stroke={state ? '#22c55e' : '#64748b'}
+      strokeWidth="1"
+      style={{ transition: 'all 0.12s ease' }}
+    />
+    <rect
+      x="30"
+      y={state ? 88 : 84}
+      width="28"
+      height="12"
+      rx="2"
+      fill={state ? '#22c55e' : '#dc2626'}
+      style={{ transition: 'all 0.12s ease' }}
+    />
+    <text x="44" y={state ? 96.5 : 92.5} textAnchor="middle" fill="#ffffff" fontSize="6" fontWeight="900" fontFamily="monospace">
+      {state ? 'ON' : 'OFF'}
+    </text>
+    <rect x="22" y="116" width="44" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+    <text x="44" y="126" textAnchor="middle" fill="#00e676" fontSize="8" fontWeight="bold" fontFamily="monospace">{tag}</text>
+    <g>
+      <rect x="83.2" y="122" width="14" height="15" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+      <circle cx="90.2" cy="129.6" r="4.5" fill="#94a3b8" />
+      <line x1="87.2" y1="129.6" x2="93.2" y2="129.6" stroke="#0f172a" strokeWidth="1" />
+    </g>
+    <rect x="6" y="149" width="98" height="26" rx="3" fill="#cbd5e1" opacity="0.6" />
+    {[19.8, 41.8, 63.8, 90.2].map((cx, i) => (
+      <g key={`c-bot-${i}`}>
+        <rect x={cx - 7} y="157.6" width="14" height="15" rx="2" fill="#1e293b" stroke="#334155" strokeWidth="0.8" />
+        <circle cx={cx} cy="165.6" r="4.5" fill="#94a3b8" />
+        <line x1={cx - 3} y1="165.6" x2={cx + 3} y2="165.6" stroke="#0f172a" strokeWidth="1" />
+      </g>
+    ))}
+    <text x="19.8" y="30" textAnchor="middle" fill="#475569" fontSize="6.5" fontWeight="bold">1/L1</text>
+    <text x="41.8" y="30" textAnchor="middle" fill="#475569" fontSize="6.5" fontWeight="bold">3/L2</text>
+    <text x="63.8" y="30" textAnchor="middle" fill="#475569" fontSize="6.5" fontWeight="bold">5/L3</text>
+    <text x="90.2" y="30" textAnchor="middle" fill="#005ea6" fontSize="6.5" fontWeight="bold">13NO</text>
+    <text x="90.2" y="40" textAnchor="middle" fill="#dc2626" fontSize="6" fontWeight="bold">A1</text>
+    <text x="19.8" y="156" textAnchor="middle" fill="#475569" fontSize="6.5" fontWeight="bold">2/T1</text>
+    <text x="41.8" y="156" textAnchor="middle" fill="#475569" fontSize="6.5" fontWeight="bold">4/T2</text>
+    <text x="63.8" y="156" textAnchor="middle" fill="#475569" fontSize="6.5" fontWeight="bold">6/T3</text>
+    <text x="90.2" y="156" textAnchor="middle" fill="#005ea6" fontSize="6.5" fontWeight="bold">14NO</text>
+    <text x="90.2" y="146" textAnchor="middle" fill="#dc2626" fontSize="6" fontWeight="bold">A2</text>
+  </svg>
+);
+
+const SvgThermalRelay: React.FC<{
+  width: number;
+  height: number;
+  tag: string;
+  tripped?: boolean;
+  onTripToggle?: () => void;
+  isSelected?: boolean;
+}> = ({ width, height, tag, tripped, onTripToggle, isSelected }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 120 190"
+    style={{
+      width: '100%',
+      height: '100%',
+      display: 'block',
+      outline: isSelected ? '2px solid #00e676' : 'none',
+      borderRadius: '4px',
+      userSelect: 'none',
+    }}
+  >
+    {[24, 60, 96].map((cx, i) => (
+      <g key={`rw-pin-${i}`}>
+        <rect x={cx - 5} y="4" width="10" height="22" rx="2" fill="#d97706" stroke="#78350f" strokeWidth="0.8" />
+        <circle cx={cx} cy="15.2" r="3.5" fill="#fef3c7" />
+      </g>
+    ))}
+    <rect x="4" y="24" width="112" height="162" rx="5" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+    <rect x="8" y="28" width="104" height="22" rx="3" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+    <text x="14" y="43" fill="#ffffff" fontSize="8" fontWeight="900" fontFamily="Arial">Шeg</text>
+    <text x="42" y="43" fill="#f87171" fontSize="7.5" fontWeight="bold" fontFamily="monospace">RW27</text>
+    <text x="86" y="43" fill="#00e676" fontSize="7.5" fontWeight="bold" fontFamily="monospace">{tag}</text>
+    <g transform="translate(24, 56)">
+      <circle cx="16" cy="16" r="14" fill="#0f172a" stroke="#475569" strokeWidth="1.2" />
+      <circle cx="16" cy="16" r="11" fill="#cbd5e1" />
+      <line x1="16" y1="7" x2="16" y2="13" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" />
+      <text x="16" y="22" textAnchor="middle" fill="#0f172a" fontSize="5" fontWeight="bold">15-23A</text>
+    </g>
+    <g transform="translate(68, 56)">
+      <rect x="0" y="0" width="18" height="18" rx="3" fill="#0284c7" stroke="#0369a1" strokeWidth="1" />
+      <text x="9" y="11.5" textAnchor="middle" fill="#ffffff" fontSize="5.5" fontWeight="bold">RESET</text>
+    </g>
+    <g transform="translate(90, 56)" onClick={(e) => { e.stopPropagation(); onTripToggle && onTripToggle(); }} style={{ cursor: 'pointer' }}>
+      <rect x="0" y="0" width="18" height="18" rx="3" fill={tripped ? '#b91c1c' : '#dc2626'} stroke="#7f1d1d" strokeWidth="1" />
+      <text x="9" y="11.5" textAnchor="middle" fill="#ffffff" fontSize="5.5" fontWeight="bold">{tripped ? 'TRIP' : 'TEST'}</text>
+    </g>
+    <rect x="74" y="78" width="30" height="6" rx="1.5" fill="#000" />
+    <rect x="75" y="79" width="28" height="4" rx="1" fill={tripped ? '#ef4444' : '#22c55e'} />
+    <rect x="8" y="96" width="104" height="28" rx="3" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+    {[21.6, 48, 74.4, 100.8].map((cx, i) => (
+      <g key={`aux-${i}`}>
+        <circle cx={cx} cy="110.2" r="4.2" fill="#94a3b8" />
+        <line x1={cx - 2.8} y1="110.2" x2={cx + 2.8} y2="110.2" stroke="#0f172a" strokeWidth="1" />
+      </g>
+    ))}
+    <text x="21.6" y="122" textAnchor="middle" fill="#93c5fd" fontSize="6.5" fontWeight="bold">95</text>
+    <text x="48" y="122" textAnchor="middle" fill="#93c5fd" fontSize="6.5" fontWeight="bold">96 NC</text>
+    <text x="74.4" y="122" textAnchor="middle" fill="#fca5a5" fontSize="6.5" fontWeight="bold">97</text>
+    <text x="100.8" y="122" textAnchor="middle" fill="#fca5a5" fontSize="6.5" fontWeight="bold">98 NO</text>
+    <rect x="8" y="156" width="104" height="26" rx="3" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+    {[24, 60, 96].map((cx, i) => (
+      <g key={`load-${i}`}>
+        <circle cx={cx} cy="174.8" r="4.8" fill="#94a3b8" />
+        <line x1={cx - 3} y1="174.8" x2={cx + 3} y2="174.8" stroke="#0f172a" strokeWidth="1.2" />
+      </g>
+    ))}
+    <text x="24" y="164" textAnchor="middle" fill="#cbd5e1" fontSize="6.5" fontWeight="bold">2/T1</text>
+    <text x="60" y="164" textAnchor="middle" fill="#cbd5e1" fontSize="6.5" fontWeight="bold">4/T2</text>
+    <text x="96" y="164" textAnchor="middle" fill="#cbd5e1" fontSize="6.5" fontWeight="bold">6/T3</text>
+  </svg>
+);
+
+const SvgMiniBreaker: React.FC<{
+  width: number;
+  height: number;
+  tag: string;
+  poles: 1 | 2;
+  currentRating?: number;
+  state: boolean;
+  onToggle?: () => void;
+  isSelected?: boolean;
+}> = ({ width, height, tag, poles, currentRating = 16, state, onToggle, isSelected }) => {
+  const is2P = poles === 2;
+  const terminalX = is2P ? [width * 0.25, width * 0.75] : [width * 0.5];
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        outline: isSelected ? '2px solid #00e676' : 'none',
+        borderRadius: '4px',
+        userSelect: 'none',
+      }}
+    >
+      <rect x="1" y="1" width={width - 2} height={height - 2} rx="4" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="1.5" />
+      {is2P && (
+        <line x1={width / 2} y1="2" x2={width / 2} y2={height - 2} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="3,2" />
+      )}
+      {terminalX.map((cx, i) => (
+        <g key={`top-sc-${i}`}>
+          <rect x={cx - 7} y={height * 0.1 - 7} width="14" height="14" rx="2" fill="#1e293b" stroke="#475569" strokeWidth="0.8" />
+          <circle cx={cx} cy={height * 0.1} r="4" fill="#94a3b8" />
+          <line x1={cx - 3} y1={height * 0.1} x2={cx + 3} y2={height * 0.1} stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+      <text x={width / 2} y="32" textAnchor="middle" fill="#005ea6" fontSize="8" fontWeight="900" fontFamily="Arial">Шeg</text>
+      <text x={width / 2} y="41" textAnchor="middle" fill="#334155" fontSize="6.5" fontWeight="bold" fontFamily="monospace">MDW-{is2P ? '2P' : '1P'}</text>
+      <rect x={width / 2 - 13} y="46" width="26" height="11" rx="2" fill="#dc2626" />
+      <text x={width / 2} y="54" textAnchor="middle" fill="#ffffff" fontSize="7" fontWeight="900" fontFamily="monospace">{`C${currentRating}`}</text>
+      <rect x={width / 2 - 8} y="61" width="16" height="6" rx="1" fill="#0f172a" />
+      <rect x={width / 2 - 7} y="62" width="14" height="4" rx="0.5" fill={state ? '#ef4444' : '#22c55e'} />
+      <rect x={width / 2 - 10} y="72" width="20" height="34" rx="2" fill="#334155" stroke="#1e293b" strokeWidth="1" />
+      <g onClick={(e) => { e.stopPropagation(); onToggle && onToggle(); }} style={{ cursor: 'pointer' }}>
+        <rect
+          x={width / 2 - 8}
+          y={state ? 74 : 88}
+          width="16"
+          height="16"
+          rx="2"
+          fill="#ef4444"
+          stroke="#991b1b"
+          strokeWidth="0.8"
+          style={{ transition: 'y 0.12s ease' }}
+        />
+        <text x={width / 2} y={state ? 84.5 : 98.5} textAnchor="middle" fill="#ffffff" fontSize="6" fontWeight="bold" style={{ transition: 'y 0.12s ease' }}>
+          {state ? 'I' : '0'}
+        </text>
+      </g>
+      <text x={width / 2} y="116" textAnchor="middle" fill="#00e676" fontSize="7" fontWeight="bold" fontFamily="monospace">{tag}</text>
+      {terminalX.map((cx, i) => (
+        <g key={`bot-sc-${i}`}>
+          <rect x={cx - 7} y={height * 0.9 - 7} width="14" height="14" rx="2" fill="#1e293b" stroke="#475569" strokeWidth="0.8" />
+          <circle cx={cx} cy={height * 0.9} r="4" fill="#94a3b8" />
+          <line x1={cx - 3} y1={height * 0.9} x2={cx + 3} y2={height * 0.9} stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+const SvgMotorBreaker: React.FC<{
+  width: number;
+  height: number;
+  tag: string;
+  currentRating?: number;
+  state: boolean;
+  onToggle?: () => void;
+  isSelected?: boolean;
+}> = ({ width, height, tag, currentRating = 20, state, onToggle, isSelected }) => {
+  const terminalX = [width * 0.18, width * 0.5, width * 0.82];
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        outline: isSelected ? '2px solid #00e676' : 'none',
+        borderRadius: '4px',
+        userSelect: 'none',
+      }}
+    >
+      <rect x="1" y="1" width={width - 2} height={height - 2} rx="4" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+      {terminalX.map((cx, i) => (
+        <g key={`mpw-t-${i}`}>
+          <rect x={cx - 7} y={height * 0.1 - 7} width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={cx} cy={height * 0.1} r="4" fill="#94a3b8" />
+          <line x1={cx - 3} y1={height * 0.1} x2={cx + 3} y2={height * 0.1} stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+      <text x="12" y="32" fill="#ffffff" fontSize="8" fontWeight="900" fontFamily="Arial">Шeg</text>
+      <text x={width / 2} y="32" textAnchor="middle" fill="#38bdf8" fontSize="7.5" fontWeight="bold" fontFamily="monospace">MPW40</text>
+      <text x={width - 12} y="32" textAnchor="end" fill="#00e676" fontSize="7.5" fontWeight="bold" fontFamily="monospace">{tag}</text>
+      <g onClick={(e) => { e.stopPropagation(); onToggle && onToggle(); }} style={{ cursor: 'pointer' }}>
+        <rect x={width * 0.18 - 12} y="40" width="24" height="26" rx="2" fill={state ? '#0284c7' : '#334155'} stroke="#64748b" strokeWidth="1" />
+        <text x={width * 0.18} y="56" textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="900">I</text>
+        <rect x={width * 0.82 - 12} y="40" width="24" height="26" rx="2" fill={!state ? '#dc2626' : '#7f1d1d'} stroke="#991b1b" strokeWidth="1" />
+        <text x={width * 0.82} y="56" textAnchor="middle" fill="#ffffff" fontSize="11" fontWeight="900">0</text>
+      </g>
+      <g transform={`translate(${width / 2 - 16}, 72)`}>
+        <circle cx="16" cy="16" r="13" fill="#0f172a" stroke="#64748b" strokeWidth="1" />
+        <circle cx="16" cy="16" r="10" fill="#cbd5e1" />
+        <line x1="16" y1="9" x2="16" y2="15" stroke="#dc2626" strokeWidth="1.5" />
+        <text x="16" y="23" textAnchor="middle" fill="#0f172a" fontSize="5" fontWeight="bold">{`${currentRating}A`}</text>
+      </g>
+      <text x={width / 2} y="118" textAnchor="middle" fill="#64748b" fontSize="5" fontFamily="monospace">IEC 60947</text>
+      {terminalX.map((cx, i) => (
+        <g key={`mpw-b-${i}`}>
+          <rect x={cx - 7} y={height * 0.9 - 7} width="14" height="14" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="0.8" />
+          <circle cx={cx} cy={height * 0.9} r="4" fill="#94a3b8" />
+          <line x1={cx - 3} y1={height * 0.9} x2={cx + 3} y2={height * 0.9} stroke="#0f172a" strokeWidth="1.2" />
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+// ============================================================================
+// WORKBENCH PRINCIPAL
+// ============================================================================
+
 export const ComandosEletricosWorkbench: React.FC = () => {
   const { state: inverterState, dispatch } = useInverter();
 
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState(true); // Controle de liberação pelo Administrador
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(true);
 
   const [components, setComponents] = useState<PlacedComponent[]>([
     {
@@ -180,7 +482,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [catalogFilter, setCatalogFilter] = useState<'ALL' | 'ALIMENTACAO' | 'PROTECAO' | 'COMANDO' | 'SEGURANCA' | 'CARGAS'>('ALL');
 
-  // MULTÍMETRO DIGITAL
   const [isMeterActive, setIsMeterActive] = useState(false);
   const [meterScale, setMeterScale] = useState<MultimeterScale>('V_AC');
   const [redProbe, setRedProbe] = useState<MeterProbePosition | null>(null);
@@ -493,7 +794,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       dispatch({ type: 'PRESS_STOP' });
     }
 
-    // MULTÍMETRO READOUT
     if (redProbe && blackProbe) {
       const nodeA = `${redProbe.compId}:${redProbe.termId}`;
       const nodeB = `${blackProbe.compId}:${blackProbe.termId}`;
@@ -661,37 +961,37 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
     if (category === 'DISJUNTOR_MONOPOLAR') {
       tag = `Q${count}`;
-      name = 'Disjuntor DIN';
-      width = 70;
-      height = 155;
+      name = 'Disjuntor DIN 1P';
+      width = 48;
+      height = 140;
       terminals = [
-        { id: '1', name: '1', relX: 50, relY: 8, type: 'COMANDO' },
-        { id: '2', name: '2', relX: 50, relY: 92, type: 'COMANDO' },
+        { id: '1', name: '1', relX: 50, relY: 10, type: 'COMANDO' },
+        { id: '2', name: '2', relX: 50, relY: 90, type: 'COMANDO' },
       ];
     } else if (category === 'DISJUNTOR_BIPOLAR') {
       tag = `Q${count}`;
-      name = 'Disjuntor 2P';
-      width = 85;
-      height = 155;
+      name = 'Disjuntor DIN 2P';
+      width = 76;
+      height = 140;
       terminals = [
-        { id: '1L1', name: '1', relX: 30, relY: 8, type: 'COMANDO' },
-        { id: '3L2', name: '3', relX: 70, relY: 8, type: 'COMANDO' },
-        { id: '2T1', name: '2', relX: 30, relY: 92, type: 'COMANDO' },
-        { id: '4T2', name: '4', relX: 70, relY: 92, type: 'COMANDO' },
+        { id: '1L1', name: '1', relX: 25, relY: 10, type: 'COMANDO' },
+        { id: '3L2', name: '3', relX: 75, relY: 10, type: 'COMANDO' },
+        { id: '2T1', name: '2', relX: 25, relY: 90, type: 'COMANDO' },
+        { id: '4T2', name: '4', relX: 75, relY: 90, type: 'COMANDO' },
       ];
     } else if (category === 'DISJUNTOR_MOTOR') {
       tag = `Q${count}`;
       name = 'Disjuntor MPW';
-      width = 100;
-      height = 165;
+      width = 94;
+      height = 150;
       currentRating = 20;
       terminals = [
-        { id: '1L1', name: '1/L1', relX: 20, relY: 8, type: 'FORCA' },
-        { id: '3L2', name: '3/L2', relX: 50, relY: 8, type: 'FORCA' },
-        { id: '5L3', name: '5/L3', relX: 80, relY: 8, type: 'FORCA' },
-        { id: '2T1', name: '2/T1', relX: 20, relY: 92, type: 'FORCA' },
-        { id: '4T2', name: '4/T2', relX: 50, relY: 92, type: 'FORCA' },
-        { id: '6T3', name: '6/T3', relX: 80, relY: 92, type: 'FORCA' },
+        { id: '1L1', name: '1/L1', relX: 18, relY: 10, type: 'FORCA' },
+        { id: '3L2', name: '3/L2', relX: 50, relY: 10, type: 'FORCA' },
+        { id: '5L3', name: '5/L3', relX: 82, relY: 10, type: 'FORCA' },
+        { id: '2T1', name: '2/T1', relX: 18, relY: 90, type: 'FORCA' },
+        { id: '4T2', name: '4/T2', relX: 50, relY: 90, type: 'FORCA' },
+        { id: '6T3', name: '6/T3', relX: 82, relY: 90, type: 'FORCA' },
       ];
     } else if (category === 'SINALEIRO_LED') {
       tag = `H${count}`;
@@ -1190,7 +1490,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   boxSizing: 'border-box',
                 }}
               >
-                {/* CAIXA DE CONFIGURAÇÃO FLUTUANTE EXTERNA */}
+                {/* 1. CAIXA DE CONFIGURAÇÃO FLUTUANTE (TAG E SELEÇÃO) */}
                 <div style={tagSidebarFloatingBox}>
                   <span style={{ fontSize: '7px', color: '#90a4ae', fontWeight: 'bold' }}>TAG</span>
                   <input
@@ -1241,6 +1541,65 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                {/* 2. COMPONENTES REALISTAS */}
+                {isQ && comp.category === 'DISJUNTOR_MOTOR' && (
+                  <SvgMotorBreaker
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    currentRating={comp.currentRating}
+                    state={comp.state}
+                    isSelected={isSelected}
+                    onToggle={() => {
+                      setComponents((prev) =>
+                        prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
+                      );
+                    }}
+                  />
+                )}
+
+                {isQ && comp.category !== 'DISJUNTOR_MOTOR' && (
+                  <SvgMiniBreaker
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    poles={comp.category === 'DISJUNTOR_BIPOLAR' ? 2 : 1}
+                    currentRating={comp.currentRating}
+                    state={comp.state}
+                    isSelected={isSelected}
+                    onToggle={() => {
+                      setComponents((prev) =>
+                        prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
+                      );
+                    }}
+                  />
+                )}
+
+                {isK && (
+                  <SvgContactor
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    state={comp.state}
+                    isSelected={isSelected}
+                  />
+                )}
+
+                {isF && (
+                  <SvgThermalRelay
+                    width={comp.width}
+                    height={comp.height}
+                    tag={comp.tag}
+                    tripped={comp.tripped}
+                    isSelected={isSelected}
+                    onTripToggle={() => {
+                      setComponents((prev) =>
+                        prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c))
+                      );
+                    }}
+                  />
+                )}
 
                 {isPente && (
                   <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#334155' }}>
@@ -1300,7 +1659,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* TRANSFORMADOR ISOLADOR 24V */}
                 {isTrafo && (
                   <div style={{ ...canvaCardBase, borderColor: '#00e676', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                     <div style={compHeaderStyle}>
@@ -1314,7 +1672,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* CHAVE SECCIONADORA LOTO */}
                 {isLoto && (
                   <div style={{ ...canvaCardBase, borderColor: '#ef5350', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                     <div style={compHeaderStyle}>
@@ -1344,7 +1701,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* RELÉ DE SEGURANÇA (NR-12) */}
                 {isSafeRelay && (
                   <div style={{ ...canvaCardBase, borderColor: '#ffd600', background: '#fffde7', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                     <div style={compHeaderStyle}>
@@ -1371,7 +1727,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* CHAVE DE INTERTRAVAMENTO (NR-12) */}
                 {isInterlock && (
                   <div style={{ ...canvaCardBase, borderColor: '#fbc02d', outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                     <div style={compHeaderStyle}>
@@ -1395,85 +1750,12 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* DISJUNTORES 2D EXATOS DA IMAGEM */}
-                {isQ && (
-                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#fdfdfd' }}>
-                    <div style={esquematicoTopTagStyle}>
-                      <span style={{ fontSize: '8px', color: '#ffffff', fontWeight: 'bold', fontFamily: 'monospace' }}>
-                        {'C' + String(comp.currentRating || 16)}
-                      </span>
-                    </div>
-
-                    <div style={esquematicoLeverSlot}>
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setComponents((prev) =>
-                            prev.map((c) => (c.id === comp.id ? { ...c, state: !c.state } : c))
-                          );
-                        }}
-                        style={{
-                          ...esquematicoRedLeverHandle,
-                          top: comp.state ? '4px' : '38px',
-                        }}
-                        title="Clique para alternar ON/OFF"
-                      />
-                    </div>
-
-                    <div style={esquematicoSymbolBoxStyle}>
-                      <div
-                        style={{
-                          width: '8px',
-                          height: '8px',
-                          borderRadius: '50%',
-                          background: comp.state ? '#ef4444' : '#22c55e',
-                          margin: '0 auto 2px auto',
-                        }}
-                      />
-                      <span style={{ fontSize: '7px', color: '#475569', fontWeight: 'bold', textAlign: 'center' }}>
-                        {comp.tag}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* CONTATOR TRIPOLAR WEG REALISTA */}
-{isK && (
-  <RealisticContactor
-    width={comp.width}
-    height={comp.height}
-    tag={comp.tag}
-    name={comp.name}
-    state={comp.state}
-    isSelected={isSelected}
-  />
-)}
-
-                {/* RELÉ TÉRMICO DE SOBRECARGA WEG RW REALISTA */}
-{isF && (
-  <RealisticThermalRelay
-    width={comp.width}
-    height={comp.height}
-    tag={comp.tag}
-    name={comp.name}
-    tripped={comp.tripped}
-    isSelected={isSelected}
-    onTripToggle={() => {
-      setComponents((prev) =>
-        prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c))
-      );
-    }}
-  />
-)}
-
-                {/* RELÉ FALTA DE FASE */}
                 {isRPF && (
                   <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                     <div style={compHeaderStyle}>
                       <strong style={{ fontSize: '8px', color: '#0288d1' }}>RPF-01</strong>
                       <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
                     </div>
-
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', margin: '4px 0' }}>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                         <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: comp.state && !comp.tripped ? '#00e676' : '#263238' }} />
@@ -1485,7 +1767,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* BLOCO AUXILIAR */}
                 {isAux && (
                   <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f1f5f9' }}>
                     <div style={compHeaderStyle}>
@@ -1501,7 +1782,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* MOTOR 3D/2D TRIFÁSICO */}
                 {isMotor && (
                   <div style={{ ...motorRealisticWrapperStyle, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                     <div style={motorFinHousingStyle}>
@@ -1532,7 +1812,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* MOTOR MONOFÁSICO COM CAPACITOR */}
                 {isMotorMono && (
                   <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#1e293b', borderColor: '#38bdf8' }}>
                     <div style={compHeaderStyle}>
@@ -1563,7 +1842,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* CAPACITOR ELETROLÍTICO / DE PARTIDA */}
                 {isCapacitor && (
                   <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f8fafc', borderColor: '#eab308' }}>
                     <div style={compHeaderStyle}>
@@ -1579,7 +1857,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* RESISTOR DE FREINAGEM */}
                 {isResistor && (
                   <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#f8fafc', borderColor: '#f97316' }}>
                     <div style={compHeaderStyle}>
@@ -1594,7 +1871,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* SINALEIRO LED COM TROCA DE CORES */}
                 {isLamp && (
                   <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                     <div
@@ -1614,7 +1890,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* BOTOEIRA NA */}
                 {isBtnNA && (
                   <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                     <div
@@ -1649,7 +1924,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* BOTOEIRA NF */}
                 {isBtnNF && (
                   <div style={{ ...circularDeviceContainer, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
                     <div
@@ -2096,53 +2370,6 @@ const canvaCardBase: React.CSSProperties = {
   boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
 };
 
-const esquematicoTopTagStyle: React.CSSProperties = {
-  width: '100%',
-  height: '18px',
-  background: '#dc2626',
-  borderRadius: '3px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-};
-
-const esquematicoLeverSlot: React.CSSProperties = {
-  position: 'relative',
-  width: '26px',
-  height: '60px',
-  background: '#e2e8f0',
-  borderRadius: '4px',
-  margin: '0 auto',
-  border: '1px solid #cbd5e1',
-  boxShadow: 'inset 0 0 6px rgba(0,0,0,0.15)',
-};
-
-const esquematicoRedLeverHandle: React.CSSProperties = {
-  position: 'absolute',
-  left: '2px',
-  width: '20px',
-  height: '18px',
-  borderRadius: '3px',
-  background: '#ef4444',
-  border: '1px solid #b91c1c',
-  cursor: 'pointer',
-  transition: 'top 0.15s ease',
-  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-};
-
-const esquematicoSymbolBoxStyle: React.CSSProperties = {
-  width: '100%',
-  background: '#ffffff',
-  border: '1px solid #e2e8f0',
-  borderRadius: '4px',
-  padding: '4px 2px',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
-
 const motorRealisticWrapperStyle: React.CSSProperties = {
   width: '100%',
   height: '100%',
@@ -2300,10 +2527,10 @@ const deviceTagLabel: React.CSSProperties = {
 const screwPoleStyle: React.CSSProperties = {
   position: 'absolute',
   transform: 'translate(-50%, -50%)',
-  width: '14px',
-  height: '14px',
+  width: '12px',
+  height: '12px',
   borderRadius: '50%',
-  border: '2px solid',
+  border: '1.5px solid',
   cursor: 'pointer',
   display: 'flex',
   alignItems: 'center',
@@ -2338,4 +2565,3 @@ const guideCardStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
 };
-
