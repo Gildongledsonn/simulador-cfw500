@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useInverter } from '../context/InverterContext';
 import { MotorVisualizer } from './MotorVisualizer';
+import { RealisticContactor, RealisticThermalRelay } from './RealisticComponents';
 
 export type ComponentCategory =
   | 'REDE_TRIFASICA'
@@ -1436,60 +1437,34 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   </div>
                 )}
 
-                {/* CONTATOR TRIPOLAR ESTILO CANVA */}
-                {isK && (
-                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none', background: '#e2e8f0' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '9px', color: '#005ea6' }}>WEG</strong>
-                      <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
-                    </div>
+                {/* CONTATOR TRIPOLAR WEG REALISTA */}
+{isK && (
+  <RealisticContactor
+    width={comp.width}
+    height={comp.height}
+    tag={comp.tag}
+    name={comp.name}
+    state={comp.state}
+    isSelected={isSelected}
+  />
+)}
 
-                    <div style={contactorCoreIndicator}>
-                      <div
-                        style={{
-                          width: '36px',
-                          height: '14px',
-                          background: comp.state ? '#00e676' : '#263238',
-                          borderRadius: '2px',
-                          boxShadow: comp.state ? '0 0 10px #00e676' : 'none',
-                        }}
-                      />
-                      <span style={{ fontSize: '8px', color: comp.state ? '#00e676' : '#37474f', fontWeight: 'bold' }}>
-                        {comp.state ? 'ATRACADO' : 'ABERTO'}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: '8px', color: '#546e7a', textAlign: 'center', fontWeight: 'bold' }}>{comp.name}</span>
-                  </div>
-                )}
-
-                {/* RELÉ TÉRMICO ESTILO CANVA */}
-                {isF && (
-                  <div style={{ ...canvaCardBase, outline: isSelected ? '3px dashed #00e676' : 'none' }}>
-                    <div style={compHeaderStyle}>
-                      <strong style={{ fontSize: '8px', color: '#d32f2f' }}>RW27</strong>
-                      <span style={{ fontSize: '9px', color: '#37474f', fontWeight: 'bold' }}>{comp.tag}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', margin: '6px 0' }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setComponents((prev) =>
-                            prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c))
-                          );
-                        }}
-                        style={{ ...btnRelayActionStyle, background: comp.tripped ? '#d32f2f' : '#b71c1c' }}
-                      >
-                        {comp.tripped ? 'TRIP' : 'TEST'}
-                      </button>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-around', width: '100%', background: '#b0bec5', padding: '1px 0', borderRadius: '2px' }}>
-                      <span style={{ fontSize: '7px', color: '#1a237e', fontWeight: 'bold' }}>95 96 NC</span>
-                      <span style={{ fontSize: '7px', color: '#b71c1c', fontWeight: 'bold' }}>97 98 NO</span>
-                    </div>
-                  </div>
-                )}
+                {/* RELÉ TÉRMICO DE SOBRECARGA WEG RW REALISTA */}
+{isF && (
+  <RealisticThermalRelay
+    width={comp.width}
+    height={comp.height}
+    tag={comp.tag}
+    name={comp.name}
+    tripped={comp.tripped}
+    isSelected={isSelected}
+    onTripToggle={() => {
+      setComponents((prev) =>
+        prev.map((c) => (c.id === comp.id ? { ...c, tripped: !c.tripped } : c))
+      );
+    }}
+  />
+)}
 
                 {/* RELÉ FALTA DE FASE */}
                 {isRPF && (
