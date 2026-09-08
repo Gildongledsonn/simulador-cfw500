@@ -35,6 +35,7 @@ export const AdminPanel: React.FC = () => {
 
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newCpf, setNewCpf] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [formFeedback, setFormFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
@@ -67,6 +68,7 @@ export const AdminPanel: React.FC = () => {
     const res = await adminAddUser({
       name: newName,
       email: newEmail,
+      cpf: newCpf,
       username: newUsername,
       password: newPassword,
     });
@@ -75,6 +77,7 @@ export const AdminPanel: React.FC = () => {
       setFormFeedback({ type: 'success', text: res.message });
       setNewName('');
       setNewEmail('');
+      setNewCpf('');
       setNewUsername('');
       setNewPassword('');
       await loadData();
@@ -185,7 +188,6 @@ export const AdminPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* ABAS INTERNAS DO PAINEL ADMIN (ALUNOS / TAREFAS) */}
       <div style={subTabsRowStyle}>
         <button
           onClick={() => setActiveSubTab('USERS')}
@@ -260,6 +262,18 @@ export const AdminPanel: React.FC = () => {
             </div>
 
             <div>
+              <label style={labelStyle}>CPF:</label>
+              <input
+                type="text"
+                required
+                value={newCpf}
+                onChange={(e) => setNewCpf(e.target.value)}
+                placeholder="000.000.000-00"
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
               <label style={labelStyle}>Usuário de Acesso:</label>
               <input
                 type="text"
@@ -292,13 +306,13 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* CONTEÚDO DA ABA DE ALUNOS */}
       {activeSubTab === 'USERS' && (
         <div style={{ overflowX: 'auto' }}>
           <table style={tableStyle}>
             <thead>
               <tr style={{ color: '#90a4ae', borderBottom: '1px solid #2a313d', textAlign: 'left', fontSize: '11px' }}>
                 <th style={{ padding: '8px' }}>NOME</th>
+                <th style={{ padding: '8px' }}>CPF</th>
                 <th style={{ padding: '8px' }}>USUÁRIO</th>
                 <th style={{ padding: '8px' }}>SENHA</th>
                 <th style={{ padding: '8px' }}>STATUS</th>
@@ -309,6 +323,7 @@ export const AdminPanel: React.FC = () => {
               {users.map((u) => (
                 <tr key={u.id} style={{ borderBottom: '1px solid #1a1f26', fontSize: '11px' }}>
                   <td style={{ padding: '8px', color: '#fff', fontWeight: 'bold' }}>{u.name}</td>
+                  <td style={{ padding: '8px', color: '#cbd5e1' }}>{u.cpf}</td>
                   <td style={{ padding: '8px', color: '#81d4fa', fontFamily: 'monospace' }}>@{u.username}</td>
                   <td style={{ padding: '8px', color: '#ffd54f', fontFamily: 'monospace' }}>{u.password}</td>
                   <td style={{ padding: '8px' }}>
@@ -354,7 +369,6 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* CONTEÚDO DA ABA DE TAREFAS */}
       {activeSubTab === 'TASKS' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={addTaskBoxStyle}>

@@ -104,7 +104,7 @@ export const CFW500ExamModal: React.FC<CFW500ExamModalProps> = ({
           <div>
             <strong style={{ fontSize: '15px', color: '#fff' }}>📝 Avaliação Final • Inversor WEG CFW500</strong>
             <span style={{ fontSize: '11px', color: '#90a4ae', display: 'block' }}>
-              Aluno: <strong>{studentName}</strong> • Nota mínima para aprovação: <strong>7.0</strong>
+              Aluno: <strong>{studentName}</strong> (CPF: {studentCpf}) • Nota mínima: <strong>7.0</strong>
             </span>
           </div>
           <button onClick={onClose} style={btnCloseStyle}>✕</button>
@@ -166,7 +166,7 @@ export const CFW500ExamModal: React.FC<CFW500ExamModalProps> = ({
             <p style={{ fontSize: '12px', color: '#cfd8dc', textAlign: 'center', maxWidth: '360px', margin: '0 0 14px 0' }}>
               Sua nota final foi <strong style={{ color: '#fff', fontSize: '15px' }}>{examResult.score.toFixed(1)}</strong>.
               {examResult.passed
-                ? ' Seu certificado oficial GAF Treinamentos foi gerado e já está disponível na aba "Meus Certificados".'
+                ? ' Seu certificado oficial GAF Treinamentos foi gerado com sucesso!'
                 : ' Revise os módulos teóricos e refaça a avaliação para atingir a nota mínima de 7.0.'}
             </p>
             <button onClick={onClose} style={btnFinishStyle}>

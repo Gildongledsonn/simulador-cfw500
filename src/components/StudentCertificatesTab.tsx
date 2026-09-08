@@ -7,12 +7,10 @@ interface StudentCertificatesTabProps {
   onOpenExam?: () => void;
 }
 
-// Componente oficial da Logo GAF Treinamentos
 const GafLogo: React.FC<{ size?: 'sm' | 'md' }> = ({ size = 'md' }) => {
   const scale = size === 'sm' ? 0.75 : 1;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: `${10 * scale}px` }}>
-      {/* Ícone da Engrenagem com a letra G */}
       <div
         style={{
           width: `${46 * scale}px`,
@@ -41,7 +39,6 @@ const GafLogo: React.FC<{ size?: 'sm' | 'md' }> = ({ size = 'md' }) => {
         </span>
       </div>
 
-      {/* Textos GAF TREINAMENTOS e Slogan */}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: `${6 * scale}px` }}>
           <span
@@ -205,10 +202,8 @@ export const StudentCertificatesTabComponent: React.FC<StudentCertificatesTabPro
 
           {selectedCert && (
             <div style={certPreviewColumnStyle}>
-              {/* CERTIFICADO COM LOGO OFICIAL GAF TREINAMENTOS NA PARTE SUPERIOR E INFERIOR */}
               <div style={certificateDocumentStyle} id="certificate-print-view">
                 <div style={certificateInnerBorder}>
-                  {/* CABEÇALHO COM A LOGO OFICIAL GAF */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2.5px solid #005ea6', paddingBottom: '12px', marginBottom: '14px' }}>
                     <GafLogo size="md" />
                     <div style={{ textAlign: 'right' }}>
@@ -219,7 +214,6 @@ export const StudentCertificatesTabComponent: React.FC<StudentCertificatesTabPro
                     </div>
                   </div>
 
-                  {/* CORPO DO CERTIFICADO */}
                   <div style={{ textAlign: 'center', margin: '14px 0' }}>
                     <h1 style={{ fontFamily: '"Cinzel", "Times New Roman", serif', fontSize: '32px', fontWeight: '700', color: '#004080', margin: '0 0 4px 0', letterSpacing: '4px' }}>
                       CERTIFICADO
@@ -248,7 +242,6 @@ export const StudentCertificatesTabComponent: React.FC<StudentCertificatesTabPro
                       {selectedCert.courseTitle}
                     </h2>
 
-                    {/* METADADOS */}
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', margin: '12px 0' }}>
                       <div style={metaBadgeStyle}>
                         <span>⏱️ CARGA HORÁRIA: <strong>{selectedCert.workloadHours} HORAS</strong></span>
@@ -262,7 +255,6 @@ export const StudentCertificatesTabComponent: React.FC<StudentCertificatesTabPro
                     </div>
                   </div>
 
-                  {/* CONTEÚDO PROGRAMÁTICO */}
                   <div style={programmaticBoxStyle}>
                     <strong style={{ fontSize: '9px', color: '#004080', display: 'block', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '1px' }}>
                       Conteúdo Programático Aplicado:
@@ -283,7 +275,6 @@ export const StudentCertificatesTabComponent: React.FC<StudentCertificatesTabPro
                     </div>
                   </div>
 
-                  {/* ASSINATURAS E RODAPÉ COM A LOGO GAF ABAIXO */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '16px', borderTop: '1px solid #cbd5e1', paddingTop: '10px' }}>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontFamily: '"Brush Script MT", cursive', fontSize: '19px', color: '#0f172a' }}>Gildongledson</div>
@@ -292,7 +283,6 @@ export const StudentCertificatesTabComponent: React.FC<StudentCertificatesTabPro
                       <span style={{ fontSize: '6.5px', color: '#64748b' }}>Registro: 075.840.954-02</span>
                     </div>
 
-                    {/* LOGO GAF OFICIAL REPETIDA NA PARTE INFERIOR */}
                     <div style={{ transform: 'scale(0.85)', transformOrigin: 'bottom center' }}>
                       <GafLogo size="sm" />
                       <div style={{ textAlign: 'center', marginTop: '2px' }}>

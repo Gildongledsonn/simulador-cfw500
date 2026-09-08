@@ -10,7 +10,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
 
-  // Estados de Cadastro
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regCpf, setRegCpf] = useState('');
@@ -46,7 +45,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       return;
     }
 
-    const authData = { name: found.name, role: found.role, username: found.username, cpf: found.cpf };
+    const authData = { name: found.name, role: found.role, username: found.username, cpf: found.cpf || '046.405.824-47' };
     localStorage.setItem('cfw500_auth_user', JSON.stringify(authData));
     onLoginSuccess(authData);
   };
@@ -117,7 +116,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 required
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
-                placeholder="Ex: fabio"
+                placeholder="Ex: airton.senna"
                 style={inputStyle}
               />
             </div>
@@ -194,7 +193,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 required
                 value={regUsername}
                 onChange={(e) => setRegUsername(e.target.value)}
-                placeholder="Airton.Senna"
+                placeholder="Airton.senna"
                 style={inputStyle}
               />
             </div>

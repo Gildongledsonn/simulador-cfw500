@@ -29,6 +29,7 @@ interface AuthUser {
   name: string;
   role: string;
   username: string;
+  cpf?: string;
 }
 
 const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = ({ user, onLogout }) => {
@@ -57,14 +58,13 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
 
   return (
     <div style={mainContainerStyle}>
-      {/* BARRA SUPERIOR DO USUÁRIO */}
       <div style={userHeaderBarStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '16px' }}>👤</span>
           <div>
             <strong style={{ fontSize: '12px', color: '#fff' }}>{user.name}</strong>
             <span style={{ fontSize: '10px', color: '#90a4ae', marginLeft: '6px' }}>
-              ({user.role === 'ADMIN' ? 'Instrutor / Admin' : 'Aluno'}) • @{user.username}
+              ({user.role === 'ADMIN' ? 'Instrutor / Admin' : 'Aluno'}) • @{user.username} {user.cpf ? `• CPF: ${user.cpf}` : ''}
             </span>
           </div>
         </div>
@@ -74,7 +74,6 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
         </button>
       </div>
 
-      {/* BARRA DE NAVEGAÇÃO ENTRE ABAS */}
       <div style={headerNavContainerStyle}>
         <div style={tabsButtonGroupStyle}>
           <button
@@ -125,7 +124,6 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
             ⚡ Comandos Elétricos
           </button>
 
-          {/* ABA DE CERTIFICADOS ADICIONADA */}
           <button
             onClick={() => setActiveTab('certificates')}
             style={{
@@ -156,7 +154,6 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
         <AudioControls />
       </div>
 
-      {/* ABA 1: BANCADA DE OPERAÇÃO LIVRE */}
       {activeTab === 'workbench' && (
         <div style={tabContentStyle}>
           <div style={modelSelectorBarStyle}>
@@ -282,14 +279,12 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
         </div>
       )}
 
-      {/* ABA 2: MODBUS RTU & CLIC-02 */}
       {activeTab === 'modbus' && (
         <div style={tabContentStyle}>
           <ModbusPanel />
         </div>
       )}
 
-      {/* ABA 3: TREINAMENTO DE AUTOMAÇÕES */}
       {activeTab === 'tutorial' && (
         <div style={tabContentStyle}>
           <TutorialGuide
@@ -353,31 +348,32 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
         </div>
       )}
 
-      {/* ABA 4: COMANDOS ELÉTRICOS */}
       {activeTab === 'comandos' && (
         <div style={tabContentStyle}>
           <ComandosEletricosWorkbench />
         </div>
       )}
 
-      {/* ABA 5: CERTIFICADOS DO ALUNO */}
       {activeTab === 'certificates' && (
         <div style={tabContentStyle}>
-          <StudentCertificatesTab studentName={user.name} onOpenExam={() => setIsExamOpen(true)} />
+          <StudentCertificatesTab
+            studentName={user.name}
+            studentCpf={user.cpf || '046.405.824-47'}
+            onOpenExam={() => setIsExamOpen(true)}
+          />
         </div>
       )}
 
-      {/* ABA 6: PAINEL DO ADMINISTRADOR */}
       {activeTab === 'admin' && user.role === 'ADMIN' && (
         <div style={tabContentStyle}>
           <AdminPanel />
         </div>
       )}
 
-      {/* MODAL DA PROVA FINAL DO CFW500 */}
       {isExamOpen && (
         <CFW500ExamModal
           studentName={user.name}
+          studentCpf={user.cpf || '046.405.824-47'}
           onClose={() => setIsExamOpen(false)}
           onCertificateIssued={() => {
             setIsExamOpen(false);

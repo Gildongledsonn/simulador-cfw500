@@ -63,7 +63,6 @@ export const registerNewUser = async (data: {
 
   const users = await getStoredUsers();
   const cleanUsername = data.username.toLowerCase().trim();
-  const cleanCpf = data.cpf.replace(/\D/g, '');
 
   if (users.some((u) => u.username.toLowerCase() === cleanUsername)) {
     return { success: false, message: 'Este nome de usuário já está em uso.' };
@@ -77,7 +76,7 @@ export const registerNewUser = async (data: {
     username: cleanUsername,
     password: data.password,
     role: 'STUDENT',
-    status: 'PENDING', // Requer aprovação do Admin ou auto-liberação conforme regra
+    status: 'PENDING',
   };
 
   users.push(newUser);
@@ -111,7 +110,7 @@ export const adminAddUser = async (data: {
     username: cleanUsername,
     password: data.password,
     role: 'STUDENT',
-    status: 'APPROVED', // Cadastrado direto pelo admin já nasce aprovado
+    status: 'APPROVED',
   };
 
   users.push(newUser);
