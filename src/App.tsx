@@ -17,10 +17,12 @@ import { CFW300Workbench } from './components/CFW300Workbench';
 import { L1000Workbench } from './components/L1000Workbench';
 import { Clic02RealisticPLC } from './components/Clic02RealisticPLC';
 import { ComandosEletricosWorkbench } from './components/ComandosEletricosWorkbench';
+import { StudentCertificatesTab } from './components/StudentCertificatesTab';
+import { CFW500ExamModal } from './components/CFW500ExamModal';
 import { COURSE_MODULES } from './constants/courseModules';
 import { Lesson } from './types/tutorial';
 
-type ActiveTab = 'workbench' | 'modbus' | 'tutorial' | 'comandos' | 'admin';
+type ActiveTab = 'workbench' | 'modbus' | 'tutorial' | 'comandos' | 'certificates' | 'admin';
 type InverterModel = 'CFW500' | 'CFW300' | 'L1000';
 
 interface AuthUser {
@@ -35,11 +37,11 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
   const [tutorialModel, setTutorialModel] = useState<'CFW500' | 'CFW300' | 'L1000' | 'CLIC02'>('CFW500');
   const [loadTorque, setLoadTorque] = useState(20);
   const [currentLesson, setCurrentLesson] = useState<Lesson>(COURSE_MODULES[0].lessons[0]);
+  const [isExamOpen, setIsExamOpen] = useState(false);
 
   usePhysicsLoop({ loadTorquePercent: loadTorque, enableNoise: true });
   useKeyboardControls();
 
-  // Sincroniza a bancada conforme o equipamento da lição ativa
   useEffect(() => {
     const id = currentLesson.id;
     if (id.startsWith('c300_')) {
@@ -52,13 +54,6 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
       setTutorialModel('CFW500');
     }
   }, [currentLesson.id]);
-
-  // Se um aluno estiver com a aba de comandos selecionada por algum estado anterior, redireciona
-  useEffect(() => {
-    if (user.role !== 'ADMIN' && activeTab === 'comandos') {
-      setActiveTab('workbench');
-    }
-  }, [user.role, activeTab]);
 
   return (
     <div style={mainContainerStyle}>
@@ -118,20 +113,30 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
             🎓 Treinamento de Automações
           </button>
 
-          {/* ABA DE COMANDOS ELÉTRICOS: VISÍVEL SOMENTE PARA ADMINISTRADORES/INSTRUTORES */}
-          {user.role === 'ADMIN' && (
-            <button
-              onClick={() => setActiveTab('comandos')}
-              style={{
-                ...tabButtonStyle,
-                background: activeTab === 'comandos' ? '#00897b' : '#1a1d21',
-                color: activeTab === 'comandos' ? '#fff' : '#80cbc4',
-                borderColor: activeTab === 'comandos' ? '#00e676' : '#323842',
-              }}
-            >
-              ⚡ Comandos Elétricos (Dev/Admin)
-            </button>
-          )}
+          <button
+            onClick={() => setActiveTab('comandos')}
+            style={{
+              ...tabButtonStyle,
+              background: activeTab === 'comandos' ? '#00897b' : '#1a1d21',
+              color: activeTab === 'comandos' ? '#fff' : '#80cbc4',
+              borderColor: activeTab === 'comandos' ? '#00e676' : '#323842',
+            }}
+          >
+            ⚡ Comandos Elétricos
+          </button>
+
+          {/* ABA DE CERTIFICADOS ADICIONADA */}
+          <button
+            onClick={() => setActiveTab('certificates')}
+            style={{
+              ...tabButtonStyle,
+              background: activeTab === 'certificates' ? '#2e7d32' : '#1a1d21',
+              color: activeTab === 'certificates' ? '#fff' : '#a5d6a7',
+              borderColor: activeTab === 'certificates' ? '#00e676' : '#323842',
+            }}
+          >
+            🏆 Meus Certificados
+          </button>
 
           {user.role === 'ADMIN' && (
             <button
@@ -348,18 +353,37 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
         </div>
       )}
 
-      {/* ABA 4: COMANDOS ELÉTRICOS (EXCLUSIVA PARA INSTRUTORES / ADMINS) */}
-      {activeTab === 'comandos' && user.role === 'ADMIN' && (
+      {/* ABA 4: COMANDOS ELÉTRICOS */}
+      {activeTab === 'comandos' && (
         <div style={tabContentStyle}>
           <ComandosEletricosWorkbench />
         </div>
       )}
 
-      {/* ABA 5: PAINEL DO ADMINISTRADOR */}
+      {/* ABA 5: CERTIFICADOS DO ALUNO */}
+      {activeTab === 'certificates' && (
+        <div style={tabContentStyle}>
+          <StudentCertificatesTab studentName={user.name} onOpenExam={() => setIsExamOpen(true)} />
+        </div>
+      )}
+
+      {/* ABA 6: PAINEL DO ADMINISTRADOR */}
       {activeTab === 'admin' && user.role === 'ADMIN' && (
         <div style={tabContentStyle}>
           <AdminPanel />
         </div>
+      )}
+
+      {/* MODAL DA PROVA FINAL DO CFW500 */}
+      {isExamOpen && (
+        <CFW500ExamModal
+          studentName={user.name}
+          onClose={() => setIsExamOpen(false)}
+          onCertificateIssued={() => {
+            setIsExamOpen(false);
+            setActiveTab('certificates');
+          }}
+        />
       )}
     </div>
   );

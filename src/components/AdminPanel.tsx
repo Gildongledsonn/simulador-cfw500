@@ -7,9 +7,30 @@ import {
   UserAccount,
 } from '../services/authService';
 
+export interface StudentTask {
+  id: string;
+  studentUsername: string;
+  taskTitle: string;
+  status: 'PENDENTE' | 'CONCLUIDA';
+  date: string;
+}
+
 export const AdminPanel: React.FC = () => {
   const [users, setUsers] = useState<UserAccount[]>([]);
+  const [tasks, setTasks] = useState<StudentTask[]>(() => {
+    try {
+      const saved = localStorage.getItem('@GAF_ADMIN_TASKS_V1');
+      return saved ? JSON.parse(saved) : [
+        { id: 't1', studentUsername: 'carlos.silva', taskTitle: 'Comissionamento do Inversor CFW500 (Partida e Rampa)', status: 'PENDENTE', date: '2026-06-01' },
+        { id: 't2', studentUsername: 'carlos.silva', taskTitle: 'Montagem de Comandos Elétricos (Partida Direta com Selo)', status: 'CONCLUIDA', date: '2026-06-02' },
+      ];
+    } catch {
+      return [];
+    }
+  });
+
   const [showAddModal, setShowAddModal] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<'USERS' | 'TASKS'>('USERS');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [newName, setNewName] = useState('');
@@ -17,6 +38,9 @@ export const AdminPanel: React.FC = () => {
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [formFeedback, setFormFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskStudent, setNewTaskStudent] = useState('');
 
   const loadData = useCallback(async () => {
     setIsRefreshing(true);
@@ -30,6 +54,10 @@ export const AdminPanel: React.FC = () => {
     const interval = setInterval(loadData, 8000);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  useEffect(() => {
+    localStorage.setItem('@GAF_ADMIN_TASKS_V1', JSON.stringify(tasks));
+  }, [tasks]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +108,40 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
+  const handleToggleTaskStatus = (taskId: string) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id === taskId) {
+          const nextStatus = t.status === 'PENDENTE' ? 'CONCLUIDA' : 'PENDENTE';
+          return { ...t, status: nextStatus };
+        }
+        return t;
+      })
+    );
+  };
+
+  const handleCreateTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+
+    const newTask: StudentTask = {
+      id: `task_${Date.now()}`,
+      studentUsername: newTaskStudent || 'geral',
+      taskTitle: newTaskTitle.trim(),
+      status: 'PENDENTE',
+      date: new Date().toISOString().split('T')[0],
+    };
+
+    setTasks((prev) => [newTask, ...prev]);
+    setNewTaskTitle('');
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+  };
+
   const pendingCount = users.filter((u) => u.status === 'PENDING').length;
+  const pendingTasksCount = tasks.filter((t) => t.status === 'PENDENTE').length;
 
   return (
     <div style={containerStyle}>
@@ -90,11 +151,11 @@ export const AdminPanel: React.FC = () => {
             <span>🛡️</span> Painel de Gestão & Aprovação de Alunos
           </h3>
           <span style={{ fontSize: '11px', color: '#90a4ae' }}>
-            Servidor Próprio UOLHost • <strong style={{ color: '#81d4fa' }}>gildongledson@gmail.com</strong>
+            Servidor GAF Treinamentos • <strong style={{ color: '#81d4fa' }}>gildongledson@gmail.com</strong>
           </span>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           {pendingCount > 0 && (
             <span style={pendingBadgeStyle}>
               ⚠️ {pendingCount} {pendingCount === 1 ? 'pendente' : 'pendentes'}
@@ -124,10 +185,37 @@ export const AdminPanel: React.FC = () => {
         </div>
       </div>
 
+      {/* ABAS INTERNAS DO PAINEL ADMIN (ALUNOS / TAREFAS) */}
+      <div style={subTabsRowStyle}>
+        <button
+          onClick={() => setActiveSubTab('USERS')}
+          style={{
+            ...subTabBtnStyle,
+            background: activeSubTab === 'USERS' ? '#0288d1' : '#161b22',
+            color: activeSubTab === 'USERS' ? '#fff' : '#90a4ae',
+            borderColor: activeSubTab === 'USERS' ? '#29b6f6' : '#30363d',
+          }}
+        >
+          👥 Gestão de Alunos ({users.length})
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('TASKS')}
+          style={{
+            ...subTabBtnStyle,
+            background: activeSubTab === 'TASKS' ? '#00897b' : '#161b22',
+            color: activeSubTab === 'TASKS' ? '#fff' : '#80cbc4',
+            borderColor: activeSubTab === 'TASKS' ? '#00e676' : '#30363d',
+          }}
+        >
+          ✅ Controle & Conclusão de Tarefas {pendingTasksCount > 0 && `(${pendingTasksCount})`}
+        </button>
+      </div>
+
       {showAddModal && (
         <div style={addCardStyle}>
           <strong style={{ fontSize: '12px', color: '#00e676', display: 'block', marginBottom: '8px' }}>
-            ➕ Cadastrar Aluno Manualmente (Salvo no UOLHost com Acesso Imediato)
+            ➕ Cadastrar Aluno Manualmente (Acesso Imediato)
           </strong>
 
           {formFeedback && (
@@ -197,71 +285,168 @@ export const AdminPanel: React.FC = () => {
 
             <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
               <button type="submit" disabled={isRefreshing} style={btnSubmitAddStyle}>
-                💾 Salvar e Liberar Acesso no UOLHost
+                💾 Salvar e Liberar Acesso
               </button>
             </div>
           </form>
         </div>
       )}
 
-      <div style={{ overflowX: 'auto' }}>
-        <table style={tableStyle}>
-          <thead>
-            <tr style={{ color: '#90a4ae', borderBottom: '1px solid #2a313d', textAlign: 'left', fontSize: '11px' }}>
-              <th style={{ padding: '8px' }}>NOME</th>
-              <th style={{ padding: '8px' }}>USUÁRIO</th>
-              <th style={{ padding: '8px' }}>SENHA</th>
-              <th style={{ padding: '8px' }}>STATUS</th>
-              <th style={{ padding: '8px', textAlign: 'center' }}>AÇÕES DE CONTROLE</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} style={{ borderBottom: '1px solid #1a1f26', fontSize: '11px' }}>
-                <td style={{ padding: '8px', color: '#fff', fontWeight: 'bold' }}>{u.name}</td>
-                <td style={{ padding: '8px', color: '#81d4fa', fontFamily: 'monospace' }}>@{u.username}</td>
-                <td style={{ padding: '8px', color: '#ffd54f', fontFamily: 'monospace' }}>{u.password}</td>
-                <td style={{ padding: '8px' }}>
-                  <span
-                    style={{
-                      ...statusBadgeStyle,
-                      background:
-                        u.status === 'APPROVED' ? 'rgba(0, 230, 118, 0.15)' : u.status === 'PENDING' ? 'rgba(255, 179, 0, 0.15)' : 'rgba(211, 47, 47, 0.15)',
-                      color:
-                        u.status === 'APPROVED' ? '#00e676' : u.status === 'PENDING' ? '#ffb300' : '#ff5252',
-                      borderColor:
-                        u.status === 'APPROVED' ? '#00e676' : u.status === 'PENDING' ? '#ffb300' : '#ff5252',
-                    }}
-                  >
-                    {u.status === 'APPROVED' ? '✓ APROVADO' : u.status === 'PENDING' ? '⏳ PENDENTE' : '✕ RECUSADO'}
-                  </span>
-                </td>
-                <td style={{ padding: '8px', textAlign: 'center' }}>
-                  {u.role !== 'ADMIN' ? (
-                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
-                      {u.status !== 'APPROVED' && (
-                        <button onClick={() => handleApprove(u.id)} style={{ ...actionBtnStyle, background: '#2e7d32' }} title="Liberar Acesso">
-                          ✅ Aprovar
-                        </button>
-                      )}
-                      {u.status !== 'REJECTED' && (
-                        <button onClick={() => handleReject(u.id)} style={{ ...actionBtnStyle, background: '#d32f2f' }} title="Recusar Acesso">
-                          ⛔ Recusar
-                        </button>
-                      )}
-                      <button onClick={() => handleDelete(u.id)} style={{ ...actionBtnStyle, background: '#37474f' }} title="Remover Aluno">
-                        🗑️
-                      </button>
-                    </div>
-                  ) : (
-                    <span style={{ fontSize: '10px', color: '#90a4ae' }}>Administrador Master</span>
-                  )}
-                </td>
+      {/* CONTEÚDO DA ABA DE ALUNOS */}
+      {activeSubTab === 'USERS' && (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={tableStyle}>
+            <thead>
+              <tr style={{ color: '#90a4ae', borderBottom: '1px solid #2a313d', textAlign: 'left', fontSize: '11px' }}>
+                <th style={{ padding: '8px' }}>NOME</th>
+                <th style={{ padding: '8px' }}>USUÁRIO</th>
+                <th style={{ padding: '8px' }}>SENHA</th>
+                <th style={{ padding: '8px' }}>STATUS</th>
+                <th style={{ padding: '8px', textAlign: 'center' }}>AÇÕES DE CONTROLE</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id} style={{ borderBottom: '1px solid #1a1f26', fontSize: '11px' }}>
+                  <td style={{ padding: '8px', color: '#fff', fontWeight: 'bold' }}>{u.name}</td>
+                  <td style={{ padding: '8px', color: '#81d4fa', fontFamily: 'monospace' }}>@{u.username}</td>
+                  <td style={{ padding: '8px', color: '#ffd54f', fontFamily: 'monospace' }}>{u.password}</td>
+                  <td style={{ padding: '8px' }}>
+                    <span
+                      style={{
+                        ...statusBadgeStyle,
+                        background:
+                          u.status === 'APPROVED' ? 'rgba(0, 230, 118, 0.15)' : u.status === 'PENDING' ? 'rgba(255, 179, 0, 0.15)' : 'rgba(211, 47, 47, 0.15)',
+                        color:
+                          u.status === 'APPROVED' ? '#00e676' : u.status === 'PENDING' ? '#ffb300' : '#ff5252',
+                        borderColor:
+                          u.status === 'APPROVED' ? '#00e676' : u.status === 'PENDING' ? '#ffb300' : '#ff5252',
+                      }}
+                    >
+                      {u.status === 'APPROVED' ? '✓ APROVADO' : u.status === 'PENDING' ? '⏳ PENDENTE' : '✕ RECUSADO'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '8px', textAlign: 'center' }}>
+                    {u.role !== 'ADMIN' ? (
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                        {u.status !== 'APPROVED' && (
+                          <button onClick={() => handleApprove(u.id)} style={{ ...actionBtnStyle, background: '#2e7d32' }} title="Liberar Acesso">
+                            ✅ Aprovar
+                          </button>
+                        )}
+                        {u.status !== 'REJECTED' && (
+                          <button onClick={() => handleReject(u.id)} style={{ ...actionBtnStyle, background: '#d32f2f' }} title="Recusar Acesso">
+                            ⛔ Recusar
+                          </button>
+                        )}
+                        <button onClick={() => handleDelete(u.id)} style={{ ...actionBtnStyle, background: '#37474f' }} title="Remover Aluno">
+                          🗑️
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '10px', color: '#90a4ae' }}>Administrador Master</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* CONTEÚDO DA ABA DE TAREFAS */}
+      {activeSubTab === 'TASKS' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={addTaskBoxStyle}>
+            <strong style={{ fontSize: '11px', color: '#80cbc4', display: 'block', marginBottom: '6px' }}>
+              ➕ Atribuir Nova Tarefa / Prática para Alunos
+            </strong>
+            <form onSubmit={handleCreateTask} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                required
+                placeholder="Título da Tarefa (Ex: Montagem da Partida Estrela-Triângulo)"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                style={{ ...inputStyle, flex: 2, minWidth: '220px' }}
+              />
+              <select
+                value={newTaskStudent}
+                onChange={(e) => setNewTaskStudent(e.target.value)}
+                style={{ ...inputStyle, flex: 1, minWidth: '130px', background: '#161b22', color: '#fff' }}
+              >
+                <option value="">Todos os Alunos (Geral)</option>
+                {users.filter(u => u.role !== 'ADMIN').map((u) => (
+                  <option key={u.id} value={u.username}>@{u.username} ({u.name})</option>
+                ))}
+              </select>
+              <button type="submit" style={btnSubmitAddStyle}>
+                Atribuir Tarefa
+              </button>
+            </form>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={tableStyle}>
+              <thead>
+                <tr style={{ color: '#90a4ae', borderBottom: '1px solid #2a313d', textAlign: 'left', fontSize: '11px' }}>
+                  <th style={{ padding: '8px' }}>ALUNO / DESTINO</th>
+                  <th style={{ padding: '8px' }}>TEMA / TAREFA PRÁTICA</th>
+                  <th style={{ padding: '8px' }}>DATA</th>
+                  <th style={{ padding: '8px' }}>STATUS</th>
+                  <th style={{ padding: '8px', textAlign: 'center' }}>CONCLUIR / GERENCIAR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: '#90a4ae', fontSize: '11px' }}>
+                      Nenhuma tarefa cadastrada.
+                    </td>
+                  </tr>
+                ) : (
+                  tasks.map((t) => (
+                    <tr key={t.id} style={{ borderBottom: '1px solid #1a1f26', fontSize: '11px' }}>
+                      <td style={{ padding: '8px', color: '#81d4fa', fontWeight: 'bold' }}>@{t.studentUsername}</td>
+                      <td style={{ padding: '8px', color: '#fff' }}>{t.taskTitle}</td>
+                      <td style={{ padding: '8px', color: '#90a4ae' }}>{t.date}</td>
+                      <td style={{ padding: '8px' }}>
+                        <span
+                          style={{
+                            ...statusBadgeStyle,
+                            background: t.status === 'CONCLUIDA' ? 'rgba(0, 230, 118, 0.15)' : 'rgba(255, 179, 0, 0.15)',
+                            color: t.status === 'CONCLUIDA' ? '#00e676' : '#ffb300',
+                            borderColor: t.status === 'CONCLUIDA' ? '#00e676' : '#ffb300',
+                          }}
+                        >
+                          {t.status === 'CONCLUIDA' ? '✓ CONCLUÍDA' : '⏳ PENDENTE'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                          <button
+                            onClick={() => handleToggleTaskStatus(t.id)}
+                            style={{
+                              ...actionBtnStyle,
+                              background: t.status === 'CONCLUIDA' ? '#c62828' : '#2e7d32',
+                            }}
+                            title={t.status === 'CONCLUIDA' ? 'Marcar como Pendente' : 'Concluir Tarefa'}
+                          >
+                            {t.status === 'CONCLUIDA' ? '↺ Reabrir' : '✓ Concluir'}
+                          </button>
+                          <button onClick={() => handleDeleteTask(t.id)} style={{ ...actionBtnStyle, background: '#37474f' }} title="Excluir Tarefa">
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -286,6 +471,22 @@ const headerStyle: React.CSSProperties = {
   gap: '10px',
   borderBottom: '1px solid #222a36',
   paddingBottom: '10px',
+};
+
+const subTabsRowStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  flexWrap: 'wrap',
+  marginTop: '4px',
+};
+
+const subTabBtnStyle: React.CSSProperties = {
+  border: '1px solid',
+  borderRadius: '6px',
+  padding: '6px 12px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
 };
 
 const pendingBadgeStyle: React.CSSProperties = {
@@ -324,6 +525,13 @@ const addCardStyle: React.CSSProperties = {
   border: '1px solid #30363d',
   borderRadius: '8px',
   padding: '14px',
+};
+
+const addTaskBoxStyle: React.CSSProperties = {
+  background: '#0d1117',
+  border: '1px solid #233544',
+  borderRadius: '8px',
+  padding: '10px 12px',
 };
 
 const gridFormStyle: React.CSSProperties = {

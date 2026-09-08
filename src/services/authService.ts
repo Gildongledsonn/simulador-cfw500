@@ -1,175 +1,132 @@
 export interface UserAccount {
   id: string;
-  username: string;
   name: string;
   email: string;
-  password: string;
-  role: 'ADMIN' | 'STUDENT';
-  status: 'APPROVED' | 'PENDING' | 'REJECTED';
-  requestedAt: string;
+  cpf: string;
+  username: string;
+  password?: string;
+  role: 'STUDENT' | 'ADMIN';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
-const API_URL = 'https://gaflink.com.br/auth.php';
+const USERS_STORAGE_KEY = '@GAF_USERS_DATABASE_V3';
 
-// Usuários locais de emergência (garantem que a plataforma sempre abra)
-const LOCAL_FALLBACK_USERS: UserAccount[] = [
-  {
-    id: 'admin_master',
-    username: 'admin',
-    name: 'Gildon Gledson (Instrutor)',
-    email: 'gildongledson@gmail.com',
-    password: '123',
-    role: 'ADMIN',
-    status: 'APPROVED',
-    requestedAt: 'Hoje',
-  },
-  {
-    id: 'student_demo',
-    username: 'aluno',
-    name: 'Aluno Demonstração',
-    email: 'aluno@gaflink.com.br',
-    password: '123',
-    role: 'STUDENT',
-    status: 'APPROVED',
-    requestedAt: 'Hoje',
-  },
-];
+const getInitialUsers = (): UserAccount[] => {
+  return [
+    {
+      id: 'usr_admin',
+      name: 'Gildongledson Alves Fernandes',
+      email: 'gildongledson@gmail.com',
+      cpf: '075.840.954-02',
+      username: 'gildongledson',
+      password: '123',
+      role: 'ADMIN',
+      status: 'APPROVED',
+    },
+    {
+      id: 'usr_student1',
+      name: 'Fabio Dantas de Assis Batista',
+      email: 'fabio.dantas@gmail.com',
+      cpf: '046.405.824-47',
+      username: 'fabio',
+      password: '123',
+      role: 'STUDENT',
+      status: 'APPROVED',
+    },
+  ];
+};
 
 export const getStoredUsers = async (): Promise<UserAccount[]> => {
   try {
-    const res = await fetch(`${API_URL}?action=list`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success && Array.isArray(data.users)) {
-        return data.users;
-      }
+    const raw = localStorage.getItem(USERS_STORAGE_KEY);
+    if (!raw) {
+      const initial = getInitialUsers();
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(initial));
+      return initial;
     }
-  } catch (err) {
-    console.warn('Servidor UOLHost offline ou sem resposta, usando fallback local:', err);
+    return JSON.parse(raw);
+  } catch {
+    return getInitialUsers();
   }
-  return LOCAL_FALLBACK_USERS;
 };
 
-export const authenticateUser = async (
-  usernameInput: string,
-  passwordInput: string
-): Promise<{ success: boolean; user?: UserAccount; message?: string }> => {
-  const u = usernameInput.trim().toLowerCase();
-  const p = passwordInput.trim();
-
-  // 1. Tenta autenticar diretamente no servidor UOLHost
-  try {
-    const res = await fetch(`${API_URL}?action=login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: u, password: p }),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return data;
-    }
-  } catch (err) {
-    console.warn('Falha na requisição ao UOLHost, tentando autenticação local:', err);
-  }
-
-  // 2. Fallback de Segurança Local (admin/123 e aluno/123)
-  const localMatch = LOCAL_FALLBACK_USERS.find(
-    (acc) => acc.username.toLowerCase() === u && acc.password === p
-  );
-
-  if (localMatch) {
-    return { success: true, user: localMatch };
-  }
-
-  return {
-    success: false,
-    message: 'Usuário ou senha inválidos. Verifique suas credenciais.',
-  };
-};
-
-export const requestRegistration = async (newUser: {
-  username: string;
+export const registerNewUser = async (data: {
   name: string;
   email: string;
-  password: string;
+  cpf: string;
+  username: string;
+  password?: string;
 }): Promise<{ success: boolean; message: string }> => {
-  try {
-    const res = await fetch(`${API_URL}?action=register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: newUser.username.trim(),
-        name: newUser.name.trim(),
-        email: newUser.email.trim(),
-        password: newUser.password.trim(),
-      }),
-    });
-
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.warn('Erro ao conectar ao UOLHost:', err);
+  if (!data.name || !data.email || !data.cpf || !data.username || !data.password) {
+    return { success: false, message: 'Preenchimento obrigatório: Nome completo, E-mail, CPF, Usuário e Senha são exigidos.' };
   }
 
-  return {
-    success: false,
-    message: 'Não foi possível conectar ao servidor. Tente novamente em instantes.',
+  const users = await getStoredUsers();
+  const cleanUsername = data.username.toLowerCase().trim();
+  const cleanCpf = data.cpf.replace(/\D/g, '');
+
+  if (users.some((u) => u.username.toLowerCase() === cleanUsername)) {
+    return { success: false, message: 'Este nome de usuário já está em uso.' };
+  }
+
+  const newUser: UserAccount = {
+    id: `usr_${Date.now()}`,
+    name: data.name.trim(),
+    email: data.email.trim(),
+    cpf: data.cpf.trim(),
+    username: cleanUsername,
+    password: data.password,
+    role: 'STUDENT',
+    status: 'PENDING', // Requer aprovação do Admin ou auto-liberação conforme regra
   };
+
+  users.push(newUser);
+  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+  return { success: true, message: 'Cadastro realizado com sucesso! Aguarde a aprovação do instrutor para acessar.' };
 };
 
-export const adminAddUser = async (user: {
+export const adminAddUser = async (data: {
   name: string;
-  username: string;
   email: string;
+  cpf: string;
+  username: string;
   password: string;
 }): Promise<{ success: boolean; message: string }> => {
-  try {
-    const res = await fetch(`${API_URL}?action=create_manual`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: user.name.trim(),
-        username: user.username.trim(),
-        email: user.email.trim(),
-        password: user.password.trim(),
-      }),
-    });
-
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.warn('Erro ao salvar no UOLHost:', err);
+  if (!data.name || !data.email || !data.cpf || !data.username || !data.password) {
+    return { success: false, message: 'Todos os campos (Nome, E-mail, CPF, Usuário e Senha) são obrigatórios.' };
   }
 
-  return {
-    success: false,
-    message: 'Erro de comunicação com o servidor ao cadastrar aluno.',
+  const users = await getStoredUsers();
+  const cleanUsername = data.username.toLowerCase().trim();
+
+  if (users.some((u) => u.username.toLowerCase() === cleanUsername)) {
+    return { success: false, message: 'Nome de usuário já cadastrado.' };
+  }
+
+  const newUser: UserAccount = {
+    id: `usr_${Date.now()}`,
+    name: data.name.trim(),
+    email: data.email.trim(),
+    cpf: data.cpf.trim(),
+    username: cleanUsername,
+    password: data.password,
+    role: 'STUDENT',
+    status: 'APPROVED', // Cadastrado direto pelo admin já nasce aprovado
   };
+
+  users.push(newUser);
+  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+  return { success: true, message: 'Aluno cadastrado com acesso liberado!' };
 };
 
 export const updateUserStatus = async (userId: string, newStatus: 'APPROVED' | 'REJECTED') => {
-  try {
-    await fetch(`${API_URL}?action=update_status`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: userId, status: newStatus }),
-    });
-  } catch (err) {
-    console.warn('Erro ao atualizar status:', err);
-  }
+  const users = await getStoredUsers();
+  const updated = users.map((u) => (u.id === userId ? { ...u, status: newStatus } : u));
+  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
 };
 
 export const deleteUser = async (userId: string) => {
-  try {
-    await fetch(`${API_URL}?action=delete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: userId }),
-    });
-  } catch (err) {
-    console.warn('Erro ao excluir usuário:', err);
-  }
+  const users = await getStoredUsers();
+  const updated = users.filter((u) => u.id !== userId);
+  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
 };

@@ -1,113 +1,124 @@
 import React, { useState } from 'react';
-import { authenticateUser, requestRegistration } from '../services/authService';
+import { getStoredUsers, registerNewUser } from '../services/authService';
 
 interface LoginScreenProps {
-  onLoginSuccess: (user: { name: string; role: string; username: string }) => void;
+  onLoginSuccess: (user: { name: string; role: string; username: string; cpf?: string }) => void;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [usernameInput, setUsernameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
 
-  const [loginUsername, setLoginUsername] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-
+  // Estados de Cadastro
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
+  const [regCpf, setRegCpf] = useState('');
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
 
   const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
     setIsLoading(true);
 
-    const result = await authenticateUser(loginUsername, loginPassword);
+    const users = await getStoredUsers();
+    const cleanUser = usernameInput.toLowerCase().trim();
+    const found = users.find((u) => u.username.toLowerCase() === cleanUser && u.password === passwordInput);
+
     setIsLoading(false);
 
-    if (result.success && result.user) {
-      const sessionUser = {
-        name: result.user.name,
-        role: result.user.role,
-        username: result.user.username,
-      };
-
-      localStorage.setItem('cfw500_auth_user', JSON.stringify(sessionUser));
-      onLoginSuccess(sessionUser);
-    } else {
-      setFeedback({
-        type: 'error',
-        text: result.message || 'Credenciais inválidas.',
-      });
+    if (!found) {
+      setFeedback({ type: 'error', text: 'Usuário ou senha incorretos.' });
+      return;
     }
+
+    if (found.status === 'PENDING' && found.role !== 'ADMIN') {
+      setFeedback({ type: 'error', text: 'Seu cadastro está aguardando aprovação do instrutor.' });
+      return;
+    }
+
+    if (found.status === 'REJECTED') {
+      setFeedback({ type: 'error', text: 'Seu acesso foi recusado pela administração.' });
+      return;
+    }
+
+    const authData = { name: found.name, role: found.role, username: found.username, cpf: found.cpf };
+    localStorage.setItem('cfw500_auth_user', JSON.stringify(authData));
+    onLoginSuccess(authData);
   };
 
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
-    setIsLoading(true);
 
-    const result = await requestRegistration({
+    if (!regName || !regEmail || !regCpf || !regUsername || !regPassword) {
+      setFeedback({ type: 'error', text: 'Preencha todos os campos obrigatórios: Nome, E-mail, CPF, Usuário e Senha.' });
+      return;
+    }
+
+    setIsLoading(true);
+    const res = await registerNewUser({
       name: regName,
       email: regEmail,
+      cpf: regCpf,
       username: regUsername,
       password: regPassword,
     });
-
     setIsLoading(false);
 
-    if (result.success) {
-      setFeedback({ type: 'success', text: result.message });
+    if (res.success) {
+      setFeedback({ type: 'success', text: res.message });
       setRegName('');
       setRegEmail('');
+      setRegCpf('');
       setRegUsername('');
       setRegPassword('');
-      setTimeout(() => setIsRegisterMode(false), 3500);
+      setTimeout(() => setIsRegistering(false), 2500);
     } else {
-      setFeedback({ type: 'error', text: result.message });
+      setFeedback({ type: 'error', text: res.message });
     }
   };
 
   return (
-    <div style={overlayStyle}>
+    <div style={screenContainerStyle}>
       <div style={cardStyle}>
-        <div style={headerStyle}>
-          <div style={badgeIconStyle}>⚡</div>
-          <h2 style={{ fontSize: '18px', color: '#fff', margin: '8px 0 2px 0' }}>
-            Portal GAF Treinamentos
-          </h2>
-          <span style={{ fontSize: '11px', color: '#90a4ae' }}>
-            Plataforma de Capacitação Técnica • Automação & Comandos
-          </span>
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <div style={logoBadgeStyle}>G</div>
+          <h2 style={{ fontSize: '20px', color: '#fff', margin: '8px 0 2px 0' }}>GAF TREINAMENTOS</h2>
+          <span style={{ fontSize: '11px', color: '#81d4fa' }}>Plataforma Oficial de Automação & Inversores</span>
         </div>
 
         {feedback && (
           <div
             style={{
-              ...feedbackBannerStyle,
-              background: feedback.type === 'error' ? 'rgba(211, 47, 47, 0.15)' : 'rgba(0, 230, 118, 0.15)',
-              borderColor: feedback.type === 'error' ? '#d32f2f' : '#00e676',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              fontSize: '11px',
+              marginBottom: '14px',
+              background: feedback.type === 'error' ? 'rgba(211,47,47,0.2)' : 'rgba(0,230,118,0.2)',
               color: feedback.type === 'error' ? '#ff8a80' : '#b9f6ca',
+              border: `1px solid ${feedback.type === 'error' ? '#d32f2f' : '#00e676'}`,
             }}
           >
-            <span>{feedback.type === 'error' ? '⚠️' : '✅'} {feedback.text}</span>
+            {feedback.text}
           </div>
         )}
 
-        {!isRegisterMode && (
-          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {!isRegistering ? (
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
-              <label style={labelStyle}>Usuário:</label>
+              <label style={labelStyle}>Nome de Usuário:</label>
               <input
                 type="text"
                 required
-                value={loginUsername}
-                onChange={(e) => setLoginUsername(e.target.value)}
-                placeholder="Digite seu usuário"
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
+                placeholder="Ex: fabio"
                 style={inputStyle}
-                autoFocus
               />
             </div>
 
@@ -116,112 +127,99 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               <input
                 type="password"
                 required
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="••••••••"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="••••••"
                 style={inputStyle}
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              style={{
-                ...btnSubmitStyle,
-                background: isLoading ? '#01579b' : '#0288d1',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {isLoading ? 'Verificando...' : 'Acessar Plataforma ➔'}
+            <button type="submit" disabled={isLoading} style={btnPrimaryStyle}>
+              {isLoading ? 'Entrando...' : 'Entrar no Sistema'}
             </button>
 
-            <div style={{ textAlign: 'center', marginTop: '6px' }}>
-              <span style={{ fontSize: '11px', color: '#90a4ae' }}>Ainda não possui acesso? </span>
+            <div style={{ textAlign: 'center', marginTop: '10px' }}>
+              <span style={{ fontSize: '11px', color: '#90a4ae' }}>Não tem uma conta? </span>
               <button
                 type="button"
-                onClick={() => {
-                  setFeedback(null);
-                  setIsRegisterMode(true);
-                }}
-                style={linkButtonStyle}
+                onClick={() => { setIsRegistering(true); setFeedback(null); }}
+                style={linkBtnStyle}
               >
-                Solicitar Cadastro
+                Cadastre-se aqui
               </button>
             </div>
           </form>
-        )}
-
-        {isRegisterMode && (
-          <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        ) : (
+          <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
-              <label style={labelStyle}>Nome Completo:</label>
+              <label style={labelStyle}>Nome Completo *</label>
               <input
                 type="text"
                 required
                 value={regName}
                 onChange={(e) => setRegName(e.target.value)}
-                placeholder="Ex: Carlos Silva"
+                placeholder="Ex: Airton Senna da Silva"
                 style={inputStyle}
-                autoFocus
               />
             </div>
 
             <div>
-              <label style={labelStyle}>E-mail:</label>
+              <label style={labelStyle}>E-mail *</label>
               <input
                 type="email"
                 required
                 value={regEmail}
                 onChange={(e) => setRegEmail(e.target.value)}
-                placeholder="carlos@exemplo.com"
+                placeholder="exemplo@gmail.com"
                 style={inputStyle}
               />
             </div>
 
             <div>
-              <label style={labelStyle}>Usuário Desejado:</label>
+              <label style={labelStyle}>CPF *</label>
+              <input
+                type="text"
+                required
+                value={regCpf}
+                onChange={(e) => setRegCpf(e.target.value)}
+                placeholder="000.000.000-00"
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Nome de Usuário *</label>
               <input
                 type="text"
                 required
                 value={regUsername}
                 onChange={(e) => setRegUsername(e.target.value)}
-                placeholder="carlos.silva"
+                placeholder="Airton.Senna"
                 style={inputStyle}
               />
             </div>
 
             <div>
-              <label style={labelStyle}>Senha:</label>
+              <label style={labelStyle}>Senha *</label>
               <input
                 type="password"
                 required
                 value={regPassword}
                 onChange={(e) => setRegPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="••••••"
                 style={inputStyle}
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              style={{
-                ...btnSubmitStyle,
-                background: isLoading ? '#004d40' : '#00897b',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {isLoading ? 'Enviando Pedido...' : 'Enviar Solicitação de Cadastro 📩'}
+            <button type="submit" disabled={isLoading} style={{ ...btnPrimaryStyle, background: '#00e676', color: '#000', marginTop: '4px' }}>
+              {isLoading ? 'Cadastrando...' : 'Concluir Cadastro'}
             </button>
 
-            <div style={{ textAlign: 'center', marginTop: '4px' }}>
+            <div style={{ textAlign: 'center', marginTop: '6px' }}>
               <button
                 type="button"
-                onClick={() => {
-                  setFeedback(null);
-                  setIsRegisterMode(false);
-                }}
-                style={linkButtonStyle}
+                onClick={() => { setIsRegistering(false); setFeedback(null); }}
+                style={linkBtnStyle}
               >
                 ← Voltar para o Login
               </button>
@@ -233,97 +231,75 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   );
 };
 
-const overlayStyle: React.CSSProperties = {
+const screenContainerStyle: React.CSSProperties = {
+  background: '#0a0d11',
   minHeight: '100vh',
-  width: '100vw',
   display: 'flex',
-  justifyContent: 'center',
   alignItems: 'center',
-  background: 'radial-gradient(circle at center, #1b222d 0%, #0c0f13 100%)',
+  justifyContent: 'center',
   padding: '16px',
-  boxSizing: 'border-box',
 };
 
 const cardStyle: React.CSSProperties = {
   background: '#14181f',
-  border: '1px solid #2d3748',
-  borderRadius: '16px',
-  padding: '24px',
-  maxWidth: '400px',
-  width: '100%',
-  boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6), 0 0 15px rgba(2, 136, 209, 0.1)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '14px',
-};
-
-const headerStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  textAlign: 'center',
-};
-
-const badgeIconStyle: React.CSSProperties = {
-  width: '44px',
-  height: '44px',
+  border: '1px solid #283344',
   borderRadius: '12px',
-  background: 'linear-gradient(135deg, #0288d1 0%, #00e676 100%)',
-  display: 'flex',
+  padding: '24px',
+  width: '100%',
+  maxWidth: '400px',
+  boxShadow: '0 15px 35px rgba(0,0,0,0.7)',
+};
+
+const logoBadgeStyle: React.CSSProperties = {
+  width: '42px',
+  height: '42px',
+  borderRadius: '50%',
+  background: '#0288d1',
+  color: '#fff',
+  display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
+  fontWeight: '900',
   fontSize: '20px',
-  color: '#fff',
-  boxShadow: '0 4px 12px rgba(2, 136, 209, 0.4)',
-};
-
-const feedbackBannerStyle: React.CSSProperties = {
-  border: '1px solid',
-  borderRadius: '8px',
-  padding: '8px 12px',
-  fontSize: '11px',
-  textAlign: 'center',
+  border: '2px solid #fff',
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: '10.5px',
   color: '#cfd8dc',
-  fontWeight: 600,
-  marginBottom: '4px',
+  fontWeight: 'bold',
   display: 'block',
+  marginBottom: '3px',
 };
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  background: '#0d1014',
-  border: '1px solid #374151',
-  borderRadius: '8px',
-  padding: '9px 12px',
+  background: '#1b222c',
+  border: '1px solid #30363d',
+  borderRadius: '6px',
+  padding: '8px 10px',
   color: '#fff',
-  fontSize: '12px',
-  outline: 'none',
+  fontSize: '11px',
   boxSizing: 'border-box',
 };
 
-const btnSubmitStyle: React.CSSProperties = {
-  padding: '11px',
+const btnPrimaryStyle: React.CSSProperties = {
+  background: '#0288d1',
   color: '#fff',
   border: 'none',
-  borderRadius: '8px',
+  borderRadius: '6px',
+  padding: '9px 14px',
   fontSize: '12px',
   fontWeight: 'bold',
-  letterSpacing: '0.5px',
-  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
-  transition: 'all 0.2s ease',
-  marginTop: '4px',
+  cursor: 'pointer',
+  width: '100%',
 };
 
-const linkButtonStyle: React.CSSProperties = {
+const linkBtnStyle: React.CSSProperties = {
   background: 'none',
   border: 'none',
-  color: '#64b5f6',
+  color: '#81d4fa',
   fontSize: '11px',
-  fontWeight: 'bold',
   cursor: 'pointer',
   textDecoration: 'underline',
 };

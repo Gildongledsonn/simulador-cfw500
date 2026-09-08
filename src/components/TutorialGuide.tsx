@@ -54,7 +54,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     dispatch({ type: 'SET_AI1_VOLTAGE', payload: 0 } as any);
   };
 
-  // Injeção de Cenários Contextuais Específicos por Lição
   const applyLessonContextScenario = (lessonId: string) => {
     if (lessonId === 'l1000_l14_pratica_resgate') {
       window.dispatchEvent(
@@ -201,6 +200,18 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     markLessonCompleted(selectedLesson.id);
   };
 
+  // FUNÇÃO EXCLUSIVA PARA O ADMIN FORÇAR A CONCLUSÃO DA AULA ATUAL
+  const handleAdminForceCompleteLesson = () => {
+    if (selectedLesson.steps) {
+      selectedLesson.steps.forEach((step) => {
+        markStepCompleted(selectedLesson.id, step.id);
+      });
+    }
+    markLessonCompleted(selectedLesson.id);
+    setProgress(getUserProgress());
+    alert(`[ADMIN] A lição "${selectedLesson.title}" foi marcada como concluída com sucesso!`);
+  };
+
   const handleNextLesson = () => {
     triggerHardReset();
 
@@ -229,7 +240,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     <div style={containerStyle}>
       {userRole === 'ADMIN' && (
         <div style={adminControlBarStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#ffb74d' }}>⚙️ Painel ADM:</span>
             <button
               onClick={handleToggleAdminMode}
@@ -242,12 +253,21 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             >
               {adminMode ? '🔓 Todos Módulos Liberados' : '🔒 Trava Sequencial Ativa'}
             </button>
+
+            {/* BOTÃO EXCLUSIVO DE ADMIN PARA CONCLUIR A AULA ATUAL DIRETAMENTE */}
+            <button
+              onClick={handleAdminForceCompleteLesson}
+              style={{ ...adminBtnStyle, background: '#7c3aed', color: '#fff' }}
+              title="Força a conclusão desta aula instantaneamente sem precisar realizar os testes"
+            >
+              ⚡ [Admin] Concluir Esta Aula
+            </button>
           </div>
 
           <button
             onClick={handleFullReset}
             style={{ ...adminBtnStyle, background: '#d32f2f', color: '#fff' }}
-            title="Zera o progresso do aluno para testar o fluxo desde o início"
+            title="Zera o progresso para testar o fluxo desde o início"
           >
             🗑️ Resetar Progresso
           </button>
