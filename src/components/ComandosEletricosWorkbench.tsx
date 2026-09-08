@@ -84,13 +84,27 @@ export interface Point2D {
   y: number;
 }
 
+export type CableType =
+  | 'FORCA_R'
+  | 'FORCA_S'
+  | 'FORCA_T'
+  | 'COMANDO_FASE'
+  | 'COMANDO_NEUTRO'
+  | 'TERRA_PE'
+  | 'JUMPER_FECHAMENTO'
+  | 'CABO_PRETO'
+  | 'CABO_BRANCO'
+  | 'CABO_CINZA'
+  | 'CABO_ROXO'
+  | 'CABO_LARANJA';
+
 export interface CableConnection {
   id: string;
   fromComponentId: string;
   fromTerminalId: string;
   toComponentId: string;
   toTerminalId: string;
-  cableType: 'FORCA_R' | 'FORCA_S' | 'FORCA_T' | 'COMANDO_FASE' | 'COMANDO_NEUTRO' | 'TERRA_PE' | 'JUMPER_FECHAMENTO';
+  cableType: CableType;
   customWaypoints?: Point2D[];
 }
 
@@ -101,7 +115,7 @@ export interface MeterProbePosition {
   termId: string;
 }
 
-const CABLE_COLORS: Record<string, string> = {
+export const CABLE_COLORS: Record<CableType, string> = {
   FORCA_R: '#ef4444',
   FORCA_S: '#f97316',
   FORCA_T: '#3b82f6',
@@ -109,6 +123,11 @@ const CABLE_COLORS: Record<string, string> = {
   COMANDO_NEUTRO: '#06b6d4',
   TERRA_PE: '#10b981',
   JUMPER_FECHAMENTO: '#eab308',
+  CABO_PRETO: '#111827',
+  CABO_BRANCO: '#f8fafc',
+  CABO_CINZA: '#64748b',
+  CABO_ROXO: '#a855f7',
+  CABO_LARANJA: '#ea580c',
 };
 
 const LAMP_COLOR_CONFIG: Record<LampColor, { on: string; off: string; glow: string; label: string }> = {
@@ -211,9 +230,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
   const [meterReadout, setMeterReadout] = useState<string>('0.0 V');
   const [isContinuityBuzzer, setIsContinuityBuzzer] = useState(false);
 
-  const [activeCableTool, setActiveCableTool] = useState<
-    'FORCA_R' | 'FORCA_S' | 'FORCA_T' | 'COMANDO_FASE' | 'COMANDO_NEUTRO' | 'TERRA_PE' | 'JUMPER_FECHAMENTO' | null
-  >(null);
+  const [activeCableTool, setActiveCableTool] = useState<CableType | null>(null);
 
   const [wiringOrigin, setWiringOrigin] = useState<{ compId: string; termId: string } | null>(null);
   const [draggingCompId, setDraggingCompId] = useState<string | null>(null);
@@ -255,29 +272,56 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     const fromDirY = fromTerm && fromTerm.relY > 50 ? 1 : -1;
     const toDirY = toTerm && toTerm.relY > 50 ? 1 : -1;
 
-    const offsetDist = 26;
-    const p1Exit: Point2D = { x: p1.x, y: p1.y + fromDirY * offsetDist };
-    const p2Entry: Point2D = { x: p2.x, y: p2.y + toDirY * offsetDist };
+    const marginY = 32;
+    const p1Exit: Point2D = { x: p1.x, y: p1.y + fromDirY * marginY };
+    const p2Entry: Point2D = { x: p2.x, y: p2.y + toDirY * marginY };
 
-    if (fromCompId === toCompId) {
-      const bridgeY = Math.max(p1.y, p2.y) + (fromDirY > 0 ? offsetDist * 1.4 : -offsetDist * 1.4);
-      return [p1, p1Exit, { x: p1.x, y: bridgeY }, { x: p2.x, y: bridgeY }, p2Entry, p2];
+    if (fromCompId === toCompId && fromComp) {
+      const rightCorridorX = fromComp.x + fromComp.width + 36;
+      return [
+        p1,
+        p1Exit,
+        { x: rightCorridorX, y: p1Exit.y },
+        { x: rightCorridorX, y: p2Entry.y },
+        p2Entry,
+        p2,
+      ];
     }
 
-    const channelX =
-      Math.abs(p1.x - p2.x) < 30
-        ? p1.x
-        : fromComp && toComp && fromComp.x !== toComp.x
-        ? (p1.x + p2.x) / 2
-        : Math.max(fromComp ? fromComp.x + fromComp.width + 24 : p1.x + 30, toComp ? toComp.x + toComp.width + 24 : p2.x + 30);
+    const obstacles = components.filter((c) => c.id !== fromCompId && c.id !== toCompId);
+
+    const minX = Math.min(p1.x, p2.x);
+    const maxX = Math.max(p1.x, p2.x);
+    const minY = Math.min(p1Exit.y, p2Entry.y);
+    const maxY = Math.max(p1Exit.y, p2Entry.y);
+
+    const blockingComp = obstacles.find((c) => {
+      const boxPad = 14;
+      return (
+        c.x - boxPad <= maxX &&
+        c.x + c.width + boxPad >= minX &&
+        c.y - boxPad <= maxY &&
+        c.y + c.height + boxPad >= minY
+      );
+    });
 
     const pts: Point2D[] = [p1, p1Exit];
 
-    if (Math.abs(p1Exit.y - p2Entry.y) > 15) {
-      pts.push({ x: channelX, y: p1Exit.y });
-      pts.push({ x: channelX, y: p2Entry.y });
+    if (blockingComp) {
+      const bypassRightX = Math.max(
+        fromComp ? fromComp.x + fromComp.width : p1.x,
+        toComp ? toComp.x + toComp.width : p2.x,
+        blockingComp.x + blockingComp.width
+      ) + 28;
+
+      pts.push({ x: p1Exit.x, y: p1Exit.y });
+      pts.push({ x: bypassRightX, y: p1Exit.y });
+      pts.push({ x: bypassRightX, y: p2Entry.y });
+      pts.push({ x: p2Entry.x, y: p2Entry.y });
     } else {
-      pts.push({ x: channelX, y: (p1Exit.y + p2Entry.y) / 2 });
+      const channelY = (p1Exit.y + p2Entry.y) / 2;
+      pts.push({ x: p1Exit.x, y: channelY });
+      pts.push({ x: p2Entry.x, y: channelY });
     }
 
     pts.push(p2Entry);
@@ -321,7 +365,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     return d;
   };
 
-  // MOTOR ELÉTRICO DE CONTINUIDADE (BFS)
   useEffect(() => {
     const adj: Record<string, string[]> = {};
     const addEdge = (u: string, v: string) => {
@@ -487,7 +530,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         const x1Neutral = isNodeEnergizedByNeutral(nodeX1);
         const x2Phase = isNodeEnergizedByPhase(nodeX2);
         const x2Neutral = isNodeEnergizedByNeutral(nodeX2);
-        // Acende com fase+neutro (qualquer lado) OU fase+fase (ex: sinaleiro ligado direto entre R-S)
         const lampOn = (x1Phase && x2Neutral) || (x2Phase && x1Neutral) || (x1Phase && x2Phase);
         if (c.state !== lampOn) {
           stateChanged = true;
@@ -540,7 +582,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         }
         setIsContinuityBuzzer(false);
       } else if (meterScale === 'V_DC') {
-        const isTrafoSec = (nodeA.includes('SEC_') && nodeB.includes('SEC_'));
+        const isTrafoSec = nodeA.includes('SEC_') && nodeB.includes('SEC_');
         setMeterReadout(isTrafoSec ? '24.1 V=' : '0.00 V=');
         setIsContinuityBuzzer(false);
       } else if (meterScale === 'CONTINUITY') {
@@ -632,7 +674,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         cableType: activeCableTool,
       };
 
-      setCables([...cables, newCable]);
+      setCables((prev) => [...prev, newCable]);
       setWiringOrigin(null);
     }
   };
@@ -666,7 +708,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     );
   };
 
-  // Construtor auxiliar de bornes
   const tPole = (id: string, name: string, relX: number, relY: number, type: 'FORCA' | 'COMANDO' | 'TERRA' = 'COMANDO'): TerminalPole => ({
     id,
     name,
@@ -842,7 +883,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       ];
     } else if (category === 'CONTATOR_TRIPOLAR') {
       tag = `K${count}`;
-      name = `Contator CWM25`;
+      name = 'Contator CWM25';
       width = 110;
       height = 180;
       terminals = [
@@ -945,9 +986,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       terminals = [tPole('1', '1', 50, 10), tPole('2', '2', 50, 90)];
     }
 
-    // Disjuntores, contatores e a botoeira NF (não pressionada) nascem "fechados".
-    // A botoeira NA (start) e o sinaleiro LED nascem "desligados" e são controlados
-    // pelo usuário/simulação a partir daí.
     const initialState = category !== 'BOTOEIRA_PULSO_NA' && category !== 'SINALEIRO_LED';
 
     const newComp: PlacedComponent = {
@@ -986,7 +1024,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
   return (
     <div style={containerStyle}>
-      {/* 1. BARRA SUPERIOR COM BOTÃO DE ADMIN */}
       <div style={topControlBarStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <button
@@ -1021,22 +1058,29 @@ export const ComandosEletricosWorkbench: React.FC = () => {
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#00e676' }}>
-            🔌 Cabos:
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#00e676', marginRight: '4px' }}>
+            🔌 Cor do Cabo:
           </span>
 
-          <button onClick={() => { setActiveCableTool('FORCA_R'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_R' ? '#ef4444' : '#263238', borderColor: '#f87171', color: '#fff' }}>R</button>
-          <button onClick={() => { setActiveCableTool('FORCA_S'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_S' ? '#f97316' : '#263238', borderColor: '#fb923c', color: '#fff' }}>S</button>
-          <button onClick={() => { setActiveCableTool('FORCA_T'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_T' ? '#3b82f6' : '#263238', borderColor: '#60a5fa', color: '#fff' }}>T</button>
-          <button onClick={() => { setActiveCableTool('COMANDO_FASE'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'COMANDO_FASE' ? '#ec4899' : '#263238', borderColor: '#f472b6', color: '#fff' }}>Comando</button>
-          <button onClick={() => { setActiveCableTool('COMANDO_NEUTRO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'COMANDO_NEUTRO' ? '#06b6d4' : '#263238', borderColor: '#22d3ee', color: '#fff' }}>0V / Neutro</button>
-          <button onClick={() => { setActiveCableTool('JUMPER_FECHAMENTO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'JUMPER_FECHAMENTO' ? '#eab308' : '#263238', borderColor: '#fde047', color: '#000', fontWeight: 'bold' }}>⭐/🔺 Jumper</button>
-          <button onClick={() => { setCables([]); setWiringOrigin(null); setSelectedCableId(null); setSelectedCompId(null); }} style={btnClearCablesBtnStyle}>🗑️</button>
+          <button onClick={() => { setActiveCableTool('FORCA_R'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_R' ? '#ef4444' : '#263238', borderColor: '#f87171', color: '#fff' }} title="Fase R (Vermelho)">R</button>
+          <button onClick={() => { setActiveCableTool('FORCA_S'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_S' ? '#f97316' : '#263238', borderColor: '#fb923c', color: '#fff' }} title="Fase S (Laranja)">S</button>
+          <button onClick={() => { setActiveCableTool('FORCA_T'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_T' ? '#3b82f6' : '#263238', borderColor: '#60a5fa', color: '#fff' }} title="Fase T (Azul Escuro)">T</button>
+          <button onClick={() => { setActiveCableTool('COMANDO_FASE'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'COMANDO_FASE' ? '#ec4899' : '#263238', borderColor: '#f472b6', color: '#fff' }} title="Comando Fase (+24V)">+24V</button>
+          <button onClick={() => { setActiveCableTool('COMANDO_NEUTRO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'COMANDO_NEUTRO' ? '#06b6d4' : '#263238', borderColor: '#22d3ee', color: '#fff' }} title="Neutro / 0V">0V / N</button>
+          <button onClick={() => { setActiveCableTool('TERRA_PE'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'TERRA_PE' ? '#10b981' : '#263238', borderColor: '#34d399', color: '#fff' }} title="Condutor de Proteção (PE)">PE Terra</button>
+          <button onClick={() => { setActiveCableTool('JUMPER_FECHAMENTO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'JUMPER_FECHAMENTO' ? '#eab308' : '#263238', borderColor: '#fde047', color: '#000', fontWeight: 'bold' }} title="Jumper Estrela / Triângulo">⭐/Δ Jumper</button>
+
+          <button onClick={() => { setActiveCableTool('CABO_PRETO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_PRETO' ? '#111827' : '#1f2937', borderColor: '#4b5563', color: '#fff' }} title="Preto (Alimentação / Força)">Preto</button>
+          <button onClick={() => { setActiveCableTool('CABO_BRANCO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_BRANCO' ? '#f8fafc' : '#263238', borderColor: '#e2e8f0', color: activeCableTool === 'CABO_BRANCO' ? '#000' : '#fff' }} title="Branco (Retorno de Sinal)">Branco</button>
+          <button onClick={() => { setActiveCableTool('CABO_CINZA'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_CINZA' ? '#64748b' : '#263238', borderColor: '#94a3b8', color: '#fff' }} title="Cinza (Comando AC 110/220V)">Cinza</button>
+          <button onClick={() => { setActiveCableTool('CABO_ROXO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_ROXO' ? '#a855f7' : '#263238', borderColor: '#c084fc', color: '#fff' }} title="Roxo (CLP / Sinal Digital)">Roxo</button>
+          <button onClick={() => { setActiveCableTool('CABO_LARANJA'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_LARANJA' ? '#ea580c' : '#263238', borderColor: '#fb923c', color: '#fff' }} title="Laranja (Intertravamento Externo)">Laranja</button>
+
+          <button onClick={() => { setCables([]); setWiringOrigin(null); setSelectedCableId(null); setSelectedCompId(null); }} style={btnClearCablesBtnStyle} title="Limpar todos os cabos">🗑️</button>
         </div>
       </div>
 
-      {/* MULTÍMETRO DIGITAL */}
       {isMeterActive && (
         <div style={multimeterContainerStyle}>
           <div style={meterDisplayHeader}>
@@ -1100,7 +1144,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL / BIBLIOTECA */}
       {isCatalogModalOpen && (
         <div style={modalOverlayStyle} onClick={() => setIsCatalogModalOpen(false)}>
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
@@ -1139,7 +1182,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       )}
 
-      {/* BARRA DE SELEÇÃO */}
       {selectedCompObj ? (
         <div style={{ ...selectedCableAlertBarStyle, borderColor: '#ffd600', background: 'rgba(255, 214, 0, 0.15)', color: '#fff' }}>
           <span>📦 <strong>Selecionado:</strong> {selectedCompObj.name} ({selectedCompObj.tag})</span>
@@ -1164,7 +1206,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         <div style={wiringPromptBarStyle}>⚡ Toque no <strong>borne de destino</strong> para conectar o cabo.</div>
       ) : null}
 
-      {/* 2. PAINEL DE MONTAGEM COM BLOQUEIO DE ADMIN */}
       {isAdminUnlocked ? (
         <div
           ref={panelRef}
@@ -1248,7 +1289,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   boxSizing: 'border-box',
                 }}
               >
-                {/* 1. CAIXA DE CONFIGURAÇÃO FLUTUANTE (TAG, AMP E COR) */}
                 <div style={tagSidebarFloatingBox}>
                   <span style={{ fontSize: '7px', color: '#90a4ae', fontWeight: 'bold' }}>TAG</span>
                   <input
@@ -1317,7 +1357,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   )}
                 </div>
 
-                {/* 2. COMPONENTES REALISTAS INTEGRADOS */}
                 {isQ && comp.category === 'DISJUNTOR_MOTOR' && (
                   <RealisticMotorBreaker
                     width={comp.width}
@@ -1566,7 +1605,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                   />
                 )}
 
-                {/* BORNES DE CONEXÃO */}
                 {comp.terminals?.map((t) => {
                   const isOrigin = wiringOrigin?.compId === comp.id && wiringOrigin?.termId === t.id;
                   const isRedProbeAttached = redProbe?.compId === comp.id && redProbe?.termId === t.id;
@@ -1577,6 +1615,8 @@ export const ComandosEletricosWorkbench: React.FC = () => {
                       key={t.id}
                       onClick={(e) => handleTerminalClick(e, comp.id, t.id)}
                       onTouchEnd={(e) => handleTerminalClick(e, comp.id, t.id)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
                       style={{
                         ...screwPoleStyle,
                         left: `${t.relX}%`,
@@ -1617,7 +1657,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       )}
 
-      {/* 3. VISUALIZADOR MECÂNICO 3D */}
       <div style={bottomVisualizerRowStyle}>
         <div style={{ flex: '1 1 360px' }}>
           <MotorVisualizer loadTorquePercent={25} />
@@ -1934,7 +1973,7 @@ const svgOverlayStyle: React.CSSProperties = {
   width: '100%',
   height: '100%',
   pointerEvents: 'none',
-  zIndex: 1,
+  zIndex: 4,
 };
 
 const tagSidebarFloatingBox: React.CSSProperties = {
@@ -1978,15 +2017,15 @@ const selectAmperageStyle: React.CSSProperties = {
 const screwPoleStyle: React.CSSProperties = {
   position: 'absolute',
   transform: 'translate(-50%, -50%)',
-  width: '12px',
-  height: '12px',
+  width: '13px',
+  height: '13px',
   borderRadius: '50%',
   border: '1.5px solid',
   cursor: 'pointer',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 3,
+  zIndex: 10,
 };
 
 const terminalSubscriptLabel: React.CSSProperties = {
