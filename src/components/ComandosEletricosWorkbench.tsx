@@ -115,6 +115,16 @@ export interface MeterProbePosition {
   termId: string;
 }
 
+export interface TrainingLesson {
+  id: string;
+  title: string;
+  module: string;
+  description: string;
+  theory: string[];
+  steps: string[];
+  schematicTips: string;
+}
+
 export const CABLE_COLORS: Record<CableType, string> = {
   FORCA_R: '#ef4444',
   FORCA_S: '#f97316',
@@ -174,10 +184,141 @@ const CATALOG_ITEMS: CatalogItem[] = [
   { category: 'RESISTOR_FREINAGEM', title: 'Resistor de Frenagem (Dynamic Braking)', subtitle: 'Dissipação de energia regenerativa de inversor', icon: '♨️', group: 'PROTECAO' },
 ];
 
+const COMANDOS_LESSONS: TrainingLesson[] = [
+  {
+    id: 'aula_01_componentes',
+    title: '1. Introdução aos Componentes de Força e Comando',
+    module: 'Módulo 1: Fundamentos',
+    description: 'Compreensão funcional da anatomia de contatores, relés térmicos, botoeiras e disjuntores.',
+    theory: [
+      'Em comandos elétricos, o circuito é dividido em circuito de força (potência) e circuito de comando.',
+      'O contator (K) utiliza uma bobina eletromagnética (A1-A2) para manobrar contatos principais de alta capacidade (1L1-2T1, 3L2-4T2, 5L3-6T3) e auxiliares de sinalização (13-14 NA, 21-22 NF).',
+      'O relé térmico (F) protege o enrolamento do estator contra sobrecargas contínuas usando tiras bimetálicas, desarmando o contato 95-96 NF na linha de comando.',
+      'As botoeiras pulsadoras verdes são normalmente abertas (NA 3-4) e os botões vermelhos de desligamento ou emergência são normalmente fechados (NF 1-2 ou 11-12).'
+    ],
+    steps: [
+      'Insira no painel: 1 Contator CWM25 (K1), 1 Relé Térmico (F1) e 1 Botoeira Verde NA (S1).',
+      'Identifique visualmente os bornes de bobina A1 e A2 e os contatos auxiliares 13-14 NA do contator.',
+      'Use o multímetro na escala de continuidade para testar a condução dos contatos NA e NF.'
+    ],
+    schematicTips: 'Circuito de Comando: Fase -> Proteção 1P -> 95-96 do Relé Térmico -> Botoeiras -> Bobina A1-A2 -> Neutro.'
+  },
+  {
+    id: 'aula_02_nr10_nr12',
+    title: '2. Segurança em Painéis: NR-10 e NR-12',
+    module: 'Módulo 1: Fundamentos',
+    description: 'Implementação de chave seccionadora LOTO (bloqueio), trafo isolador SELV e relé de segurança de duplo canal.',
+    theory: [
+      'A NR-10 exige desenergização prévia, bloqueio mecânico com cadeado LOTO (Lockout/Tagout) e sinalização na seccionadora geral.',
+      'Para circuitos de comando e interfaces manuais, deve-se priorizar extra-baixa tensão de segurança (24V SELV) utilizando transformadores isoladores ou fontes protegidas.',
+      'A NR-12 determina que paradas de emergência e portas móveis utilizem duplo canal supervisionado com redundância e autocontrole (Relé de Segurança Categoria 4).'
+    ],
+    steps: [
+      'Adicione a Chave Seccionadora LOTO (QS1) na entrada de alimentação trifásica da rede.',
+      'Conecte a saída monofásica no primário do Transformador 220V/24V (TR1) para alimentar o circuito de comando em extra-baixa tensão.',
+      'Instale o Relé de Segurança Cat 4 (SR1) e a Chave de Intertravamento (SQ1) ligada aos canais S11 e duplo retorno.'
+    ],
+    schematicTips: 'Rede 380V -> Seccionadora LOTO -> Disjuntor-Motor -> Trafo Isolador 24V -> Relé Cat 4 -> Bobinas.'
+  },
+  {
+    id: 'aula_03_partida_direta',
+    title: '3. Partida Direta com Contato de Selo',
+    module: 'Módulo 2: Comandos Básicos',
+    description: 'Montagem do circuito clássico de partida direta com retenção (selo 13-14), botão liga/desliga e sinaleiro de status.',
+    theory: [
+      'A partida direta aplica a tensão nominal plena instantaneamente sobre os terminais do motor trifásico.',
+      'Ao pressionar o botão NA S1 (Liga), a bobina de K1 é energizada. Quando o operador solta o botão, o contato auxiliar K1:13-14 em paralelo com S1 mantém a bobina alimentada (Contato de Selo).',
+      'O botão NF S0 ou a atuação do contato 95-96 do relé térmico interrompe a retenção, desligando o motor.',
+      'Sinaleiros luminosos verdes indicam motor em operação (K1:13-14) e vermelhos indicam trip térmico (F1:97-98).'
+    ],
+    steps: [
+      'Alimente o comando: borne F da rede monofásica -> contato 95-96 NF do Relé Térmico F1 -> Botão NF S0 -> Botão NA S1 -> A1 de K1.',
+      'Conecte o borne N da rede no borne A2 do contator K1.',
+      'Faça o contato de selo conectando K1:13 e K1:14 em paralelo com os bornes 3 e 4 do botão S1.',
+      'Conecte o circuito de força: R, S, T -> Disjuntor-Motor -> Contator K1 -> Relé Térmico -> Motor W22 (U1, V1, W1 fechado em estrela).'
+    ],
+    schematicTips: 'Linha: [Fase] -> [95 F1 96] -> [1 S0 2] -> [3 S1 4 // 13 K1 14] -> [A1 K1 A2] -> [Neutro]'
+  },
+  {
+    id: 'aula_04_partida_reversa',
+    title: '4. Partida Direta com Reversão e Intertravamento',
+    module: 'Módulo 2: Comandos Básicos',
+    description: 'Inversão do sentido de rotação trocando duas fases e garantindo intertravamento elétrico por contatos NF cruzados.',
+    theory: [
+      'Para inverter o sentido de giro de um motor de indução trifásico, basta comutar duas de suas três fases de alimentação (ex: trocar R por S mantendo T).',
+      'Dois contatores são utilizados: K1 (Sentido Horário) e K2 (Sentido Anti-horário).',
+      'INTERTRAVAMENTO ELÉTRICO OBRIGATÓRIO: Se K1 e K2 forem acionados juntos, ocorrerá um curto-circuito fase-fase violento. Por isso, a bobina de K1 passa pelo contato auxiliar NF (21-22) de K2, e vice-versa.'
+    ],
+    steps: [
+      'Insira dois contatores: K1 (Horário) e K2 (Anti-horário) e duas botoeiras NA: S1 (Horário) e S2 (Anti-horário).',
+      'Faça o intertravamento: antes do A1 de K1, passe pelo contato 21-22 NF de K2. Antes do A1 de K2, passe pelo contato 21-22 NF de K1.',
+      'No circuito de força de K2, inverta as fases de entrada nos bornes 1L1 e 3L2 em relação ao K1.'
+    ],
+    schematicTips: 'Intertravamento cruzado: Linha S1 -> K2:21-22 (NF) -> K1:A1 | Linha S2 -> K1:21-22 (NF) -> K2:A1.'
+  },
+  {
+    id: 'aula_05_estrela_triangulo',
+    title: '5. Partida Estrela-Triângulo (Y-Δ) com Temporizador',
+    module: 'Módulo 3: Métodos de Partida Indireta',
+    description: 'Redução da corrente de partida (Ip) a 1/3 do valor nominal usando chaveamento transitório Estrela para Triângulo.',
+    theory: [
+      'A corrente de partida direta de um motor pode atingir 6 a 8 vezes a corrente nominal (Ip/In), causando quedas de tensão na rede.',
+      'Na ligação Estrela (Y), a tensão aplicada em cada bobina é reduzida por $\\sqrt{3}$ (220V em rede 380V), reduzindo o conjugado e a corrente para 33% do valor nominal.',
+      'Após o motor atingir aproximadamente 85% da rotação de regime, o temporizador desliga o contator estrela (K3) e liga o contator triângulo (K2), aplicando a tensão plena de 380V.',
+      'O motor deve ter 6 pontas acessíveis e sua tensão nominal em triângulo deve coincidir com a tensão de linha da rede.'
+    ],
+    steps: [
+      'Componentes necessários: Contator de Linha K1, Contator Triângulo K2, Contator Estrela K3 e Relé Temporizador TON.',
+      'Fechamento Estrela: K3 conecta em curto os terminais W2, U2 e V2 do motor.',
+      'Fechamento Triângulo: K2 conecta U1-W2, V1-U2 e W1-V2.',
+      'Assegure o intertravamento elétrico rigoroso entre as bobinas de K2 e K3 para evitar curto-circuito durante a comutação.'
+    ],
+    schematicTips: 'Sequência: Parte K1 + K3 (Estrela) -> Conta tempo (5 a 8s) -> Desliga K3 -> Liga K2 (Triângulo) permanente.'
+  },
+  {
+    id: 'aula_06_partida_compensada',
+    title: '6. Partida Compensada por Autotransformador',
+    module: 'Módulo 3: Métodos de Partida Indireta',
+    description: 'Partida de motores sob carga com redução de tensão via taps de 65% ou 80% em autotransformador de partida.',
+    theory: [
+      'Diferente da partida estrela-triângulo (que exige partida quase a vazio), a partida compensada mantém torque proporcional suficiente para partir cargas mais pesadas.',
+      'O autotransformador trifásico fornece tensões reduzidas selecionáveis por tapes (ex: 65% da tensão nominal reduz a corrente para 42%).',
+      'São empregados três contatores: K1 (Linha Principal), K2 (Alimentação do Trafo) e K3 (Ponto Estrela do Trafo).',
+      'O autotrafo possui regime intermitente de poucos segundos e deve ser protegido contra religamentos consecutivos sem resfriamento.'
+    ],
+    steps: [
+      'Identifique os bornes do Autotransformador: 0V, Tap 65%, Tap 80% e 100%.',
+      'Configure o temporizador para 6 segundos de aceleração no tap reduzido.',
+      'Ligue K2 e K3 para aplicar a tensão reduzida nos bornes U1-V1-W1; na transição, K2/K3 abrem e K1 fecha direto na rede 380V.'
+    ],
+    schematicTips: 'Transição: (K2 + K3 fecham no Tap) -> Tempo esgota -> Abre K3 -> Abre K2 -> Fecha K1 direto na rede.'
+  },
+  {
+    id: 'aula_07_bombas_recalque',
+    title: '7. Sistema de Recalque de Água com Revezamento Automático',
+    module: 'Módulo 4: Automações Prediais e Industriais',
+    description: 'Controle de nível por boias elétricas e alternância automática entre Bomba 1 e Bomba 2 a cada ciclo de enchimento.',
+    theory: [
+      'Sistemas prediais de abastecimento utilizam dois conjuntos motobomba (Bomba 1 e Bomba 2) em paralelo com revezamento para desgaste uniforme e garantia de redundância.',
+      'O reservatório inferior (cisterna) possui boia de nível mínimo de proteção contra trabalho a seco (bloqueio geral).',
+      'O reservatório superior possui boia de nível máximo (desliga) e boia de nível mínimo (chama bomba).',
+      'Uma chave comutadora de 3 posições permite operar em Manual (MAN), Desligado (0) ou Automático (AUT via boias e relé de alternância).'
+    ],
+    steps: [
+      'Insira a Chave Seletora 3 Posições (SA1: MAN - 0 - AUT) e dois contatores (K1 Bomba 1 e K2 Bomba 2).',
+      'Passe a linha de comando automático pelos contatos das boias do reservatório superior e cisterna inferior.',
+      'Adicione um bloco de sinalização sonora/visual para alerta de nível crítico ou desarme por sobrecarga térmica de bomba.'
+    ],
+    schematicTips: 'Linha AUT: [Fase] -> [Boia Cisterna OK] -> [Boia Caixa Baixa] -> [Relé de Revezamento K1/K2] -> [K1:A1 / K2:A1]'
+  }
+];
+
 export const ComandosEletricosWorkbench: React.FC = () => {
   const { state: inverterState, dispatch } = useInverter();
 
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(true);
+  const [isTrainingOpen, setIsTrainingOpen] = useState(false);
+  const [selectedLessonId, setSelectedLessonId] = useState<string>(COMANDOS_LESSONS[0].id);
 
   const [components, setComponents] = useState<PlacedComponent[]>([
     {
@@ -237,6 +378,11 @@ export const ComandosEletricosWorkbench: React.FC = () => {
   const [dragOffset, setDragOffset] = useState<Point2D>({ x: 0, y: 0 });
 
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const activeLesson = COMANDOS_LESSONS.find((l) => l.id === selectedLessonId) || COMANDOS_LESSONS[0];
+  const filteredCatalog = CATALOG_ITEMS.filter((item) =>
+    catalogFilter === 'ALL' ? true : item.group === catalogFilter
+  );
 
   const getTerminalAbsolutePos = useCallback((compId: string, termId: string): Point2D => {
     const comp = components.find((c) => c.id === compId);
@@ -1018,10 +1164,6 @@ export const ComandosEletricosWorkbench: React.FC = () => {
   const selectedCableObj = cables.find((c) => c.id === selectedCableId);
   const selectedCompObj = components.find((c) => c.id === selectedCompId);
 
-  const filteredCatalog = CATALOG_ITEMS.filter((item) =>
-    catalogFilter === 'ALL' ? true : item.group === catalogFilter
-  );
-
   return (
     <div style={containerStyle}>
       <div style={topControlBarStyle}>
@@ -1056,6 +1198,19 @@ export const ComandosEletricosWorkbench: React.FC = () => {
           >
             📟 {isMeterActive ? 'Ocultar Multímetro' : 'Multímetro Digital'}
           </button>
+
+          <button
+            onClick={() => setIsTrainingOpen(!isTrainingOpen)}
+            style={{
+              ...btnMeterToggleStyle,
+              background: isTrainingOpen ? '#6a1b9a' : '#2e1065',
+              color: '#f3e8ff',
+              borderColor: '#a855f7',
+              boxShadow: isTrainingOpen ? '0 0 12px rgba(168, 85, 247, 0.4)' : 'none',
+            }}
+          >
+            🎓 {isTrainingOpen ? 'Ocultar Treinamento' : 'Treinamento'}
+          </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
@@ -1080,6 +1235,92 @@ export const ComandosEletricosWorkbench: React.FC = () => {
           <button onClick={() => { setCables([]); setWiringOrigin(null); setSelectedCableId(null); setSelectedCompId(null); }} style={btnClearCablesBtnStyle} title="Limpar todos os cabos">🗑️</button>
         </div>
       </div>
+
+      {isTrainingOpen && (
+        <div style={trainingContainerStyle}>
+          <div style={trainingHeaderStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '18px' }}>🎓</span>
+              <div>
+                <strong style={{ fontSize: '13px', color: '#c084fc' }}>
+                  CURSO PRÁTICO DE COMANDOS ELÉTRICOS INDUSTRIAIS
+                </strong>
+                <span style={{ fontSize: '10px', color: '#94a3b8', display: 'block' }}>
+                  Normas NR-10 & NR-12 • Partidas Direta, Reversa, Y-Δ, Compensada e Automação de Recalque
+                </span>
+              </div>
+            </div>
+            <button onClick={() => setIsTrainingOpen(false)} style={btnCloseTrainingStyle}>✕ Fechar</button>
+          </div>
+
+          <div style={trainingBodyGridStyle}>
+            <div style={trainingSidebarStyle}>
+              <span style={{ fontSize: '10px', color: '#a855f7', fontWeight: 'bold', marginBottom: '6px', display: 'block' }}>
+                AULAS DISPONÍVEIS:
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {COMANDOS_LESSONS.map((les) => {
+                  const isSelected = les.id === selectedLessonId;
+                  return (
+                    <button
+                      key={les.id}
+                      onClick={() => setSelectedLessonId(les.id)}
+                      style={{
+                        ...btnLessonSelectStyle,
+                        background: isSelected ? '#581c87' : '#1e1b4b',
+                        borderColor: isSelected ? '#a855f7' : '#312e81',
+                        color: isSelected ? '#fff' : '#c7d2fe',
+                      }}
+                    >
+                      <span style={{ fontSize: '9px', color: '#a5b4fc', display: 'block' }}>{les.module}</span>
+                      <strong style={{ fontSize: '11px', display: 'block', marginTop: '2px' }}>{les.title}</strong>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={trainingContentStyle}>
+              <div style={{ borderBottom: '1px solid #3b0764', paddingBottom: '8px', marginBottom: '8px' }}>
+                <span style={badgeModuleStyle}>{activeLesson.module}</span>
+                <h3 style={{ fontSize: '15px', color: '#fff', margin: '4px 0 2px 0' }}>{activeLesson.title}</h3>
+                <p style={{ fontSize: '11px', color: '#d8b4fe', margin: 0 }}>{activeLesson.description}</p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
+                <div style={theoryBlockCardStyle}>
+                  <strong style={{ fontSize: '11px', color: '#e9d5ff', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                    <span>📖</span> Fundamentos & Normas Técnicas:
+                  </strong>
+                  <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '10.5px', color: '#cbd5e1', lineHeight: '1.5' }}>
+                    {activeLesson.theory.map((t, idx) => (
+                      <li key={idx} style={{ marginBottom: '4px' }}>{t}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div style={practiceBlockCardStyle}>
+                  <strong style={{ fontSize: '11px', color: '#86efac', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                    <span>🛠️</span> Roteiro de Montagem na Bancada:
+                  </strong>
+                  <ol style={{ margin: 0, paddingLeft: '16px', fontSize: '10.5px', color: '#e2e8f0', lineHeight: '1.5' }}>
+                    {activeLesson.steps.map((s, idx) => (
+                      <li key={idx} style={{ marginBottom: '4px' }}>{s}</li>
+                    ))}
+                  </ol>
+
+                  <div style={schematicTipBoxStyle}>
+                    <strong style={{ fontSize: '10px', color: '#facc15' }}>💡 Diagrama do Circuito:</strong>
+                    <div style={{ fontSize: '10px', color: '#fff', marginTop: '2px', fontFamily: 'monospace' }}>
+                      {activeLesson.schematicTips}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isMeterActive && (
         <div style={multimeterContainerStyle}>
@@ -1668,6 +1909,9 @@ export const ComandosEletricosWorkbench: React.FC = () => {
           </strong>
           <ul style={{ fontSize: '11px', color: '#cfd8dc', margin: '6px 0 0 16px', lineHeight: '1.6' }}>
             <li>
+              <strong>Aulas e Treinamento Prático:</strong> Clique no botão roxo <strong>"🎓 Treinamento"</strong> no topo para consultar teorias de comandos e instruções passo a passo de ligação.
+            </li>
+            <li>
               <strong>Modo Administrador:</strong> Use o botão verde/vermelho no topo para bloquear ou liberar a visualização da bancada para os alunos.
             </li>
             <li>
@@ -1723,6 +1967,102 @@ const btnMeterToggleStyle: React.CSSProperties = {
   fontWeight: 'bold',
   cursor: 'pointer',
   transition: 'all 0.15s ease',
+};
+
+const trainingContainerStyle: React.CSSProperties = {
+  background: '#150d2a',
+  border: '2px solid #a855f7',
+  borderRadius: '12px',
+  padding: '12px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '10px',
+  boxShadow: '0 8px 30px rgba(168, 85, 247, 0.2)',
+};
+
+const trainingHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  borderBottom: '1px solid #3b0764',
+  paddingBottom: '8px',
+};
+
+const btnCloseTrainingStyle: React.CSSProperties = {
+  background: '#3b0764',
+  border: '1px solid #7e22ce',
+  color: '#e9d5ff',
+  borderRadius: '6px',
+  padding: '4px 10px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+};
+
+const trainingBodyGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '260px 1fr',
+  gap: '12px',
+};
+
+const trainingSidebarStyle: React.CSSProperties = {
+  background: '#0e081c',
+  border: '1px solid #3b0764',
+  borderRadius: '8px',
+  padding: '8px',
+  maxHeight: '380px',
+  overflowY: 'auto',
+};
+
+const btnLessonSelectStyle: React.CSSProperties = {
+  width: '100%',
+  textAlign: 'left',
+  padding: '8px',
+  borderRadius: '6px',
+  border: '1px solid',
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
+};
+
+const trainingContentStyle: React.CSSProperties = {
+  background: '#1f1338',
+  border: '1px solid #4c1d95',
+  borderRadius: '8px',
+  padding: '12px',
+  maxHeight: '380px',
+  overflowY: 'auto',
+};
+
+const badgeModuleStyle: React.CSSProperties = {
+  background: '#6b21a8',
+  color: '#f3e8ff',
+  fontSize: '9px',
+  fontWeight: 'bold',
+  padding: '2px 8px',
+  borderRadius: '4px',
+  display: 'inline-block',
+};
+
+const theoryBlockCardStyle: React.CSSProperties = {
+  background: '#160b29',
+  border: '1px solid #581c87',
+  borderRadius: '6px',
+  padding: '10px',
+};
+
+const practiceBlockCardStyle: React.CSSProperties = {
+  background: '#09211c',
+  border: '1px solid #065f46',
+  borderRadius: '6px',
+  padding: '10px',
+};
+
+const schematicTipBoxStyle: React.CSSProperties = {
+  background: '#041712',
+  border: '1px dashed #10b981',
+  borderRadius: '4px',
+  padding: '6px 8px',
+  marginTop: '8px',
 };
 
 const multimeterContainerStyle: React.CSSProperties = {
