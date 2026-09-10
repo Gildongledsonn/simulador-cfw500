@@ -5,7 +5,9 @@ import {
   approveAllPendingUsers,
   deleteUser,
   adminAddUser,
-  restoreLegacyUsers,
+  consolidateAndGetUsers,
+  exportUsersJson,
+  importUsersJson,
   UserAccount,
 } from '../services/authService';
 
@@ -32,11 +34,13 @@ export const AdminPanel: React.FC = () => {
   });
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [backupText, setBackupText] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<'USERS' | 'TASKS'>('USERS');
   const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [recoveryFeedback, setRecoveryFeedback] = useState<string | null>(null);
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
 
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -78,13 +82,32 @@ export const AdminPanel: React.FC = () => {
     localStorage.setItem('@GAF_ADMIN_TASKS_V1', JSON.stringify(tasks));
   }, [tasks]);
 
-  const handleForceScanLegacy = async () => {
+  const handleDeepScan = () => {
     setIsRefreshing(true);
-    const result = await restoreLegacyUsers();
-    setUsers(result.users);
+    const list = consolidateAndGetUsers();
+    setUsers(list);
     setIsRefreshing(false);
-    setRecoveryFeedback(`✓ Varredura concluída! Total de ${result.count} contas sincronizadas.`);
-    setTimeout(() => setRecoveryFeedback(null), 4000);
+    setFeedbackMsg(`✓ Varredura concluída com sucesso! Total de ${list.length} cadastros sincronizados.`);
+    setTimeout(() => setFeedbackMsg(null), 4000);
+  };
+
+  const handleExportBackup = () => {
+    const json = exportUsersJson();
+    setBackupText(json);
+    setShowBackupModal(true);
+  };
+
+  const handleImportBackup = () => {
+    if (!backupText.trim()) return;
+    const res = importUsersJson(backupText);
+    if (res.success) {
+      loadData();
+      setFeedbackMsg(`✓ ${res.message}`);
+      setShowBackupModal(false);
+      setTimeout(() => setFeedbackMsg(null), 4000);
+    } else {
+      alert(res.message);
+    }
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -183,6 +206,7 @@ export const AdminPanel: React.FC = () => {
   const rejectedCount = users.filter((u) => u.status === 'REJECTED').length;
   const pendingTasksCount = tasks.filter((t) => t.status === 'PENDENTE').length;
 
+  // Filtragem ultra-segura (nunca quebra se algum campo for undefined)
   const filteredUsers = users.filter((u) => {
     const matchesFilter =
       userStatusFilter === 'ALL' ||
@@ -193,13 +217,13 @@ export const AdminPanel: React.FC = () => {
     if (!matchesFilter) return false;
 
     if (!searchTerm.trim()) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      u.name.toLowerCase().includes(term) ||
-      u.username.toLowerCase().includes(term) ||
-      u.cpf.includes(term) ||
-      u.email.toLowerCase().includes(term)
-    );
+    const term = searchTerm.toLowerCase().trim();
+    const name = (u.name || '').toLowerCase();
+    const username = (u.username || '').toLowerCase();
+    const cpf = (u.cpf || '').toLowerCase();
+    const email = (u.email || '').toLowerCase();
+
+    return name.includes(term) || username.includes(term) || cpf.includes(term) || email.includes(term);
   });
 
   return (
@@ -217,25 +241,25 @@ export const AdminPanel: React.FC = () => {
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           {pendingCount > 0 && (
             <span style={pendingBadgeStyle}>
-              ⚠️ {pendingCount} {pendingCount === 1 ? 'pendente para aprovar' : 'pendentes para aprovar'}
+              ⚠️ {pendingCount} {pendingCount === 1 ? 'pendente' : 'pendentes'}
             </span>
           )}
 
           <button
-            onClick={handleForceScanLegacy}
+            onClick={handleDeepScan}
             disabled={isRefreshing}
             style={btnScanLegacyStyle}
-            title="Vasculha e recupera cadastros anteriores salvos no navegador"
+            title="Recupera automaticamente qualquer cadastro antigo que estivesse em chaves anteriores"
           >
-            🔍 Buscar Cadastros Antigos
+            🔍 Restaurar Cadastros Antigos
           </button>
 
-          <button
-            onClick={loadData}
-            disabled={isRefreshing}
-            style={refreshBtnStyle}
-          >
-            {isRefreshing ? '⏳ Sincronizando...' : '🔄 Atualizar'}
+          <button onClick={handleExportBackup} style={btnBackupStyle} title="Fazer backup ou restaurar lista de alunos em JSON">
+            💾 Backup / Restaurar
+          </button>
+
+          <button onClick={loadData} disabled={isRefreshing} style={refreshBtnStyle}>
+            {isRefreshing ? '⏳...' : '🔄 Atualizar'}
           </button>
 
           <button
@@ -250,13 +274,14 @@ export const AdminPanel: React.FC = () => {
         </div>
       </div>
 
-      {recoveryFeedback && (
-        <div style={recoveryBannerStyle}>
-          {recoveryFeedback}
-        </div>
-      )}
+      {feedbackMsg && <div style={recoveryBannerStyle}>{feedbackMsg}</div>}
 
-      {/* BANNER DE ALERTA QUANDO HOUVER ALUNOS PENDENTES */}
+      {/* AVISO IMPORTANTE SOBRE JANELA ANÔNIMA */}
+      <div style={anonymousNoticeBoxStyle}>
+        <span>💡 <strong>Nota para testes:</strong> O navegador isola o armazenamento local de <em>Janelas Anônimas</em>. Para testar o cadastro de um aluno novo, faça o registro em uma aba normal ou use o botão <strong>"💾 Backup / Restaurar"</strong> para colar os dados.</span>
+      </div>
+
+      {/* BANNER EM DESTAQUE DE ALUNOS PENDENTES */}
       {pendingCount > 0 && (
         <div style={pendingAlertBannerStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -266,7 +291,7 @@ export const AdminPanel: React.FC = () => {
                 Existem {pendingCount} novo(s) aluno(s) aguardando liberação de acesso!
               </strong>
               <span style={{ fontSize: '10.5px', color: '#ffe082', display: 'block' }}>
-                Você pode aprovar todos de uma vez pelo botão ao lado ou individualmente na lista.
+                Aprove individualmente nos botões verdes abaixo ou clique em "Liberar Acesso de Todos".
               </span>
             </div>
           </div>
@@ -276,7 +301,7 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* ABAS INTERNAS: GESTÃO DE ALUNOS E TAREFAS */}
+      {/* ABAS INTERNAS */}
       <div style={subTabsRowStyle}>
         <button
           onClick={() => setActiveSubTab('USERS')}
@@ -302,6 +327,40 @@ export const AdminPanel: React.FC = () => {
           ✅ Controle & Conclusão de Tarefas {pendingTasksCount > 0 && `(${pendingTasksCount})`}
         </button>
       </div>
+
+      {/* MODAL DE BACKUP E RESTAURAÇÃO */}
+      {showBackupModal && (
+        <div style={addCardStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <strong style={{ fontSize: '12px', color: '#81d4fa' }}>
+              💾 Backup e Restauração de Alunos (Formato JSON)
+            </strong>
+            <button onClick={() => setShowBackupModal(false)} style={{ background: 'none', border: 'none', color: '#90a4ae', cursor: 'pointer' }}>✕</button>
+          </div>
+          <p style={{ fontSize: '10.5px', color: '#cfd8dc', margin: '0 0 8px 0' }}>
+            Copie o texto abaixo para salvar um backup dos alunos cadastrados ou cole dados de alunos para restaurar:
+          </p>
+          <textarea
+            value={backupText}
+            onChange={(e) => setBackupText(e.target.value)}
+            style={{ width: '100%', height: '140px', background: '#0a0d11', color: '#00e676', border: '1px solid #30363d', borderRadius: '6px', padding: '8px', fontSize: '10px', fontFamily: 'monospace' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(backupText);
+                alert('JSON copiado para a área de transferência!');
+              }}
+              style={{ ...actionBtnStyle, background: '#0288d1' }}
+            >
+              📋 Copiar JSON
+            </button>
+            <button onClick={handleImportBackup} style={{ ...actionBtnStyle, background: '#00e676', color: '#000' }}>
+              📥 Restaurar Alunos do Texto
+            </button>
+          </div>
+        </div>
+      )}
 
       {showAddModal && (
         <div style={addCardStyle}>
@@ -395,7 +454,7 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* LISTA DE ALUNOS COM BARRA DE BUSCA E FILTROS */}
+      {/* LISTA DE ALUNOS */}
       {activeSubTab === 'USERS' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div style={searchAndFilterBar}>
@@ -403,7 +462,7 @@ export const AdminPanel: React.FC = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="🔍 Buscar aluno por nome, usuário ou CPF..."
+              placeholder="🔍 Buscar aluno por nome, usuário, CPF ou e-mail..."
               style={searchInputStyle}
             />
 
@@ -456,19 +515,19 @@ export const AdminPanel: React.FC = () => {
             <table style={tableStyle}>
               <thead>
                 <tr style={{ color: '#90a4ae', borderBottom: '1px solid #2a313d', textAlign: 'left', fontSize: '11px' }}>
-                  <th style={{ padding: '8px' }}>NOME</th>
+                  <th style={{ padding: '8px' }}>NOME DO ALUNO</th>
                   <th style={{ padding: '8px' }}>CPF</th>
                   <th style={{ padding: '8px' }}>USUÁRIO</th>
                   <th style={{ padding: '8px' }}>SENHA</th>
                   <th style={{ padding: '8px' }}>STATUS</th>
-                  <th style={{ padding: '8px', textAlign: 'center' }}>AÇÕES DE CONTROLE</th>
+                  <th style={{ padding: '8px', textAlign: 'center' }}>AÇÕES DO INSTRUTOR</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#90a4ae', fontSize: '11px' }}>
-                      Nenhum aluno encontrado para os critérios selecionados.
+                      Nenhum aluno encontrado para este filtro.
                     </td>
                   </tr>
                 ) : (
@@ -481,10 +540,10 @@ export const AdminPanel: React.FC = () => {
                         background: u.status === 'PENDING' ? 'rgba(255, 143, 0, 0.08)' : 'transparent',
                       }}
                     >
-                      <td style={{ padding: '8px', color: '#fff', fontWeight: 'bold' }}>{u.name}</td>
-                      <td style={{ padding: '8px', color: '#cbd5e1' }}>{u.cpf}</td>
+                      <td style={{ padding: '8px', color: '#fff', fontWeight: 'bold' }}>{u.name || 'Sem nome'}</td>
+                      <td style={{ padding: '8px', color: '#cbd5e1' }}>{u.cpf || 'Não informado'}</td>
                       <td style={{ padding: '8px', color: '#81d4fa', fontFamily: 'monospace' }}>@{u.username}</td>
-                      <td style={{ padding: '8px', color: '#ffd54f', fontFamily: 'monospace' }}>{u.password}</td>
+                      <td style={{ padding: '8px', color: '#ffd54f', fontFamily: 'monospace' }}>{u.password || '---'}</td>
                       <td style={{ padding: '8px' }}>
                         <span
                           style={{
@@ -659,6 +718,15 @@ const recoveryBannerStyle: React.CSSProperties = {
   fontWeight: 'bold',
 };
 
+const anonymousNoticeBoxStyle: React.CSSProperties = {
+  background: 'rgba(2, 136, 209, 0.12)',
+  border: '1px solid #0288d1',
+  borderRadius: '6px',
+  padding: '6px 12px',
+  color: '#81d4fa',
+  fontSize: '10.5px',
+};
+
 const pendingAlertBannerStyle: React.CSSProperties = {
   background: 'linear-gradient(135deg, #b45309 0%, #78350f 100%)',
   border: '1px solid #f59e0b',
@@ -740,6 +808,17 @@ const btnScanLegacyStyle: React.CSSProperties = {
   background: '#4f46e5',
   color: '#fff',
   border: '1px solid #6366f1',
+  borderRadius: '6px',
+  padding: '6px 12px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+};
+
+const btnBackupStyle: React.CSSProperties = {
+  background: '#334155',
+  color: '#fff',
+  border: '1px solid #475569',
   borderRadius: '6px',
   padding: '6px 12px',
   fontSize: '11px',
