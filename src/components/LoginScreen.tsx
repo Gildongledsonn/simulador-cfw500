@@ -24,28 +24,51 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setFeedback(null);
     setIsLoading(true);
 
+    const cleanUser = usernameInput.trim().toLowerCase();
+    const cleanPass = passwordInput.trim();
+
     const users = await getStoredUsers();
-    const cleanUser = usernameInput.toLowerCase().trim();
-    const found = users.find((u) => u.username.toLowerCase() === cleanUser && u.password === passwordInput);
+
+    // Busca insensível a maiúsculas/minúsculas no usuário e exata na senha
+    const found = users.find(
+      (u) =>
+        u.username.trim().toLowerCase() === cleanUser &&
+        String(u.password || '').trim() === cleanPass
+    );
 
     setIsLoading(false);
 
     if (!found) {
-      setFeedback({ type: 'error', text: 'Usuário ou senha incorretos.' });
+      setFeedback({
+        type: 'error',
+        text: 'Usuário ou senha incorretos. Verifique se digitou corretamente ou contate o instrutor.',
+      });
       return;
     }
 
     if (found.status === 'PENDING' && found.role !== 'ADMIN') {
-      setFeedback({ type: 'error', text: 'Seu cadastro está aguardando aprovação do instrutor.' });
+      setFeedback({
+        type: 'error',
+        text: '⏳ Cadastro aguardando aprovação. Peça para o instrutor liberar seu acesso no Painel ADM.',
+      });
       return;
     }
 
     if (found.status === 'REJECTED') {
-      setFeedback({ type: 'error', text: 'Seu acesso foi recusado pela administração.' });
+      setFeedback({
+        type: 'error',
+        text: '⛔ Seu cadastro foi recusado pela administração.',
+      });
       return;
     }
 
-    const authData = { name: found.name, role: found.role, username: found.username, cpf: found.cpf || '046.405.824-47' };
+    const authData = {
+      name: found.name,
+      role: found.role,
+      username: found.username,
+      cpf: found.cpf || 'Não informado',
+    };
+
     localStorage.setItem('cfw500_auth_user', JSON.stringify(authData));
     onLoginSuccess(authData);
   };
@@ -54,8 +77,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     e.preventDefault();
     setFeedback(null);
 
-    if (!regName || !regEmail || !regCpf || !regUsername || !regPassword) {
-      setFeedback({ type: 'error', text: 'Preencha todos os campos obrigatórios: Nome, E-mail, CPF, Usuário e Senha.' });
+    if (!regName.trim() || !regEmail.trim() || !regCpf.trim() || !regUsername.trim() || !regPassword.trim()) {
+      setFeedback({
+        type: 'error',
+        text: 'Preencha todos os campos obrigatórios: Nome, E-mail, CPF, Usuário e Senha.',
+      });
       return;
     }
 
@@ -116,7 +142,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 required
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
-                placeholder="Ex: airton.senna"
+                placeholder="Ex: fabio ou usuario criado"
                 style={inputStyle}
               />
             </div>
@@ -138,10 +164,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             </button>
 
             <div style={{ textAlign: 'center', marginTop: '10px' }}>
-              <span style={{ fontSize: '11px', color: '#90a4ae' }}>Não tem uma conta? </span>
+              <span style={{ fontSize: '11px', color: '#90a4ae' }}>Novo aluno? </span>
               <button
                 type="button"
-                onClick={() => { setIsRegistering(true); setFeedback(null); }}
+                onClick={() => {
+                  setIsRegistering(true);
+                  setFeedback(null);
+                }}
                 style={linkBtnStyle}
               >
                 Cadastre-se aqui
@@ -157,7 +186,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 required
                 value={regName}
                 onChange={(e) => setRegName(e.target.value)}
-                placeholder="Ex: Airton Senna da Silva"
+                placeholder="Ex: Carlos Silva de Souza"
                 style={inputStyle}
               />
             </div>
@@ -169,7 +198,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 required
                 value={regEmail}
                 onChange={(e) => setRegEmail(e.target.value)}
-                placeholder="exemplo@gmail.com"
+                placeholder="carlos@gmail.com"
                 style={inputStyle}
               />
             </div>
@@ -187,13 +216,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             </div>
 
             <div>
-              <label style={labelStyle}>Nome de Usuário *</label>
+              <label style={labelStyle}>Nome de Usuário para Acesso *</label>
               <input
                 type="text"
                 required
                 value={regUsername}
                 onChange={(e) => setRegUsername(e.target.value)}
-                placeholder="Airton.senna"
+                placeholder="carlos.silva"
                 style={inputStyle}
               />
             </div>
@@ -210,14 +239,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               />
             </div>
 
-            <button type="submit" disabled={isLoading} style={{ ...btnPrimaryStyle, background: '#00e676', color: '#000', marginTop: '4px' }}>
+            <button
+              type="submit"
+              disabled={isLoading}
+              style={{ ...btnPrimaryStyle, background: '#00e676', color: '#000', marginTop: '4px' }}
+            >
               {isLoading ? 'Cadastrando...' : 'Concluir Cadastro'}
             </button>
 
             <div style={{ textAlign: 'center', marginTop: '6px' }}>
               <button
                 type="button"
-                onClick={() => { setIsRegistering(false); setFeedback(null); }}
+                onClick={() => {
+                  setIsRegistering(false);
+                  setFeedback(null);
+                }}
                 style={linkBtnStyle}
               >
                 ← Voltar para o Login
