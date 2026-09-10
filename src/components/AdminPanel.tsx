@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   getStoredUsers,
   updateUserStatus,
+  approveAllPendingUsers,
   deleteUser,
   adminAddUser,
   UserAccount,
@@ -31,6 +32,7 @@ export const AdminPanel: React.FC = () => {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<'USERS' | 'TASKS'>('USERS');
+  const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [newName, setNewName] = useState('');
@@ -52,8 +54,33 @@ export const AdminPanel: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 8000);
-    return () => clearInterval(interval);
+
+    // Sincronização em tempo real quando novo aluno se cadastra na mesma ou em outra aba
+    const handleSync = () => {
+      loadData();
+    };
+
+    window.addEventListener('gaf_users_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('gaf_auth_sync_channel');
+      channel.onmessage = () => {
+        loadData();
+      };
+    } catch {
+      // ignore
+    }
+
+    const interval = setInterval(loadData, 4000);
+
+    return () => {
+      window.removeEventListener('gaf_users_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+      if (channel) channel.close();
+      clearInterval(interval);
+    };
   }, [loadData]);
 
   useEffect(() => {
@@ -95,6 +122,14 @@ export const AdminPanel: React.FC = () => {
     setIsRefreshing(true);
     await updateUserStatus(userId, 'APPROVED');
     await loadData();
+  };
+
+  const handleApproveAll = async () => {
+    if (window.confirm('Deseja aprovar o acesso de todos os alunos pendentes de uma vez?')) {
+      setIsRefreshing(true);
+      await approveAllPendingUsers();
+      await loadData();
+    }
   };
 
   const handleReject = async (userId: string) => {
@@ -144,7 +179,16 @@ export const AdminPanel: React.FC = () => {
   };
 
   const pendingCount = users.filter((u) => u.status === 'PENDING').length;
+  const approvedCount = users.filter((u) => u.status === 'APPROVED' && u.role !== 'ADMIN').length;
+  const rejectedCount = users.filter((u) => u.status === 'REJECTED').length;
   const pendingTasksCount = tasks.filter((t) => t.status === 'PENDENTE').length;
+
+  const filteredUsers = users.filter((u) => {
+    if (userStatusFilter === 'PENDING') return u.status === 'PENDING';
+    if (userStatusFilter === 'APPROVED') return u.status === 'APPROVED';
+    if (userStatusFilter === 'REJECTED') return u.status === 'REJECTED';
+    return true;
+  });
 
   return (
     <div style={containerStyle}>
@@ -161,7 +205,7 @@ export const AdminPanel: React.FC = () => {
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           {pendingCount > 0 && (
             <span style={pendingBadgeStyle}>
-              ⚠️ {pendingCount} {pendingCount === 1 ? 'pendente' : 'pendentes'}
+              ⚠️ {pendingCount} {pendingCount === 1 ? 'pendente para aprovar' : 'pendentes para aprovar'}
             </span>
           )}
 
@@ -173,7 +217,7 @@ export const AdminPanel: React.FC = () => {
               opacity: isRefreshing ? 0.6 : 1,
             }}
           >
-            {isRefreshing ? '⏳ Sincronizando...' : '🔄 Atualizar'}
+            {isRefreshing ? '⏳ Sincronizando...' : '🔄 Atualizar Lista'}
           </button>
 
           <button
@@ -188,6 +232,27 @@ export const AdminPanel: React.FC = () => {
         </div>
       </div>
 
+      {/* BANNER DE ALERTA DE ALUNOS PENDENTES */}
+      {pendingCount > 0 && (
+        <div style={pendingAlertBannerStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '18px' }}>🔔</span>
+            <div>
+              <strong style={{ fontSize: '12px', color: '#fff' }}>
+                Existem {pendingCount} novo(s) cadastro(s) aguardando aprovação!
+              </strong>
+              <span style={{ fontSize: '10px', color: '#ffe082', display: 'block' }}>
+                Clique no botão ao lado para liberar todos ou aprove individualmente na tabela abaixo.
+              </span>
+            </div>
+          </div>
+          <button onClick={handleApproveAll} style={btnApproveAllStyle}>
+            ✅ Aprovar Todos ({pendingCount})
+          </button>
+        </div>
+      )}
+
+      {/* ABAS INTERNAS DO PAINEL ADMIN */}
       <div style={subTabsRowStyle}>
         <button
           onClick={() => setActiveSubTab('USERS')}
@@ -306,69 +371,133 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
+      {/* CONTEÚDO DA ABA DE ALUNOS COM FILTRO */}
       {activeSubTab === 'USERS' && (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={tableStyle}>
-            <thead>
-              <tr style={{ color: '#90a4ae', borderBottom: '1px solid #2a313d', textAlign: 'left', fontSize: '11px' }}>
-                <th style={{ padding: '8px' }}>NOME</th>
-                <th style={{ padding: '8px' }}>CPF</th>
-                <th style={{ padding: '8px' }}>USUÁRIO</th>
-                <th style={{ padding: '8px' }}>SENHA</th>
-                <th style={{ padding: '8px' }}>STATUS</th>
-                <th style={{ padding: '8px', textAlign: 'center' }}>AÇÕES DE CONTROLE</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} style={{ borderBottom: '1px solid #1a1f26', fontSize: '11px' }}>
-                  <td style={{ padding: '8px', color: '#fff', fontWeight: 'bold' }}>{u.name}</td>
-                  <td style={{ padding: '8px', color: '#cbd5e1' }}>{u.cpf}</td>
-                  <td style={{ padding: '8px', color: '#81d4fa', fontFamily: 'monospace' }}>@{u.username}</td>
-                  <td style={{ padding: '8px', color: '#ffd54f', fontFamily: 'monospace' }}>{u.password}</td>
-                  <td style={{ padding: '8px' }}>
-                    <span
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={filterButtonsRowStyle}>
+            <span style={{ fontSize: '11px', color: '#90a4ae', fontWeight: 'bold' }}>Filtrar Status:</span>
+            <button
+              onClick={() => setUserStatusFilter('ALL')}
+              style={{
+                ...btnFilterStyle,
+                background: userStatusFilter === 'ALL' ? '#0288d1' : '#1e293b',
+                color: userStatusFilter === 'ALL' ? '#fff' : '#cbd5e1',
+              }}
+            >
+              Todos ({users.length})
+            </button>
+            <button
+              onClick={() => setUserStatusFilter('PENDING')}
+              style={{
+                ...btnFilterStyle,
+                background: userStatusFilter === 'PENDING' ? '#ff8f00' : '#1e293b',
+                color: userStatusFilter === 'PENDING' ? '#000' : '#ffe082',
+                fontWeight: 'bold',
+              }}
+            >
+              ⏳ Pendentes ({pendingCount})
+            </button>
+            <button
+              onClick={() => setUserStatusFilter('APPROVED')}
+              style={{
+                ...btnFilterStyle,
+                background: userStatusFilter === 'APPROVED' ? '#2e7d32' : '#1e293b',
+                color: userStatusFilter === 'APPROVED' ? '#fff' : '#a5d6a7',
+              }}
+            >
+              ✅ Aprovados ({approvedCount})
+            </button>
+            <button
+              onClick={() => setUserStatusFilter('REJECTED')}
+              style={{
+                ...btnFilterStyle,
+                background: userStatusFilter === 'REJECTED' ? '#c62828' : '#1e293b',
+                color: userStatusFilter === 'REJECTED' ? '#fff' : '#ef9a9a',
+              }}
+            >
+              ⛔ Recusados ({rejectedCount})
+            </button>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={tableStyle}>
+              <thead>
+                <tr style={{ color: '#90a4ae', borderBottom: '1px solid #2a313d', textAlign: 'left', fontSize: '11px' }}>
+                  <th style={{ padding: '8px' }}>NOME</th>
+                  <th style={{ padding: '8px' }}>CPF</th>
+                  <th style={{ padding: '8px' }}>USUÁRIO</th>
+                  <th style={{ padding: '8px' }}>SENHA</th>
+                  <th style={{ padding: '8px' }}>STATUS</th>
+                  <th style={{ padding: '8px', textAlign: 'center' }}>AÇÕES DE CONTROLE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '20px', color: '#90a4ae', fontSize: '11px' }}>
+                      Nenhum usuário encontrado neste filtro.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsers.map((u) => (
+                    <tr
+                      key={u.id}
                       style={{
-                        ...statusBadgeStyle,
-                        background:
-                          u.status === 'APPROVED' ? 'rgba(0, 230, 118, 0.15)' : u.status === 'PENDING' ? 'rgba(255, 179, 0, 0.15)' : 'rgba(211, 47, 47, 0.15)',
-                        color:
-                          u.status === 'APPROVED' ? '#00e676' : u.status === 'PENDING' ? '#ffb300' : '#ff5252',
-                        borderColor:
-                          u.status === 'APPROVED' ? '#00e676' : u.status === 'PENDING' ? '#ffb300' : '#ff5252',
+                        borderBottom: '1px solid #1a1f26',
+                        fontSize: '11px',
+                        background: u.status === 'PENDING' ? 'rgba(255, 143, 0, 0.06)' : 'transparent',
                       }}
                     >
-                      {u.status === 'APPROVED' ? '✓ APROVADO' : u.status === 'PENDING' ? '⏳ PENDENTE' : '✕ RECUSADO'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '8px', textAlign: 'center' }}>
-                    {u.role !== 'ADMIN' ? (
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
-                        {u.status !== 'APPROVED' && (
-                          <button onClick={() => handleApprove(u.id)} style={{ ...actionBtnStyle, background: '#2e7d32' }} title="Liberar Acesso">
-                            ✅ Aprovar
-                          </button>
+                      <td style={{ padding: '8px', color: '#fff', fontWeight: 'bold' }}>{u.name}</td>
+                      <td style={{ padding: '8px', color: '#cbd5e1' }}>{u.cpf}</td>
+                      <td style={{ padding: '8px', color: '#81d4fa', fontFamily: 'monospace' }}>@{u.username}</td>
+                      <td style={{ padding: '8px', color: '#ffd54f', fontFamily: 'monospace' }}>{u.password}</td>
+                      <td style={{ padding: '8px' }}>
+                        <span
+                          style={{
+                            ...statusBadgeStyle,
+                            background:
+                              u.status === 'APPROVED' ? 'rgba(0, 230, 118, 0.15)' : u.status === 'PENDING' ? 'rgba(255, 179, 0, 0.2)' : 'rgba(211, 47, 47, 0.15)',
+                            color:
+                              u.status === 'APPROVED' ? '#00e676' : u.status === 'PENDING' ? '#ffb300' : '#ff5252',
+                            borderColor:
+                              u.status === 'APPROVED' ? '#00e676' : u.status === 'PENDING' ? '#ffb300' : '#ff5252',
+                          }}
+                        >
+                          {u.status === 'APPROVED' ? '✓ APROVADO' : u.status === 'PENDING' ? '⏳ PENDENTE' : '✕ RECUSADO'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>
+                        {u.role !== 'ADMIN' ? (
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                            {u.status !== 'APPROVED' && (
+                              <button onClick={() => handleApprove(u.id)} style={{ ...actionBtnStyle, background: '#2e7d32' }} title="Liberar Acesso">
+                                ✅ Aprovar
+                              </button>
+                            )}
+                            {u.status !== 'REJECTED' && (
+                              <button onClick={() => handleReject(u.id)} style={{ ...actionBtnStyle, background: '#d32f2f' }} title="Recusar Acesso">
+                                ⛔ Recusar
+                              </button>
+                            )}
+                            <button onClick={() => handleDelete(u.id)} style={{ ...actionBtnStyle, background: '#37474f' }} title="Remover Aluno">
+                              🗑️
+                            </button>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '10px', color: '#90a4ae' }}>Administrador Master</span>
                         )}
-                        {u.status !== 'REJECTED' && (
-                          <button onClick={() => handleReject(u.id)} style={{ ...actionBtnStyle, background: '#d32f2f' }} title="Recusar Acesso">
-                            ⛔ Recusar
-                          </button>
-                        )}
-                        <button onClick={() => handleDelete(u.id)} style={{ ...actionBtnStyle, background: '#37474f' }} title="Remover Aluno">
-                          🗑️
-                        </button>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '10px', color: '#90a4ae' }}>Administrador Master</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
+      {/* CONTEÚDO DA ABA DE TAREFAS */}
       {activeSubTab === 'TASKS' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={addTaskBoxStyle}>
@@ -390,7 +519,7 @@ export const AdminPanel: React.FC = () => {
                 style={{ ...inputStyle, flex: 1, minWidth: '130px', background: '#161b22', color: '#fff' }}
               >
                 <option value="">Todos os Alunos (Geral)</option>
-                {users.filter(u => u.role !== 'ADMIN').map((u) => (
+                {users.filter((u) => u.role !== 'ADMIN').map((u) => (
                   <option key={u.id} value={u.username}>@{u.username} ({u.name})</option>
                 ))}
               </select>
@@ -485,6 +614,47 @@ const headerStyle: React.CSSProperties = {
   gap: '10px',
   borderBottom: '1px solid #222a36',
   paddingBottom: '10px',
+};
+
+const pendingAlertBannerStyle: React.CSSProperties = {
+  background: 'linear-gradient(135deg, #b45309 0%, #78350f 100%)',
+  border: '1px solid #f59e0b',
+  borderRadius: '8px',
+  padding: '10px 14px',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: '10px',
+  boxShadow: '0 4px 12px rgba(245, 158, 11, 0.2)',
+};
+
+const btnApproveAllStyle: React.CSSProperties = {
+  background: '#00e676',
+  color: '#000',
+  border: 'none',
+  borderRadius: '6px',
+  padding: '6px 14px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+};
+
+const filterButtonsRowStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  flexWrap: 'wrap',
+  margin: '4px 0',
+};
+
+const btnFilterStyle: React.CSSProperties = {
+  border: '1px solid #334155',
+  borderRadius: '6px',
+  padding: '4px 10px',
+  fontSize: '10px',
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
 };
 
 const subTabsRowStyle: React.CSSProperties = {
