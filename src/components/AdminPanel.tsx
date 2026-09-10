@@ -5,6 +5,7 @@ import {
   approveAllPendingUsers,
   deleteUser,
   adminAddUser,
+  restoreLegacyUsers,
   UserAccount,
 } from '../services/authService';
 
@@ -33,7 +34,9 @@ export const AdminPanel: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<'USERS' | 'TASKS'>('USERS');
   const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [recoveryFeedback, setRecoveryFeedback] = useState<string | null>(null);
 
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -55,7 +58,6 @@ export const AdminPanel: React.FC = () => {
   useEffect(() => {
     loadData();
 
-    // Sincronização em tempo real quando novo aluno se cadastra na mesma ou em outra aba
     const handleSync = () => {
       loadData();
     };
@@ -63,22 +65,11 @@ export const AdminPanel: React.FC = () => {
     window.addEventListener('gaf_users_updated', handleSync);
     window.addEventListener('storage', handleSync);
 
-    let channel: BroadcastChannel | null = null;
-    try {
-      channel = new BroadcastChannel('gaf_auth_sync_channel');
-      channel.onmessage = () => {
-        loadData();
-      };
-    } catch {
-      // ignore
-    }
-
-    const interval = setInterval(loadData, 4000);
+    const interval = setInterval(loadData, 3000);
 
     return () => {
       window.removeEventListener('gaf_users_updated', handleSync);
       window.removeEventListener('storage', handleSync);
-      if (channel) channel.close();
       clearInterval(interval);
     };
   }, [loadData]);
@@ -86,6 +77,15 @@ export const AdminPanel: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('@GAF_ADMIN_TASKS_V1', JSON.stringify(tasks));
   }, [tasks]);
+
+  const handleForceScanLegacy = async () => {
+    setIsRefreshing(true);
+    const result = await restoreLegacyUsers();
+    setUsers(result.users);
+    setIsRefreshing(false);
+    setRecoveryFeedback(`✓ Varredura concluída! Total de ${result.count} contas sincronizadas.`);
+    setTimeout(() => setRecoveryFeedback(null), 4000);
+  };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,10 +184,22 @@ export const AdminPanel: React.FC = () => {
   const pendingTasksCount = tasks.filter((t) => t.status === 'PENDENTE').length;
 
   const filteredUsers = users.filter((u) => {
-    if (userStatusFilter === 'PENDING') return u.status === 'PENDING';
-    if (userStatusFilter === 'APPROVED') return u.status === 'APPROVED';
-    if (userStatusFilter === 'REJECTED') return u.status === 'REJECTED';
-    return true;
+    const matchesFilter =
+      userStatusFilter === 'ALL' ||
+      (userStatusFilter === 'PENDING' && u.status === 'PENDING') ||
+      (userStatusFilter === 'APPROVED' && u.status === 'APPROVED') ||
+      (userStatusFilter === 'REJECTED' && u.status === 'REJECTED');
+
+    if (!matchesFilter) return false;
+
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      u.name.toLowerCase().includes(term) ||
+      u.username.toLowerCase().includes(term) ||
+      u.cpf.includes(term) ||
+      u.email.toLowerCase().includes(term)
+    );
   });
 
   return (
@@ -210,14 +222,20 @@ export const AdminPanel: React.FC = () => {
           )}
 
           <button
+            onClick={handleForceScanLegacy}
+            disabled={isRefreshing}
+            style={btnScanLegacyStyle}
+            title="Vasculha e recupera cadastros anteriores salvos no navegador"
+          >
+            🔍 Buscar Cadastros Antigos
+          </button>
+
+          <button
             onClick={loadData}
             disabled={isRefreshing}
-            style={{
-              ...refreshBtnStyle,
-              opacity: isRefreshing ? 0.6 : 1,
-            }}
+            style={refreshBtnStyle}
           >
-            {isRefreshing ? '⏳ Sincronizando...' : '🔄 Atualizar Lista'}
+            {isRefreshing ? '⏳ Sincronizando...' : '🔄 Atualizar'}
           </button>
 
           <button
@@ -232,27 +250,33 @@ export const AdminPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* BANNER DE ALERTA DE ALUNOS PENDENTES */}
+      {recoveryFeedback && (
+        <div style={recoveryBannerStyle}>
+          {recoveryFeedback}
+        </div>
+      )}
+
+      {/* BANNER DE ALERTA QUANDO HOUVER ALUNOS PENDENTES */}
       {pendingCount > 0 && (
         <div style={pendingAlertBannerStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '18px' }}>🔔</span>
+            <span style={{ fontSize: '20px' }}>🔔</span>
             <div>
               <strong style={{ fontSize: '12px', color: '#fff' }}>
-                Existem {pendingCount} novo(s) cadastro(s) aguardando aprovação!
+                Existem {pendingCount} novo(s) aluno(s) aguardando liberação de acesso!
               </strong>
-              <span style={{ fontSize: '10px', color: '#ffe082', display: 'block' }}>
-                Clique no botão ao lado para liberar todos ou aprove individualmente na tabela abaixo.
+              <span style={{ fontSize: '10.5px', color: '#ffe082', display: 'block' }}>
+                Você pode aprovar todos de uma vez pelo botão ao lado ou individualmente na lista.
               </span>
             </div>
           </div>
           <button onClick={handleApproveAll} style={btnApproveAllStyle}>
-            ✅ Aprovar Todos ({pendingCount})
+            ✅ Liberar Acesso de Todos ({pendingCount})
           </button>
         </div>
       )}
 
-      {/* ABAS INTERNAS DO PAINEL ADMIN */}
+      {/* ABAS INTERNAS: GESTÃO DE ALUNOS E TAREFAS */}
       <div style={subTabsRowStyle}>
         <button
           onClick={() => setActiveSubTab('USERS')}
@@ -371,52 +395,61 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* CONTEÚDO DA ABA DE ALUNOS COM FILTRO */}
+      {/* LISTA DE ALUNOS COM BARRA DE BUSCA E FILTROS */}
       {activeSubTab === 'USERS' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={filterButtonsRowStyle}>
-            <span style={{ fontSize: '11px', color: '#90a4ae', fontWeight: 'bold' }}>Filtrar Status:</span>
-            <button
-              onClick={() => setUserStatusFilter('ALL')}
-              style={{
-                ...btnFilterStyle,
-                background: userStatusFilter === 'ALL' ? '#0288d1' : '#1e293b',
-                color: userStatusFilter === 'ALL' ? '#fff' : '#cbd5e1',
-              }}
-            >
-              Todos ({users.length})
-            </button>
-            <button
-              onClick={() => setUserStatusFilter('PENDING')}
-              style={{
-                ...btnFilterStyle,
-                background: userStatusFilter === 'PENDING' ? '#ff8f00' : '#1e293b',
-                color: userStatusFilter === 'PENDING' ? '#000' : '#ffe082',
-                fontWeight: 'bold',
-              }}
-            >
-              ⏳ Pendentes ({pendingCount})
-            </button>
-            <button
-              onClick={() => setUserStatusFilter('APPROVED')}
-              style={{
-                ...btnFilterStyle,
-                background: userStatusFilter === 'APPROVED' ? '#2e7d32' : '#1e293b',
-                color: userStatusFilter === 'APPROVED' ? '#fff' : '#a5d6a7',
-              }}
-            >
-              ✅ Aprovados ({approvedCount})
-            </button>
-            <button
-              onClick={() => setUserStatusFilter('REJECTED')}
-              style={{
-                ...btnFilterStyle,
-                background: userStatusFilter === 'REJECTED' ? '#c62828' : '#1e293b',
-                color: userStatusFilter === 'REJECTED' ? '#fff' : '#ef9a9a',
-              }}
-            >
-              ⛔ Recusados ({rejectedCount})
-            </button>
+          <div style={searchAndFilterBar}>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="🔍 Buscar aluno por nome, usuário ou CPF..."
+              style={searchInputStyle}
+            />
+
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setUserStatusFilter('ALL')}
+                style={{
+                  ...btnFilterStyle,
+                  background: userStatusFilter === 'ALL' ? '#0288d1' : '#1e293b',
+                  color: userStatusFilter === 'ALL' ? '#fff' : '#cbd5e1',
+                }}
+              >
+                Todos ({users.length})
+              </button>
+              <button
+                onClick={() => setUserStatusFilter('PENDING')}
+                style={{
+                  ...btnFilterStyle,
+                  background: userStatusFilter === 'PENDING' ? '#ff8f00' : '#1e293b',
+                  color: userStatusFilter === 'PENDING' ? '#000' : '#ffe082',
+                  fontWeight: 'bold',
+                }}
+              >
+                ⏳ Pendentes ({pendingCount})
+              </button>
+              <button
+                onClick={() => setUserStatusFilter('APPROVED')}
+                style={{
+                  ...btnFilterStyle,
+                  background: userStatusFilter === 'APPROVED' ? '#2e7d32' : '#1e293b',
+                  color: userStatusFilter === 'APPROVED' ? '#fff' : '#a5d6a7',
+                }}
+              >
+                ✅ Aprovados ({approvedCount})
+              </button>
+              <button
+                onClick={() => setUserStatusFilter('REJECTED')}
+                style={{
+                  ...btnFilterStyle,
+                  background: userStatusFilter === 'REJECTED' ? '#c62828' : '#1e293b',
+                  color: userStatusFilter === 'REJECTED' ? '#fff' : '#ef9a9a',
+                }}
+              >
+                ⛔ Recusados ({rejectedCount})
+              </button>
+            </div>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
@@ -434,8 +467,8 @@ export const AdminPanel: React.FC = () => {
               <tbody>
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '20px', color: '#90a4ae', fontSize: '11px' }}>
-                      Nenhum usuário encontrado neste filtro.
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#90a4ae', fontSize: '11px' }}>
+                      Nenhum aluno encontrado para os critérios selecionados.
                     </td>
                   </tr>
                 ) : (
@@ -445,7 +478,7 @@ export const AdminPanel: React.FC = () => {
                       style={{
                         borderBottom: '1px solid #1a1f26',
                         fontSize: '11px',
-                        background: u.status === 'PENDING' ? 'rgba(255, 143, 0, 0.06)' : 'transparent',
+                        background: u.status === 'PENDING' ? 'rgba(255, 143, 0, 0.08)' : 'transparent',
                       }}
                     >
                       <td style={{ padding: '8px', color: '#fff', fontWeight: 'bold' }}>{u.name}</td>
@@ -497,7 +530,7 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* CONTEÚDO DA ABA DE TAREFAS */}
+      {/* ABA DE TAREFAS */}
       {activeSubTab === 'TASKS' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={addTaskBoxStyle}>
@@ -616,6 +649,16 @@ const headerStyle: React.CSSProperties = {
   paddingBottom: '10px',
 };
 
+const recoveryBannerStyle: React.CSSProperties = {
+  background: 'rgba(0, 230, 118, 0.15)',
+  border: '1px solid #00e676',
+  borderRadius: '6px',
+  padding: '8px 12px',
+  color: '#b9f6ca',
+  fontSize: '11px',
+  fontWeight: 'bold',
+};
+
 const pendingAlertBannerStyle: React.CSSProperties = {
   background: 'linear-gradient(135deg, #b45309 0%, #78350f 100%)',
   border: '1px solid #f59e0b',
@@ -640,12 +683,23 @@ const btnApproveAllStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const filterButtonsRowStyle: React.CSSProperties = {
+const searchAndFilterBar: React.CSSProperties = {
   display: 'flex',
+  justifyContent: 'space-between',
   alignItems: 'center',
-  gap: '8px',
+  gap: '10px',
   flexWrap: 'wrap',
   margin: '4px 0',
+};
+
+const searchInputStyle: React.CSSProperties = {
+  flex: '1 1 240px',
+  background: '#161b22',
+  border: '1px solid #30363d',
+  borderRadius: '6px',
+  padding: '6px 10px',
+  color: '#fff',
+  fontSize: '11px',
 };
 
 const btnFilterStyle: React.CSSProperties = {
@@ -680,6 +734,17 @@ const pendingBadgeStyle: React.CSSProperties = {
   borderRadius: '6px',
   fontSize: '11px',
   fontWeight: 'bold',
+};
+
+const btnScanLegacyStyle: React.CSSProperties = {
+  background: '#4f46e5',
+  color: '#fff',
+  border: '1px solid #6366f1',
+  borderRadius: '6px',
+  padding: '6px 12px',
+  fontSize: '11px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
 };
 
 const refreshBtnStyle: React.CSSProperties = {
