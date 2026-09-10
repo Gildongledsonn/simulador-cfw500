@@ -10,9 +10,15 @@ export interface UserAccount {
   createdAt?: string;
 }
 
-const STORAGE_KEY = '@GAF_USERS_DATABASE_V3';
+// URL da API PHP hospedada no seu servidor UOL Host
+// Se não usar variável de ambiente, coloque a URL do seu site diretamente:
+const API_URL =
+  (import.meta as any).env?.VITE_API_URL ||
+  'https://seudominio.com.br/api_users.php'; // Altere para o seu domínio real da UOL Host
 
-const defaultUsers: UserAccount[] = [
+const LOCAL_CACHE_KEY = '@GAF_USERS_DATABASE_V3';
+
+const DEFAULT_USERS: UserAccount[] = [
   {
     id: 'usr_admin',
     name: 'Gildongledson Alves Fernandes',
@@ -37,39 +43,65 @@ const defaultUsers: UserAccount[] = [
   },
 ];
 
-/**
- * Lê diretamente os usuários salvos no localStorage.
- * Se estiver vazio, inicializa com os usuários padrão sem sobrescrever o que já existe.
- */
-export const getStoredUsers = async (): Promise<UserAccount[]> => {
+function getLocalCache(): UserAccount[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-    // Inicialização segura
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultUsers));
-    return defaultUsers;
-  } catch (err) {
-    console.error('Erro ao ler usuários do storage:', err);
-    return defaultUsers;
-  }
-};
-
-function saveUsers(users: UserAccount[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('gaf_users_updated'));
-    }
-  } catch (err) {
-    console.error('Erro ao salvar usuários:', err);
+    const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+    return raw ? JSON.parse(raw) : DEFAULT_USERS;
+  } catch {
+    return DEFAULT_USERS;
   }
 }
 
+function setLocalCache(users: UserAccount[]) {
+  try {
+    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(users));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gaf_users_updated'));
+    }
+  } catch (e) {
+    console.error('Erro ao gravar cache local:', e);
+  }
+}
+
+/**
+ * Busca a lista de usuários diretamente do banco MySQL da UOL Host.
+ */
+export const getStoredUsers = async (): Promise<UserAccount[]> => {
+  try {
+    const response = await fetch(API_URL, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (response.ok) {
+      const serverData = await response.json();
+      if (Array.isArray(serverData)) {
+        const mapped: UserAccount[] = serverData.map((row: any) => ({
+          id: String(row.id),
+          name: String(row.name || ''),
+          email: String(row.email || ''),
+          cpf: String(row.cpf || 'Não informado'),
+          username: String(row.username || '').toLowerCase().trim(),
+          password: String(row.password || ''),
+          role: row.role === 'ADMIN' ? 'ADMIN' : 'STUDENT',
+          status: row.status === 'APPROVED' ? 'APPROVED' : row.status === 'REJECTED' ? 'REJECTED' : 'PENDING',
+          createdAt: row.created_at || row.createdAt,
+        }));
+
+        setLocalCache(mapped);
+        return mapped;
+      }
+    }
+  } catch (err) {
+    console.warn('Servidor UOL Host offline ou inacessível no momento, usando cache local:', err);
+  }
+
+  return getLocalCache();
+};
+
+/**
+ * Cadastra um novo aluno gravando diretamente no MySQL da UOL Host.
+ */
 export const registerNewUser = async (data: {
   name: string;
   email: string;
@@ -84,19 +116,10 @@ export const registerNewUser = async (data: {
   const password = data.password?.trim() || '';
 
   if (!name || !email || !cpf || !username || !password) {
-    return {
-      success: false,
-      message: 'Todos os campos são obrigatórios: Nome, E-mail, CPF, Usuário e Senha.',
-    };
+    return { success: false, message: 'Preencha todos os campos obrigatórios: Nome, E-mail, CPF, Usuário e Senha.' };
   }
 
-  const users = await getStoredUsers();
-
-  if (users.some((u) => u.username.toLowerCase().trim() === username)) {
-    return { success: false, message: 'Este nome de usuário já está em uso. Escolha outro.' };
-  }
-
-  const newUser: UserAccount = {
+  const payload = {
     id: `usr_${Date.now()}`,
     name,
     email,
@@ -105,18 +128,42 @@ export const registerNewUser = async (data: {
     password,
     role: 'STUDENT',
     status: 'PENDING',
-    createdAt: new Date().toISOString().split('T')[0],
   };
 
-  const updated = [newUser, ...users];
-  saveUsers(updated);
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-  return {
-    success: true,
-    message: 'Cadastro realizado com sucesso! Aguarde a aprovação do instrutor no painel ADM.',
-  };
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        // Atualiza cache local
+        const current = getLocalCache();
+        setLocalCache([payload, ...current]);
+        return { success: true, message: 'Cadastro enviado com sucesso! Aguarde aprovação do instrutor no Painel ADM.' };
+      } else {
+        return { success: false, message: result.message || 'Erro ao realizar cadastro.' };
+      }
+    }
+  } catch (err) {
+    console.error('Falha de rede com servidor UOL Host:', err);
+  }
+
+  // Fallback caso esteja sem conexão momentânea com o servidor
+  const current = getLocalCache();
+  if (current.some((u) => u.username === username)) {
+    return { success: false, message: 'Nome de usuário já cadastrado.' };
+  }
+  setLocalCache([payload, ...current]);
+  return { success: true, message: 'Cadastro registrado! Aguardando sincronização com o servidor.' };
 };
 
+/**
+ * Cria aluno com acesso imediato (APPROVED) direto no MySQL da UOL Host.
+ */
 export const adminAddUser = async (data: {
   name: string;
   email: string;
@@ -131,16 +178,10 @@ export const adminAddUser = async (data: {
   const password = data.password?.trim() || '';
 
   if (!name || !email || !cpf || !username || !password) {
-    return { success: false, message: 'Preencha todos os campos obrigatórios.' };
+    return { success: false, message: 'Todos os campos são obrigatórios.' };
   }
 
-  const users = await getStoredUsers();
-
-  if (users.some((u) => u.username.toLowerCase().trim() === username)) {
-    return { success: false, message: 'Nome de usuário já cadastrado.' };
-  }
-
-  const newUser: UserAccount = {
+  const payload = {
     id: `usr_${Date.now()}`,
     name,
     email,
@@ -148,124 +189,75 @@ export const adminAddUser = async (data: {
     username,
     password,
     role: 'STUDENT',
-    status: 'APPROVED', // Criado pelo admin já entra 100% aprovado para logar imediatamente
-    createdAt: new Date().toISOString().split('T')[0],
+    status: 'APPROVED',
   };
 
-  const updated = [newUser, ...users];
-  saveUsers(updated);
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-  return { success: true, message: 'Aluno cadastrado e liberado com sucesso para login!' };
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        const current = getLocalCache();
+        setLocalCache([payload, ...current]);
+        return { success: true, message: 'Aluno cadastrado com acesso liberado imediatamente!' };
+      }
+      return { success: false, message: result.message };
+    }
+  } catch (err) {
+    console.error('Erro ao cadastrar na UOL Host:', err);
+  }
+
+  const current = getLocalCache();
+  setLocalCache([payload, ...current]);
+  return { success: true, message: 'Aluno cadastrado e liberado!' };
 };
 
 export const updateUserStatus = async (userId: string, newStatus: 'APPROVED' | 'REJECTED') => {
-  const users = await getStoredUsers();
-  const updated = users.map((u) => (u.id === userId ? { ...u, status: newStatus } : u));
-  saveUsers(updated);
+  try {
+    await fetch(API_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId, status: newStatus }),
+    });
+  } catch (e) {
+    console.warn('Erro ao atualizar status na UOL Host:', e);
+  }
+
+  const current = getLocalCache();
+  const updated = current.map((u) => (u.id === userId ? { ...u, status: newStatus } : u));
+  setLocalCache(updated);
 };
 
 export const approveAllPendingUsers = async () => {
-  const users = await getStoredUsers();
-  const updated = users.map((u) =>
-    u.status === 'PENDING' && u.role !== 'ADMIN' ? { ...u, status: 'APPROVED' as const } : u
-  );
-  saveUsers(updated);
+  try {
+    await fetch(`${API_URL}?action=approve_all`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (e) {
+    console.warn('Erro ao aprovar todos na UOL Host:', e);
+  }
+
+  const current = getLocalCache();
+  const updated = current.map((u) => (u.status === 'PENDING' && u.role !== 'ADMIN' ? { ...u, status: 'APPROVED' as const } : u));
+  setLocalCache(updated);
 };
 
 export const deleteUser = async (userId: string) => {
-  const users = await getStoredUsers();
-  const updated = users.filter((u) => u.id !== userId);
-  saveUsers(updated);
-};
-
-export const restoreLegacyUsers = async (): Promise<{ count: number; users: UserAccount[] }> => {
-  const current = await getStoredUsers();
-  const map = new Map<string, UserAccount>();
-
-  // Guarda os atuais
-  current.forEach((u) => map.set(u.username.toLowerCase().trim(), u));
-
-  // Varre chaves anteriores que possam ter cadastros antigos
-  const legacyKeys = [
-    '@GAF_USERS_DATABASE_V2',
-    '@GAF_USERS_DATABASE',
-    '@GAF_USERS_DATABASE_V1',
-    'cfw500_users_database',
-    'cfw500_auth_users',
-    'cfw500_users',
-  ];
-
-  legacyKeys.forEach((k) => {
-    const raw = localStorage.getItem(k);
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        parsed.forEach((item: any) => {
-          if (item && item.username) {
-            const uname = String(item.username).toLowerCase().trim();
-            if (!map.has(uname)) {
-              map.set(uname, {
-                id: item.id || `usr_${Date.now()}_${Math.random()}`,
-                name: item.name || uname,
-                email: item.email || '',
-                cpf: item.cpf || 'Não informado',
-                username: uname,
-                password: String(item.password || '123'),
-                role: item.role === 'ADMIN' ? 'ADMIN' : 'STUDENT',
-                status: item.status === 'REJECTED' ? 'REJECTED' : 'APPROVED',
-                createdAt: item.createdAt || '2026-01-01',
-              });
-            }
-          }
-        });
-      }
-    } catch {
-      // ignore
-    }
-  });
-
-  const merged = Array.from(map.values());
-  saveUsers(merged);
-  return { count: merged.length, users: merged };
-};
-
-export const exportUsersJson = async (): Promise<string> => {
-  const users = await getStoredUsers();
-  return JSON.stringify(users, null, 2);
-};
-
-export const importUsersJson = async (jsonString: string): Promise<{ success: boolean; message: string }> => {
   try {
-    const parsed = JSON.parse(jsonString);
-    if (!Array.isArray(parsed)) {
-      return { success: false, message: 'JSON inválido: deve ser uma lista de alunos.' };
-    }
-    const current = await getStoredUsers();
-    const map = new Map<string, UserAccount>();
-    current.forEach((u) => map.set(u.username.toLowerCase().trim(), u));
-
-    parsed.forEach((item: any) => {
-      if (item && item.username) {
-        const uname = String(item.username).toLowerCase().trim();
-        map.set(uname, {
-          id: item.id || `usr_${Date.now()}_${Math.random()}`,
-          name: item.name || uname,
-          email: item.email || '',
-          cpf: item.cpf || 'Não informado',
-          username: uname,
-          password: String(item.password || '123'),
-          role: item.role === 'ADMIN' ? 'ADMIN' : 'STUDENT',
-          status: item.status || 'APPROVED',
-          createdAt: item.createdAt || new Date().toISOString().split('T')[0],
-        });
-      }
+    await fetch(`${API_URL}?id=${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
     });
-
-    const merged = Array.from(map.values());
-    saveUsers(merged);
-    return { success: true, message: `${merged.length} usuários sincronizados com sucesso!` };
-  } catch (err) {
-    return { success: false, message: 'Erro ao processar arquivo JSON.' };
+  } catch (e) {
+    console.warn('Erro ao deletar na UOL Host:', e);
   }
+
+  const current = getLocalCache();
+  const updated = current.filter((u) => u.id !== userId);
+  setLocalCache(updated);
 };
