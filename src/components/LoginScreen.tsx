@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
-import { getStoredUsers, registerNewUser } from '../services/authService';
+
+// =========================================================================
+// CONFIGURAÇÃO DA API:
+// Substitua pela URL onde você enviou os arquivos PHP na sua hospedagem UOL Host
+// Exemplo: 'https://meusite.com.br/api' ou 'https://simulador.gaflink.com.br/api'
+// =========================================================================
+const API_URL = 'https://SEUDOMINIO.com.br/api';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: { name: string; role: string; username: string; cpf?: string }) => void;
@@ -19,6 +25,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // -------------------------------------------------------------
+  // AUTENTICAÇÃO / LOGIN VIA API (UOL HOST)
+  // -------------------------------------------------------------
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
@@ -27,52 +36,74 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     const cleanUser = usernameInput.trim().toLowerCase();
     const cleanPass = passwordInput.trim();
 
-    const users = await getStoredUsers();
+    try {
+      const response = await fetch(`${API_URL}/login.php`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          usuario: cleanUser,
+          senha: cleanPass,
+        }),
+      });
 
-    // Busca insensível a maiúsculas/minúsculas no usuário e exata na senha
-    const found = users.find(
-      (u) =>
-        u.username.trim().toLowerCase() === cleanUser &&
-        String(u.password || '').trim() === cleanPass
-    );
+      const data = await response.json();
 
-    setIsLoading(false);
+      if (!response.ok || !data.sucesso) {
+        setFeedback({
+          type: 'error',
+          text: data.mensagem || 'Usuário ou senha incorretos.',
+        });
+        return;
+      }
 
-    if (!found) {
+      const userData = data.usuario;
+
+      // Verificação de status do usuário
+      const statusUpper = String(userData.status || '').toUpperCase();
+      const roleUpper = String(userData.tipo || userData.role || '').toUpperCase();
+
+      if (statusUpper === 'PENDENTE' && roleUpper !== 'ADMIN') {
+        setFeedback({
+          type: 'error',
+          text: '⏳ Cadastro aguardando aprovação. Peça para o instrutor liberar seu acesso no Painel ADM.',
+        });
+        return;
+      }
+
+      if (statusUpper === 'REJEITADO' || statusUpper === 'REJECTED') {
+        setFeedback({
+          type: 'error',
+          text: '⛔ Seu cadastro foi recusado pela administração.',
+        });
+        return;
+      }
+
+      const authData = {
+        name: userData.nome || userData.name,
+        role: roleUpper || 'ALUNO',
+        username: userData.usuario || userData.username,
+        cpf: userData.cpf || 'Não informado',
+      };
+
+      // Salva no localStorage e libera o simulador
+      localStorage.setItem('cfw500_auth_user', JSON.stringify(authData));
+      onLoginSuccess(authData);
+    } catch (err) {
+      console.error('Erro na requisição de login:', err);
       setFeedback({
         type: 'error',
-        text: 'Usuário ou senha incorretos. Verifique se digitou corretamente ou contate o instrutor.',
+        text: 'Falha ao conectar com o servidor do banco de dados (UOL Host). Verifique sua conexão ou a URL da API.',
       });
-      return;
+    } finally {
+      setIsLoading(false);
     }
-
-    if (found.status === 'PENDING' && found.role !== 'ADMIN') {
-      setFeedback({
-        type: 'error',
-        text: '⏳ Cadastro aguardando aprovação. Peça para o instrutor liberar seu acesso no Painel ADM.',
-      });
-      return;
-    }
-
-    if (found.status === 'REJECTED') {
-      setFeedback({
-        type: 'error',
-        text: '⛔ Seu cadastro foi recusado pela administração.',
-      });
-      return;
-    }
-
-    const authData = {
-      name: found.name,
-      role: found.role,
-      username: found.username,
-      cpf: found.cpf || 'Não informado',
-    };
-
-    localStorage.setItem('cfw500_auth_user', JSON.stringify(authData));
-    onLoginSuccess(authData);
   };
 
+  // -------------------------------------------------------------
+  // CADASTRO DE NOVO USUÁRIO VIA API (UOL HOST)
+  // -------------------------------------------------------------
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
@@ -86,25 +117,50 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     }
 
     setIsLoading(true);
-    const res = await registerNewUser({
-      name: regName,
-      email: regEmail,
-      cpf: regCpf,
-      username: regUsername,
-      password: regPassword,
-    });
-    setIsLoading(false);
 
-    if (res.success) {
-      setFeedback({ type: 'success', text: res.message });
-      setRegName('');
-      setRegEmail('');
-      setRegCpf('');
-      setRegUsername('');
-      setRegPassword('');
-      setTimeout(() => setIsRegistering(false), 2500);
-    } else {
-      setFeedback({ type: 'error', text: res.message });
+    try {
+      const response = await fetch(`${API_URL}/cadastro.php`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nome: regName.trim(),
+          email: regEmail.trim(),
+          cpf: regCpf.trim(),
+          usuario: regUsername.trim().toLowerCase(),
+          senha: regPassword.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.sucesso) {
+        setFeedback({
+          type: 'success',
+          text: data.mensagem || 'Cadastro realizado com sucesso!',
+        });
+        setRegName('');
+        setRegEmail('');
+        setRegCpf('');
+        setRegUsername('');
+        setRegPassword('');
+        // Retorna para a tela de login após 2.5 segundos
+        setTimeout(() => setIsRegistering(false), 2500);
+      } else {
+        setFeedback({
+          type: 'error',
+          text: data.mensagem || 'Não foi possível concluir o cadastro.',
+        });
+      }
+    } catch (err) {
+      console.error('Erro no cadastro:', err);
+      setFeedback({
+        type: 'error',
+        text: 'Erro ao conectar ao servidor da UOL Host para cadastrar.',
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -315,6 +371,10 @@ const inputStyle: React.CSSProperties = {
   padding: '8px 10px',
   color: '#fff',
   fontSize: '11px',
+  boxSizing: 'border-box',
+};
+
+const btnPrimaryStyle: React11px',
   boxSizing: 'border-box',
 };
 
