@@ -10,18 +10,6 @@ export interface UserAccount {
 }
 
 const PRIMARY_KEY = '@GAF_USERS_DATABASE_V3';
-const LEGACY_STORAGE_KEYS = [
-  '@GAF_USERS_DATABASE_V3',
-  '@GAF_USERS_DATABASE_V2',
-  '@GAF_USERS_DATABASE',
-  '@GAF_USERS_DATABASE_V1',
-  'cfw500_users_database',
-  'cfw500_auth_users',
-  'cfw500_users',
-  'users',
-];
-
-const BROADCAST_CHANNEL_NAME = 'gaf_auth_sync_channel';
 
 const getInitialUsers = (): UserAccount[] => {
   return [
@@ -52,69 +40,101 @@ function saveToStorage(users: UserAccount[]) {
   try {
     const serialized = JSON.stringify(users);
     localStorage.setItem(PRIMARY_KEY, serialized);
-    // Mantém as chaves legadas sincronizadas para garantir compatibilidade
+    // Espelho de compatibilidade para garantir que nunca mais se perca
     localStorage.setItem('@GAF_USERS_DATABASE_V2', serialized);
     localStorage.setItem('@GAF_USERS_DATABASE', serialized);
+    localStorage.setItem('cfw500_users_database', serialized);
   } catch (e) {
-    console.error('Erro ao salvar no storage local', e);
+    console.error('Erro ao salvar usuários no localStorage:', e);
   }
 }
 
-function notifyUsersUpdated() {
+function notifyUpdate() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('gaf_users_updated'));
-    try {
-      const channel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
-      channel.postMessage({ type: 'USERS_UPDATED' });
-      channel.close();
-    } catch {
-      // BroadcastChannel não suportado em ambientes restritos
-    }
   }
 }
+
+/**
+ * Realiza uma varredura completa em todas as chaves do localStorage do navegador
+ * para resgatar qualquer cadastro de aluno de versões anteriores.
+ */
+export const restoreLegacyUsers = async (): Promise<{ count: number; users: UserAccount[] }> => {
+  const userMap = new Map<string, UserAccount>();
+
+  // 1. Carrega os usuários padrão
+  getInitialUsers().forEach((u) => userMap.set(u.username.toLowerCase(), u));
+
+  // 2. Varre todas as chaves existentes no localStorage do navegador
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+
+      // Ignora chaves que não sejam de dados de usuários
+      if (
+        key === 'cfw500_auth_user' ||
+        key.includes('progress') ||
+        key.includes('audio') ||
+        key.includes('scenario')
+      ) {
+        continue;
+      }
+
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item: any) => {
+            if (item && typeof item === 'object') {
+              const uname = item.username || item.login || item.user;
+              if (uname && typeof uname === 'string') {
+                const cleanUname = uname.toLowerCase().trim();
+                const existing = userMap.get(cleanUname);
+
+                userMap.set(cleanUname, {
+                  id: String(item.id || existing?.id || `usr_${Date.now()}_${Math.random()}`),
+                  name: String(item.name || item.nome || existing?.name || cleanUname),
+                  email: String(item.email || existing?.email || ''),
+                  cpf: String(item.cpf || existing?.cpf || '000.000.000-00'),
+                  username: cleanUname,
+                  password: String(item.password || item.senha || existing?.password || '123'),
+                  role: item.role === 'ADMIN' ? 'ADMIN' : (existing?.role || 'STUDENT'),
+                  status: item.status === 'APPROVED' ? 'APPROVED' : item.status === 'REJECTED' ? 'REJECTED' : (existing?.status || 'PENDING'),
+                });
+              }
+            }
+          });
+        }
+      } catch {
+        // Ignora valores que não são JSON
+      }
+    }
+  } catch (err) {
+    console.warn('Erro durante a varredura do storage:', err);
+  }
+
+  const consolidated = Array.from(userMap.values());
+  saveToStorage(consolidated);
+  notifyUpdate();
+
+  return { count: consolidated.length, users: consolidated };
+};
 
 export const getStoredUsers = async (): Promise<UserAccount[]> => {
   try {
-    const userMap = new Map<string, UserAccount>();
-
-    // 1. Insere os usuários padrão
-    getInitialUsers().forEach((u) => {
-      userMap.set(u.username.toLowerCase(), u);
-    });
-
-    // 2. Varre todas as chaves anteriores do localStorage para recuperar cadastros antigos
-    for (const key of LEGACY_STORAGE_KEYS) {
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((u: any) => {
-              if (u && u.username) {
-                const uname = String(u.username).toLowerCase().trim();
-                const existing = userMap.get(uname);
-                userMap.set(uname, {
-                  id: u.id || existing?.id || `usr_${Date.now()}_${Math.random()}`,
-                  name: u.name || existing?.name || 'Aluno',
-                  email: u.email || existing?.email || '',
-                  cpf: u.cpf || existing?.cpf || '000.000.000-00',
-                  username: uname,
-                  password: u.password || existing?.password || '123',
-                  role: u.role === 'ADMIN' ? 'ADMIN' : (existing?.role || 'STUDENT'),
-                  status: u.status || existing?.status || 'PENDING',
-                });
-              }
-            });
-          }
-        } catch {
-          // Ignora JSON mal formatado em chaves legadas
-        }
+    const raw = localStorage.getItem(PRIMARY_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
       }
     }
-
-    const consolidated = Array.from(userMap.values());
-    saveToStorage(consolidated);
-    return consolidated;
+    // Se o banco primário ainda não estiver populado, faz a recuperação automática
+    const recovered = await restoreLegacyUsers();
+    return recovered.users;
   } catch {
     return getInitialUsers();
   }
@@ -149,10 +169,10 @@ export const registerNewUser = async (data: {
     status: 'PENDING',
   };
 
-  // Adiciona o novo aluno no início da lista para aparecer de imediato no topo
-  users.unshift(newUser);
-  saveToStorage(users);
-  notifyUsersUpdated();
+  // Coloca o novo aluno na primeira posição para aparecer no topo da tabela
+  const updatedList = [newUser, ...users];
+  saveToStorage(updatedList);
+  notifyUpdate();
 
   return { success: true, message: 'Cadastro realizado com sucesso! Aguarde a aprovação do instrutor no painel ADM.' };
 };
@@ -186,9 +206,9 @@ export const adminAddUser = async (data: {
     status: 'APPROVED',
   };
 
-  users.unshift(newUser);
-  saveToStorage(users);
-  notifyUsersUpdated();
+  const updatedList = [newUser, ...users];
+  saveToStorage(updatedList);
+  notifyUpdate();
 
   return { success: true, message: 'Aluno cadastrado com acesso liberado!' };
 };
@@ -197,19 +217,19 @@ export const updateUserStatus = async (userId: string, newStatus: 'APPROVED' | '
   const users = await getStoredUsers();
   const updated = users.map((u) => (u.id === userId ? { ...u, status: newStatus } : u));
   saveToStorage(updated);
-  notifyUsersUpdated();
+  notifyUpdate();
 };
 
 export const approveAllPendingUsers = async () => {
   const users = await getStoredUsers();
   const updated = users.map((u) => (u.status === 'PENDING' && u.role !== 'ADMIN' ? { ...u, status: 'APPROVED' as const } : u));
   saveToStorage(updated);
-  notifyUsersUpdated();
+  notifyUpdate();
 };
 
 export const deleteUser = async (userId: string) => {
   const users = await getStoredUsers();
   const updated = users.filter((u) => u.id !== userId);
   saveToStorage(updated);
-  notifyUsersUpdated();
+  notifyUpdate();
 };
