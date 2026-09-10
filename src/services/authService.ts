@@ -7,9 +7,21 @@ export interface UserAccount {
   password?: string;
   role: 'STUDENT' | 'ADMIN';
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt?: string;
 }
 
 const PRIMARY_KEY = '@GAF_USERS_DATABASE_V3';
+const KNOWN_KEYS = [
+  '@GAF_USERS_DATABASE_V3',
+  '@GAF_USERS_DATABASE_V2',
+  '@GAF_USERS_DATABASE_V1',
+  '@GAF_USERS_DATABASE',
+  'cfw500_users_database',
+  'cfw500_auth_users',
+  'cfw500_users',
+  'users_db',
+  'users',
+];
 
 const getInitialUsers = (): UserAccount[] => {
   return [
@@ -22,6 +34,7 @@ const getInitialUsers = (): UserAccount[] => {
       password: '123',
       role: 'ADMIN',
       status: 'APPROVED',
+      createdAt: '2026-01-01',
     },
     {
       id: 'usr_student1',
@@ -32,112 +45,117 @@ const getInitialUsers = (): UserAccount[] => {
       password: '123',
       role: 'STUDENT',
       status: 'APPROVED',
+      createdAt: '2026-01-02',
     },
   ];
 };
 
-function saveToStorage(users: UserAccount[]) {
+/**
+ * Salva a lista de usuários em múltiplas chaves para nunca mais perder cadastros.
+ */
+function persistUsers(users: UserAccount[]) {
   try {
     const serialized = JSON.stringify(users);
     localStorage.setItem(PRIMARY_KEY, serialized);
-    // Espelho de compatibilidade para garantir que nunca mais se perca
     localStorage.setItem('@GAF_USERS_DATABASE_V2', serialized);
     localStorage.setItem('@GAF_USERS_DATABASE', serialized);
     localStorage.setItem('cfw500_users_database', serialized);
   } catch (e) {
-    console.error('Erro ao salvar usuários no localStorage:', e);
+    console.error('Erro ao persistir usuários:', e);
   }
 }
 
-function notifyUpdate() {
+function notifyChange() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('gaf_users_updated'));
   }
 }
 
 /**
- * Realiza uma varredura completa em todas as chaves do localStorage do navegador
- * para resgatar qualquer cadastro de aluno de versões anteriores.
+ * Faz uma busca profunda em todo o localStorage do navegador,
+ * resgatando qualquer usuário cadastrado no passado e fundindo com os atuais.
  */
-export const restoreLegacyUsers = async (): Promise<{ count: number; users: UserAccount[] }> => {
+export const consolidateAndGetUsers = (): UserAccount[] => {
   const userMap = new Map<string, UserAccount>();
 
-  // 1. Carrega os usuários padrão
-  getInitialUsers().forEach((u) => userMap.set(u.username.toLowerCase(), u));
+  // 1. Carrega os usuários padrão fundamentais
+  getInitialUsers().forEach((u) => {
+    userMap.set(u.username.toLowerCase().trim(), u);
+  });
 
-  // 2. Varre todas as chaves existentes no localStorage do navegador
   try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key) continue;
+    // 2. Varre chaves conhecidas
+    const keysToCheck = new Set<string>(KNOWN_KEYS);
 
-      // Ignora chaves que não sejam de dados de usuários
-      if (
-        key === 'cfw500_auth_user' ||
-        key.includes('progress') ||
-        key.includes('audio') ||
-        key.includes('scenario')
-      ) {
-        continue;
+    // 3. Adiciona qualquer outra chave do localStorage que possa conter usuários
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.includes('user') || k.includes('GAF') || k.includes('aluno'))) {
+        keysToCheck.add(k);
       }
+    }
+
+    keysToCheck.forEach((key) => {
+      // Ignora chave de sessão do usuário logado
+      if (key === 'cfw500_auth_user') return;
 
       const raw = localStorage.getItem(key);
-      if (!raw) continue;
+      if (!raw) return;
 
       try {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           parsed.forEach((item: any) => {
             if (item && typeof item === 'object') {
-              const uname = item.username || item.login || item.user;
-              if (uname && typeof uname === 'string') {
-                const cleanUname = uname.toLowerCase().trim();
+              const rawUsername = item.username || item.login || item.user;
+              if (rawUsername && typeof rawUsername === 'string') {
+                const cleanUname = rawUsername.toLowerCase().trim();
                 const existing = userMap.get(cleanUname);
 
+                // Sanitização completa: garante que nenhum campo seja undefined
                 userMap.set(cleanUname, {
                   id: String(item.id || existing?.id || `usr_${Date.now()}_${Math.random()}`),
                   name: String(item.name || item.nome || existing?.name || cleanUname),
                   email: String(item.email || existing?.email || ''),
-                  cpf: String(item.cpf || existing?.cpf || '000.000.000-00'),
+                  cpf: String(item.cpf || existing?.cpf || 'Não informado'),
                   username: cleanUname,
                   password: String(item.password || item.senha || existing?.password || '123'),
                   role: item.role === 'ADMIN' ? 'ADMIN' : (existing?.role || 'STUDENT'),
-                  status: item.status === 'APPROVED' ? 'APPROVED' : item.status === 'REJECTED' ? 'REJECTED' : (existing?.status || 'PENDING'),
+                  status:
+                    item.status === 'APPROVED'
+                      ? 'APPROVED'
+                      : item.status === 'REJECTED'
+                      ? 'REJECTED'
+                      : (existing?.status || 'PENDING'),
+                  createdAt: String(item.createdAt || existing?.createdAt || new Date().toISOString().split('T')[0]),
                 });
               }
             }
           });
         }
       } catch {
-        // Ignora valores que não são JSON
+        // Ignora valores não-JSON
       }
-    }
+    });
   } catch (err) {
-    console.warn('Erro durante a varredura do storage:', err);
+    console.warn('Falha durante a consolidação de usuários:', err);
   }
 
-  const consolidated = Array.from(userMap.values());
-  saveToStorage(consolidated);
-  notifyUpdate();
+  const allUsers = Array.from(userMap.values());
 
-  return { count: consolidated.length, users: consolidated };
+  // Ordena: Alunos PENDENTES primeiro, depois os mais novos
+  allUsers.sort((a, b) => {
+    if (a.status === 'PENDING' && b.status !== 'PENDING') return -1;
+    if (b.status === 'PENDING' && a.status !== 'PENDING') return 1;
+    return 0;
+  });
+
+  persistUsers(allUsers);
+  return allUsers;
 };
 
 export const getStoredUsers = async (): Promise<UserAccount[]> => {
-  try {
-    const raw = localStorage.getItem(PRIMARY_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-    // Se o banco primário ainda não estiver populado, faz a recuperação automática
-    const recovered = await restoreLegacyUsers();
-    return recovered.users;
-  } catch {
-    return getInitialUsers();
-  }
+  return consolidateAndGetUsers();
 };
 
 export const registerNewUser = async (data: {
@@ -147,15 +165,25 @@ export const registerNewUser = async (data: {
   username: string;
   password?: string;
 }): Promise<{ success: boolean; message: string }> => {
-  if (!data.name?.trim() || !data.email?.trim() || !data.cpf?.trim() || !data.username?.trim() || !data.password?.trim()) {
-    return { success: false, message: 'Preenchimento obrigatório: Nome completo, E-mail, CPF, Usuário e Senha são exigidos.' };
+  if (
+    !data.name?.trim() ||
+    !data.email?.trim() ||
+    !data.cpf?.trim() ||
+    !data.username?.trim() ||
+    !data.password?.trim()
+  ) {
+    return {
+      success: false,
+      message: 'Todos os campos são obrigatórios: Nome completo, E-mail, CPF, Usuário e Senha.',
+    };
   }
 
-  const users = await getStoredUsers();
+  // Consolida o banco antes de registrar
+  const currentUsers = consolidateAndGetUsers();
   const cleanUsername = data.username.toLowerCase().trim();
 
-  if (users.some((u) => u.username.toLowerCase() === cleanUsername)) {
-    return { success: false, message: 'Este nome de usuário já está em uso. Escolha outro.' };
+  if (currentUsers.some((u) => u.username.toLowerCase().trim() === cleanUsername)) {
+    return { success: false, message: 'Este nome de usuário já está cadastrado. Escolha outro.' };
   }
 
   const newUser: UserAccount = {
@@ -167,14 +195,18 @@ export const registerNewUser = async (data: {
     password: data.password,
     role: 'STUDENT',
     status: 'PENDING',
+    createdAt: new Date().toISOString().split('T')[0],
   };
 
-  // Coloca o novo aluno na primeira posição para aparecer no topo da tabela
-  const updatedList = [newUser, ...users];
-  saveToStorage(updatedList);
-  notifyUpdate();
+  // Insere imediatamente no topo
+  const updatedList = [newUser, ...currentUsers];
+  persistUsers(updatedList);
+  notifyChange();
 
-  return { success: true, message: 'Cadastro realizado com sucesso! Aguarde a aprovação do instrutor no painel ADM.' };
+  return {
+    success: true,
+    message: 'Cadastro realizado com sucesso! Aguarde a aprovação do instrutor para acessar o simulador.',
+  };
 };
 
 export const adminAddUser = async (data: {
@@ -184,14 +216,20 @@ export const adminAddUser = async (data: {
   username: string;
   password: string;
 }): Promise<{ success: boolean; message: string }> => {
-  if (!data.name?.trim() || !data.email?.trim() || !data.cpf?.trim() || !data.username?.trim() || !data.password?.trim()) {
-    return { success: false, message: 'Todos os campos (Nome, E-mail, CPF, Usuário e Senha) são obrigatórios.' };
+  if (
+    !data.name?.trim() ||
+    !data.email?.trim() ||
+    !data.cpf?.trim() ||
+    !data.username?.trim() ||
+    !data.password?.trim()
+  ) {
+    return { success: false, message: 'Todos os campos são obrigatórios.' };
   }
 
-  const users = await getStoredUsers();
+  const currentUsers = consolidateAndGetUsers();
   const cleanUsername = data.username.toLowerCase().trim();
 
-  if (users.some((u) => u.username.toLowerCase() === cleanUsername)) {
+  if (currentUsers.some((u) => u.username.toLowerCase().trim() === cleanUsername)) {
     return { success: false, message: 'Nome de usuário já cadastrado.' };
   }
 
@@ -204,32 +242,87 @@ export const adminAddUser = async (data: {
     password: data.password,
     role: 'STUDENT',
     status: 'APPROVED',
+    createdAt: new Date().toISOString().split('T')[0],
   };
 
-  const updatedList = [newUser, ...users];
-  saveToStorage(updatedList);
-  notifyUpdate();
+  const updatedList = [newUser, ...currentUsers];
+  persistUsers(updatedList);
+  notifyChange();
 
-  return { success: true, message: 'Aluno cadastrado com acesso liberado!' };
+  return { success: true, message: 'Aluno cadastrado com acesso liberado imediatamente!' };
 };
 
 export const updateUserStatus = async (userId: string, newStatus: 'APPROVED' | 'REJECTED') => {
-  const users = await getStoredUsers();
-  const updated = users.map((u) => (u.id === userId ? { ...u, status: newStatus } : u));
-  saveToStorage(updated);
-  notifyUpdate();
+  const currentUsers = consolidateAndGetUsers();
+  const updated = currentUsers.map((u) => (u.id === userId ? { ...u, status: newStatus } : u));
+  persistUsers(updated);
+  notifyChange();
 };
 
 export const approveAllPendingUsers = async () => {
-  const users = await getStoredUsers();
-  const updated = users.map((u) => (u.status === 'PENDING' && u.role !== 'ADMIN' ? { ...u, status: 'APPROVED' as const } : u));
-  saveToStorage(updated);
-  notifyUpdate();
+  const currentUsers = consolidateAndGetUsers();
+  const updated = currentUsers.map((u) =>
+    u.status === 'PENDING' && u.role !== 'ADMIN' ? { ...u, status: 'APPROVED' as const } : u
+  );
+  persistUsers(updated);
+  notifyChange();
 };
 
 export const deleteUser = async (userId: string) => {
-  const users = await getStoredUsers();
-  const updated = users.filter((u) => u.id !== userId);
-  saveToStorage(updated);
-  notifyUpdate();
+  const currentUsers = consolidateAndGetUsers();
+  const updated = currentUsers.filter((u) => u.id !== userId);
+  persistUsers(updated);
+  notifyChange();
+};
+
+/**
+ * Exporta a lista de usuários em formato JSON para backup.
+ */
+export const exportUsersJson = (): string => {
+  const users = consolidateAndGetUsers();
+  return JSON.stringify(users, null, 2);
+};
+
+/**
+ * Importa uma lista de usuários em formato JSON restaurando cadastros.
+ */
+export const importUsersJson = (jsonString: string): { success: boolean; count: number; message: string } => {
+  try {
+    const parsed = JSON.parse(jsonString);
+    if (!Array.isArray(parsed)) {
+      return { success: false, count: 0, message: 'O arquivo informado não contém uma lista válida de alunos.' };
+    }
+
+    const currentUsers = consolidateAndGetUsers();
+    const map = new Map<string, UserAccount>();
+
+    currentUsers.forEach((u) => map.set(u.username.toLowerCase().trim(), u));
+
+    let importedCount = 0;
+    parsed.forEach((item: any) => {
+      if (item && item.username) {
+        const uName = String(item.username).toLowerCase().trim();
+        map.set(uName, {
+          id: String(item.id || `usr_${Date.now()}_${Math.random()}`),
+          name: String(item.name || item.nome || uName),
+          email: String(item.email || ''),
+          cpf: String(item.cpf || 'Não informado'),
+          username: uName,
+          password: String(item.password || item.senha || '123'),
+          role: item.role === 'ADMIN' ? 'ADMIN' : 'STUDENT',
+          status: item.status === 'REJECTED' ? 'REJECTED' : item.status === 'PENDING' ? 'PENDING' : 'APPROVED',
+          createdAt: String(item.createdAt || new Date().toISOString().split('T')[0]),
+        });
+        importedCount++;
+      }
+    });
+
+    const merged = Array.from(map.values());
+    persistUsers(merged);
+    notifyChange();
+
+    return { success: true, count: importedCount, message: `${importedCount} alunos importados com sucesso!` };
+  } catch (err) {
+    return { success: false, count: 0, message: 'Erro ao interpretar JSON de alunos.' };
+  }
 };
