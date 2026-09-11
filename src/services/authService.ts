@@ -14,7 +14,7 @@
 // Se não usar variável de ambiente, coloque a URL do seu site diretamente:
 const API_URL =
   (import.meta as any).env?.VITE_API_URL ||
-  'https://seudominio.com.br/api_users.php';
+  'https://simulador.gaflink.com.br/api_users.php';
 
 const LOCAL_CACHE_KEY = '@GAF_USERS_DATABASE_V3';
 const STORAGE_KEY = 'cfw500_registered_users';
