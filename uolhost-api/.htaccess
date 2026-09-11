@@ -1,4 +1,5 @@
 Options -Indexes
-<FilesMatch "^(config\.php|schema\.sql)$">
+SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+<FilesMatch "^(config\.php(?:\.example)?|schema\.sql|README\.md)$">
   Require all denied
 </FilesMatch>

@@ -5,7 +5,7 @@ import {
   approveAllPendingUsers,
   deleteUser,
   adminAddUser,
-  consolidateAndGetUsers,
+
   exportUsersJson,
   importUsersJson,
   UserAccount,
@@ -54,9 +54,7 @@ export const AdminPanel: React.FC = () => {
 
   const loadData = useCallback(async () => {
     setIsRefreshing(true);
-    const list = await getStoredUsers();
-    setUsers(list);
-    setIsRefreshing(false);
+    try { setUsers(await getStoredUsers()); } catch (error) { setUsers([]); setFeedbackMsg((error as Error).message); } finally { setIsRefreshing(false); }
   }, []);
 
   useEffect(() => {
@@ -82,14 +80,7 @@ export const AdminPanel: React.FC = () => {
     localStorage.setItem('@GAF_ADMIN_TASKS_V1', JSON.stringify(tasks));
   }, [tasks]);
 
-  const handleDeepScan = () => {
-    setIsRefreshing(true);
-    const list = consolidateAndGetUsers();
-    setUsers(list);
-    setIsRefreshing(false);
-    setFeedbackMsg(`✓ Varredura concluída com sucesso! Total de ${list.length} cadastros sincronizados.`);
-    setTimeout(() => setFeedbackMsg(null), 4000);
-  };
+  const handleDeepScan = async () => { await loadData(); };
 
   const handleExportBackup = () => {
     const json = exportUsersJson();
@@ -141,33 +132,30 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
-  const handleApprove = async (userId?: string) => {
-    if (!userId) return;
+  const handleApprove = async (userId: string) => {
     setIsRefreshing(true);
-    await updateUserStatus(userId, 'APPROVED');
+    try { await updateUserStatus(userId, 'APPROVED'); } catch (error) { setFeedbackMsg((error as Error).message); setIsRefreshing(false); return; }
     await loadData();
   };
 
   const handleApproveAll = async () => {
     if (window.confirm('Deseja aprovar o acesso de todos os alunos pendentes de uma vez?')) {
       setIsRefreshing(true);
-      await approveAllPendingUsers();
+      try { await approveAllPendingUsers(); } catch (error) { setFeedbackMsg((error as Error).message); setIsRefreshing(false); return; }
       await loadData();
     }
   };
 
-  const handleReject = async (userId?: string) => {
-    if (!userId) return;
+  const handleReject = async (userId: string) => {
     setIsRefreshing(true);
-    await updateUserStatus(userId, 'REJECTED');
+    try { await updateUserStatus(userId, 'REJECTED'); } catch (error) { setFeedbackMsg((error as Error).message); setIsRefreshing(false); return; }
     await loadData();
   };
 
-  const handleDelete = async (userId?: string) => {
-    if (!userId) return;
+  const handleDelete = async (userId: string) => {
     if (window.confirm('Deseja realmente remover este cadastro?')) {
       setIsRefreshing(true);
-      await deleteUser(userId);
+      try { await deleteUser(userId); } catch (error) { setFeedbackMsg((error as Error).message); setIsRefreshing(false); return; }
       await loadData();
     }
   };
@@ -546,7 +534,7 @@ export const AdminPanel: React.FC = () => {
                       <td style={{ padding: '8px', color: '#fff', fontWeight: 'bold' }}>{u.name || 'Sem nome'}</td>
                       <td style={{ padding: '8px', color: '#cbd5e1' }}>{u.cpf || 'Não informado'}</td>
                       <td style={{ padding: '8px', color: '#81d4fa', fontFamily: 'monospace' }}>@{u.username}</td>
-                      <td style={{ padding: '8px', color: '#ffd54f', fontFamily: 'monospace' }}>{u.password || '---'}</td>
+                      <td style={{ padding: '8px', color: '#ffd54f', fontFamily: 'monospace' }}>'Protegida'</td>
                       <td style={{ padding: '8px' }}>
                         <span
                           style={{
@@ -566,16 +554,16 @@ export const AdminPanel: React.FC = () => {
                         {u.role !== 'ADMIN' ? (
                           <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
                             {u.status !== 'APPROVED' && (
-                              <button onClick={() => handleApprove(u.id)} style={{ ...actionBtnStyle, background: '#2e7d32' }} title="Liberar Acesso">
+                              <button onClick={() => handleApprove(u.id!)} style={{ ...actionBtnStyle, background: '#2e7d32' }} title="Liberar Acesso">
                                 ✅ Aprovar
                               </button>
                             )}
                             {u.status !== 'REJECTED' && (
-                              <button onClick={() => handleReject(u.id)} style={{ ...actionBtnStyle, background: '#d32f2f' }} title="Recusar Acesso">
+                              <button onClick={() => handleReject(u.id!)} style={{ ...actionBtnStyle, background: '#d32f2f' }} title="Recusar Acesso">
                                 ⛔ Recusar
                               </button>
                             )}
-                            <button onClick={() => handleDelete(u.id)} style={{ ...actionBtnStyle, background: '#37474f' }} title="Remover Aluno">
+                            <button onClick={() => handleDelete(u.id!)} style={{ ...actionBtnStyle, background: '#37474f' }} title="Remover Aluno">
                               🗑️
                             </button>
                           </div>

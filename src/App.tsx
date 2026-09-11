@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getSessionUser, clearSession } from './services/authService';
 import { InverterProvider } from './context/InverterContext';
 import { usePhysicsLoop } from './hooks/usePhysicsLoop';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
@@ -390,20 +391,23 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
-    const savedLocal = localStorage.getItem('cfw500_auth_user');
-    if (savedLocal) {
-      try {
-        setCurrentUser(JSON.parse(savedLocal));
-      } catch {
-        localStorage.removeItem('cfw500_auth_user');
-      }
-    }
-    setIsInitializing(false);
+    let alive = true;
+    const validate = async () => {
+      try { const user = await getSessionUser(); if (alive) setCurrentUser(user); }
+      catch { if (alive) setCurrentUser(null); }
+      finally { if (alive) setIsInitializing(false); }
+    };
+    const ended = () => setCurrentUser(null);
+    void validate();
+    const timer = setInterval(validate, 60000);
+    window.addEventListener('focus', validate);
+    window.addEventListener('storage', validate);
+    window.addEventListener('gaf_session_ended', ended);
+    return () => { alive = false; clearInterval(timer); window.removeEventListener('focus', validate); window.removeEventListener('storage', validate); window.removeEventListener('gaf_session_ended', ended); };
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('cfw500_auth_user');
-    localStorage.removeItem('gaf_auth_token');
+    clearSession();
     setCurrentUser(null);
   };
 
