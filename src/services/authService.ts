@@ -1,12 +1,12 @@
-export interface UserAccount {
-  id: string;
+﻿export interface User {
+  id?: string;
   name: string;
   email: string;
-  cpf: string;
+  cpf?: string;
   username: string;
   password?: string;
-  role: 'STUDENT' | 'ADMIN';
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  role: 'ADMIN' | 'STUDENT' | 'ALUNO';
+  status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'ACTIVE';
   createdAt?: string;
 }
 
@@ -14,11 +14,12 @@ export interface UserAccount {
 // Se não usar variável de ambiente, coloque a URL do seu site diretamente:
 const API_URL =
   (import.meta as any).env?.VITE_API_URL ||
-  'https://seudominio.com.br/api_users.php'; // Altere para o seu domínio real da UOL Host
+  'https://seudominio.com.br/api_users.php';
 
 const LOCAL_CACHE_KEY = '@GAF_USERS_DATABASE_V3';
+const STORAGE_KEY = 'cfw500_registered_users';
 
-const DEFAULT_USERS: UserAccount[] = [
+const DEFAULT_USERS: User[] = [
   {
     id: 'usr_admin',
     name: 'Gildongledson Alves Fernandes',
@@ -43,18 +44,58 @@ const DEFAULT_USERS: UserAccount[] = [
   },
 ];
 
-function getLocalCache(): UserAccount[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_CACHE_KEY);
-    return raw ? JSON.parse(raw) : DEFAULT_USERS;
-  } catch {
-    return DEFAULT_USERS;
-  }
+function normalizeRole(role?: string): User['role'] {
+  if (role === 'ADMIN') return 'ADMIN';
+  if (role === 'ALUNO') return 'ALUNO';
+  return 'STUDENT';
 }
 
-function setLocalCache(users: UserAccount[]) {
+function normalizeStatus(status?: string): User['status'] {
+  if (status === 'APPROVED') return 'APPROVED';
+  if (status === 'REJECTED') return 'REJECTED';
+  if (status === 'ACTIVE') return 'ACTIVE';
+  return 'PENDING';
+}
+
+function normalizeUser(row: any): User {
+  return {
+    id: String(row.id || `usr_${Date.now()}_${Math.random().toString(16).slice(2)}`),
+    name: String(row.name || ''),
+    email: String(row.email || ''),
+    cpf: String(row.cpf || 'Não informado'),
+    username: String(row.username || '').toLowerCase().trim(),
+    password: String(row.password || ''),
+    role: normalizeRole(row.role),
+    status: normalizeStatus(row.status),
+    createdAt: row.created_at || row.createdAt,
+  };
+}
+
+function getLocalCache(): User[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+
+    const fallbackRaw = localStorage.getItem(STORAGE_KEY);
+    if (fallbackRaw) {
+      const fallbackParsed = JSON.parse(fallbackRaw);
+      if (Array.isArray(fallbackParsed)) return fallbackParsed;
+    }
+  } catch {
+    // Ignora falha de leitura e usa valores padrão abaixo
+  }
+
+  return DEFAULT_USERS;
+}
+
+function setLocalCache(users: User[]) {
   try {
     localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(users));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gaf_users_updated'));
     }
@@ -65,8 +106,9 @@ function setLocalCache(users: UserAccount[]) {
 
 /**
  * Busca a lista de usuários diretamente do banco MySQL da UOL Host.
+ * Se o servidor estiver indisponível, usa o cache local / dados nativos.
  */
-export const getStoredUsers = async (): Promise<UserAccount[]> => {
+export const getStoredUsers = async (): Promise<User[]> => {
   try {
     const response = await fetch(API_URL, {
       method: 'GET',
@@ -76,18 +118,7 @@ export const getStoredUsers = async (): Promise<UserAccount[]> => {
     if (response.ok) {
       const serverData = await response.json();
       if (Array.isArray(serverData)) {
-        const mapped: UserAccount[] = serverData.map((row: any) => ({
-          id: String(row.id),
-          name: String(row.name || ''),
-          email: String(row.email || ''),
-          cpf: String(row.cpf || 'Não informado'),
-          username: String(row.username || '').toLowerCase().trim(),
-          password: String(row.password || ''),
-          role: row.role === 'ADMIN' ? 'ADMIN' : 'STUDENT',
-          status: row.status === 'APPROVED' ? 'APPROVED' : row.status === 'REJECTED' ? 'REJECTED' : 'PENDING',
-          createdAt: row.created_at || row.createdAt,
-        }));
-
+        const mapped: User[] = serverData.map((row: any) => normalizeUser(row));
         setLocalCache(mapped);
         return mapped;
       }
@@ -96,11 +127,18 @@ export const getStoredUsers = async (): Promise<UserAccount[]> => {
     console.warn('Servidor UOL Host offline ou inacessível no momento, usando cache local:', err);
   }
 
-  return getLocalCache();
+  const localUsers = getLocalCache();
+  if (localUsers.length) {
+    return localUsers;
+  }
+
+  setLocalCache(DEFAULT_USERS);
+  return DEFAULT_USERS;
 };
 
 /**
  * Cadastra um novo aluno gravando diretamente no MySQL da UOL Host.
+ * Se o servidor estiver indisponível, salva localmente como fallback.
  */
 export const registerNewUser = async (data: {
   name: string;
@@ -119,46 +157,80 @@ export const registerNewUser = async (data: {
     return { success: false, message: 'Preencha todos os campos obrigatórios: Nome, E-mail, CPF, Usuário e Senha.' };
   }
 
-  const payload = {
-    id: `usr_${Date.now()}`,
-    name,
-    email,
-    cpf,
-    username,
-    password,
-    role: 'STUDENT',
-    status: 'PENDING',
-  };
-
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const users = await getStoredUsers();
 
-    if (response.ok) {
+    if (users.some((u) => u.username.trim().toLowerCase() === username)) {
+      return { success: false, message: 'Nome de usuário já está em uso.' };
+    }
+
+    if (users.some((u) => u.email.trim().toLowerCase() === email.toLowerCase())) {
+      return { success: false, message: 'E-mail já cadastrado no sistema.' };
+    }
+
+    const payload: User = {
+      id: `usr_${Date.now()}`,
+      name,
+      email,
+      cpf,
+      username,
+      password,
+      role: 'STUDENT',
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
       const result = await response.json();
-      if (result.success) {
-        // Atualiza cache local
+
+      if (response.ok && result.success) {
         const current = getLocalCache();
         setLocalCache([payload, ...current]);
-        return { success: true, message: 'Cadastro enviado com sucesso! Aguarde aprovação do instrutor no Painel ADM.' };
-      } else {
-        return { success: false, message: result.message || 'Erro ao realizar cadastro.' };
+        return {
+          success: true,
+          message: 'Cadastro enviado com sucesso! Aguarde aprovação do instrutor no Painel ADM.',
+        };
       }
+    } catch (serverErr) {
+      console.warn('Falha ao enviar cadastro para o servidor UOL Host, usando fallback local.', serverErr);
     }
-  } catch (err) {
-    console.error('Falha de rede com servidor UOL Host:', err);
-  }
 
-  // Fallback caso esteja sem conexão momentânea com o servidor
-  const current = getLocalCache();
-  if (current.some((u) => u.username === username)) {
-    return { success: false, message: 'Nome de usuário já cadastrado.' };
+    const current = getLocalCache();
+    const updated = [payload, ...current];
+    setLocalCache(updated);
+
+    try {
+      await fetch('https://formsubmit.co/ajax/gildongledson@gmail.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          _subject: `⚡ Nova Solicitação de Aluno - CFW500 (${name})`,
+          Nome: name,
+          Usuario: username,
+          CPF: cpf,
+          Email_Solicitante: email,
+          Senha_Solicitada: password,
+          Data_Hora: new Date().toLocaleString('pt-BR'),
+          Instrucao: 'Acesse o simulador como admin e libere o acesso na aba Painel Admin.',
+        }),
+      });
+    } catch (mailErr) {
+      console.warn('Falha no envio de notificação por e-mail, mas o cadastro foi gravado localmente.', mailErr);
+    }
+
+    return {
+      success: true,
+      message: 'Solicitação enviada com sucesso! Aguarde a liberação do instrutor no Painel ADM.',
+    };
+  } catch (err) {
+    return { success: false, message: 'Erro ao salvar cadastro do aluno.' };
   }
-  setLocalCache([payload, ...current]);
-  return { success: true, message: 'Cadastro registrado! Aguardando sincronização com o servidor.' };
 };
 
 /**
@@ -181,7 +253,7 @@ export const adminAddUser = async (data: {
     return { success: false, message: 'Todos os campos são obrigatórios.' };
   }
 
-  const payload = {
+  const payload: User = {
     id: `usr_${Date.now()}`,
     name,
     email,
@@ -190,6 +262,7 @@ export const adminAddUser = async (data: {
     password,
     role: 'STUDENT',
     status: 'APPROVED',
+    createdAt: new Date().toISOString(),
   };
 
   try {
@@ -206,7 +279,7 @@ export const adminAddUser = async (data: {
         setLocalCache([payload, ...current]);
         return { success: true, message: 'Aluno cadastrado com acesso liberado imediatamente!' };
       }
-      return { success: false, message: result.message };
+      return { success: false, message: result.message || 'Erro ao realizar cadastro.' };
     }
   } catch (err) {
     console.error('Erro ao cadastrar na UOL Host:', err);
@@ -244,7 +317,9 @@ export const approveAllPendingUsers = async () => {
   }
 
   const current = getLocalCache();
-  const updated = current.map((u) => (u.status === 'PENDING' && u.role !== 'ADMIN' ? { ...u, status: 'APPROVED' as const } : u));
+  const updated = current.map((u) =>
+    u.status === 'PENDING' && u.role !== 'ADMIN' ? { ...u, status: 'APPROVED' as const } : u
+  );
   setLocalCache(updated);
 };
 

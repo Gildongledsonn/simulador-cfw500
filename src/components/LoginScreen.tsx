@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getStoredUsers } from '../services/authService';
 
 // =========================================================================
 // CONFIGURAÇÃO DA API:
@@ -50,55 +51,83 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
       const data = await response.json();
 
-      if (!response.ok || !data.sucesso) {
-        setFeedback({
-          type: 'error',
-          text: data.mensagem || 'Usuário ou senha incorretos.',
-        });
+      if (response.ok && data.sucesso) {
+        const userData = data.usuario;
+
+        const statusUpper = String(userData.status || '').toUpperCase();
+        const roleUpper = String(userData.tipo || userData.role || '').toUpperCase();
+
+        if (statusUpper === 'PENDENTE' && roleUpper !== 'ADMIN') {
+          setFeedback({
+            type: 'error',
+            text: '⏳ Cadastro aguardando aprovação. Peça para o instrutor liberar seu acesso no Painel ADM.',
+          });
+          return;
+        }
+
+        if (statusUpper === 'REJEITADO' || statusUpper === 'REJECTED') {
+          setFeedback({
+            type: 'error',
+            text: '⛔ Seu cadastro foi recusado pela administração.',
+          });
+          return;
+        }
+
+        const authData = {
+          name: userData.nome || userData.name,
+          role: roleUpper || 'ALUNO',
+          username: userData.usuario || userData.username,
+          cpf: userData.cpf || 'Não informado',
+        };
+
+        localStorage.setItem('cfw500_auth_user', JSON.stringify(authData));
+        onLoginSuccess(authData);
         return;
       }
-
-      const userData = data.usuario;
-
-      // Verificação de status do usuário
-      const statusUpper = String(userData.status || '').toUpperCase();
-      const roleUpper = String(userData.tipo || userData.role || '').toUpperCase();
-
-      if (statusUpper === 'PENDENTE' && roleUpper !== 'ADMIN') {
-        setFeedback({
-          type: 'error',
-          text: '⏳ Cadastro aguardando aprovação. Peça para o instrutor liberar seu acesso no Painel ADM.',
-        });
-        return;
-      }
-
-      if (statusUpper === 'REJEITADO' || statusUpper === 'REJECTED') {
-        setFeedback({
-          type: 'error',
-          text: '⛔ Seu cadastro foi recusado pela administração.',
-        });
-        return;
-      }
-
-      const authData = {
-        name: userData.nome || userData.name,
-        role: roleUpper || 'ALUNO',
-        username: userData.usuario || userData.username,
-        cpf: userData.cpf || 'Não informado',
-      };
-
-      // Salva no localStorage e libera o simulador
-      localStorage.setItem('cfw500_auth_user', JSON.stringify(authData));
-      onLoginSuccess(authData);
     } catch (err) {
       console.error('Erro na requisição de login:', err);
+    }
+
+    const users = await getStoredUsers();
+    const found = users.find(
+      (u) =>
+        u.username.trim().toLowerCase() === cleanUser &&
+        String(u.password || '').trim() === cleanPass
+    );
+
+    if (!found) {
       setFeedback({
         type: 'error',
-        text: 'Falha ao conectar com o servidor do banco de dados (UOL Host). Verifique sua conexão ou a URL da API.',
+        text: 'Usuário ou senha incorretos. Verifique se digitou corretamente ou contate o instrutor.',
       });
-    } finally {
-      setIsLoading(false);
+      return;
     }
+
+    if (found.status === 'PENDING' && found.role !== 'ADMIN') {
+      setFeedback({
+        type: 'error',
+        text: '⏳ Cadastro aguardando aprovação. Peça para o instrutor liberar seu acesso no Painel ADM.',
+      });
+      return;
+    }
+
+    if (found.status === 'REJECTED') {
+      setFeedback({
+        type: 'error',
+        text: '⛔ Seu cadastro foi recusado pela administração.',
+      });
+      return;
+    }
+
+    const authData = {
+      name: found.name,
+      role: found.role,
+      username: found.username,
+      cpf: found.cpf || 'Não informado',
+    };
+
+    localStorage.setItem('cfw500_auth_user', JSON.stringify(authData));
+    onLoginSuccess(authData);
   };
 
   // -------------------------------------------------------------
