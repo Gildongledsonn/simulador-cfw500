@@ -403,6 +403,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('cfw500_auth_user');
+    localStorage.removeItem('gaf_auth_token');
     setCurrentUser(null);
   };
 

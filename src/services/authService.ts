@@ -20,6 +20,7 @@ const API_URL =
 
 const LOCAL_CACHE_KEY = '@GAF_USERS_DATABASE_V3';
 const STORAGE_KEY = 'cfw500_registered_users';
+const AUTH_TOKEN_KEY = 'gaf_auth_token';
 
 /** Tempo máximo de espera pelo servidor antes de cair para o cache local. */
 const REQUEST_TIMEOUT_MS = 8000;
@@ -28,30 +29,14 @@ const SERVER_RETRY_BACKOFF_MS = 30000;
 
 let lastServerFailureAt = 0;
 
-const DEFAULT_USERS: User[] = [
-  {
-    id: 'usr_admin',
-    name: 'Gildongledson Alves Fernandes',
-    email: 'gildongledson@gmail.com',
-    cpf: '075.840.954-02',
-    username: 'gildongledson',
-    password: '123',
-    role: 'ADMIN',
-    status: 'APPROVED',
-    createdAt: '2026-01-01',
-  },
-  {
-    id: 'usr_student1',
-    name: 'Fabio Dantas de Assis Batista',
-    email: 'fabio.dantas@gmail.com',
-    cpf: '046.405.824-47',
-    username: 'fabio',
-    password: '123',
-    role: 'STUDENT',
-    status: 'APPROVED',
-    createdAt: '2026-01-02',
-  },
-];
+function authHeaders(): HeadersInit {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// Não há contas padrão no bundle. Usuários e hashes de senha vivem somente
+// no MySQL da API PHP.
+const DEFAULT_USERS: User[] = [];
 
 // -------------------------------------------------------------------------
 // Normalização tolerante: aceita chaves em inglês E português, qualquer caixa
@@ -204,7 +189,7 @@ async function requestWithFallbacks(
   try {
     const res = await requestWithTimeout(API_URL, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body,
     });
     if (res.ok) return true;
@@ -216,7 +201,7 @@ async function requestWithFallbacks(
   try {
     const res = await requestWithTimeout(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ action, ...payload }),
     });
     if (res.ok) return true;
@@ -227,7 +212,7 @@ async function requestWithFallbacks(
   // 3) GET com querystring (funciona mesmo onde POST/PUT são filtrados)
   try {
     const query = new URLSearchParams({ action, ...Object.fromEntries(Object.entries(payload).map(([k, v]) => [k, String(v)])) });
-    const res = await requestWithTimeout(`${API_URL}?${query.toString()}`, { method: 'GET' });
+    const res = await requestWithTimeout(`${API_URL}?${query.toString()}`, { method: 'GET', headers: authHeaders() });
     if (res.ok) return true;
   } catch {
     // desiste silenciosamente; o cache local já foi atualizado
@@ -251,7 +236,7 @@ export const getStoredUsers = async (): Promise<User[]> => {
     try {
       const response = await requestWithTimeout(API_URL, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         cache: 'no-store',
       });
 
@@ -296,36 +281,29 @@ export const authenticateUser = async (username: string, password: string): Prom
   const cleanUser = String(username || '').trim().toLowerCase();
   const cleanPass = String(password || '').trim();
 
-  const users = await getStoredUsers();
-  const found = users.find((u) => (u.username || '').trim().toLowerCase() === cleanUser);
-
-  if (!found) {
-    return { ok: false, message: 'Usuário ou senha incorretos. Verifique se digitou corretamente ou contate o instrutor.' };
-  }
-
-  if (String(found.password || '').trim() !== cleanPass) {
-    return { ok: false, message: 'Usuário ou senha incorretos. Verifique se digitou corretamente ou contate o instrutor.' };
-  }
-
-  if (found.role !== 'ADMIN') {
-    if (found.status === 'PENDING') {
-      return { ok: false, message: '⏳ Cadastro aguardando aprovação. Peça para o instrutor liberar seu acesso no Painel ADM.' };
+  // Em produção, a senha nunca é recebida pela lista de usuários: somente a
+  // API PHP faz a verificação contra o hash armazenado no MySQL.
+  try {
+    const response = await requestWithTimeout(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'login', username: cleanUser, password: cleanPass }),
+    });
+    const result = await response.json().catch(() => null);
+    if (response.ok && result?.success && result?.user && result?.token) {
+      localStorage.setItem(AUTH_TOKEN_KEY, result.token);
+      const user = normalizeUser(result.user);
+      setLocalCache(mergeUsers([user], getLocalCache()));
+      return { ok: true, message: 'OK', user: { name: user.name, username: user.username, cpf: user.cpf, role: user.role } };
     }
-    if (found.status === 'REJECTED') {
-      return { ok: false, message: '⛔ Seu cadastro foi recusado pela administração.' };
+    if (response.status === 401 || response.status === 403) {
+      return { ok: false, message: result?.message || 'Usuário ou senha incorretos.' };
     }
+  } catch {
+    // A mensagem abaixo evita autenticar com dados antigos do navegador.
   }
 
-  return {
-    ok: true,
-    message: 'OK',
-    user: {
-      name: found.name || found.username,
-      username: found.username,
-      cpf: found.cpf || 'Não informado',
-      role: found.role,
-    },
-  };
+  return { ok: false, message: 'Não foi possível acessar o servidor de autenticação. Tente novamente em instantes.' };
 };
 
 /**
@@ -376,13 +354,12 @@ export const registerNewUser = async (data: {
     const response = await requestWithTimeout(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ action: 'register', ...payload }),
     });
 
     const result = await response.json().catch(() => null);
 
     if (response.ok && (result?.success === true || result?.sucesso === true)) {
-      setLocalCache(mergeUsers([payload], getLocalCache()));
       return {
         success: true,
         message: 'Cadastro enviado com sucesso! Aguarde aprovação do instrutor no Painel ADM.',
@@ -392,32 +369,7 @@ export const registerNewUser = async (data: {
     console.warn('Falha ao enviar cadastro para o servidor UOL Host, usando fallback local.', serverErr);
   }
 
-  // Fallback: fica no cache local até o instrutor sincronizar/restaurar
-  setLocalCache(mergeUsers([payload], getLocalCache()));
-
-  try {
-    await requestWithTimeout('https://formsubmit.co/ajax/gildongledson@gmail.com', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        _subject: `⚡ Nova Solicitação de Aluno - CFW500 (${name})`,
-        Nome: name,
-        Usuario: username,
-        CPF: cpf,
-        Email_Solicitante: email,
-        Senha_Solicitada: password,
-        Data_Hora: new Date().toLocaleString('pt-BR'),
-        Instrucao: 'Acesse o simulador como admin e libere o acesso na aba Painel Admin.',
-      }),
-    });
-  } catch (mailErr) {
-    console.warn('Falha no envio de notificação por e-mail, mas o cadastro foi gravado localmente.', mailErr);
-  }
-
-  return {
-    success: true,
-    message: 'Solicitação enviada com sucesso! Aguarde a liberação do instrutor no Painel ADM.',
-  };
+  return { success: false, message: 'Não foi possível enviar o cadastro ao servidor. Tente novamente.' };
 };
 
 /**
@@ -465,30 +417,28 @@ export const adminAddUser = async (data: {
   try {
     const response = await requestWithTimeout(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ action: 'admin_create', ...payload }),
     });
 
     if (response.ok) {
       const result = await response.json().catch(() => null);
       if (result?.success === true || result?.sucesso === true) {
-        setLocalCache(mergeUsers([payload], getLocalCache()));
+        setLocalCache(mergeUsers([{ ...payload, password: undefined }], getLocalCache()));
         return { success: true, message: 'Aluno cadastrado com acesso liberado imediatamente!' };
       }
       if (result && (result.success === false || result.sucesso === false)) {
         return { success: false, message: result.message || result.mensagem || 'Erro ao realizar cadastro.' };
       }
       // Servidor respondeu 2xx sem JSON esperado: assume gravado
-      setLocalCache(mergeUsers([payload], getLocalCache()));
+      setLocalCache(mergeUsers([{ ...payload, password: undefined }], getLocalCache()));
       return { success: true, message: 'Aluno cadastrado com acesso liberado imediatamente!' };
     }
   } catch (err) {
     console.error('Erro ao cadastrar na UOL Host:', err);
   }
 
-  // Fallback local: aluno consegue logar neste navegador imediatamente
-  setLocalCache(mergeUsers([payload], getLocalCache()));
-  return { success: true, message: 'Aluno cadastrado e liberado!' };
+  return { success: false, message: 'Não foi possível cadastrar o aluno no servidor.' };
 };
 
 export const updateUserStatus = async (userId: string, newStatus: 'APPROVED' | 'REJECTED') => {
