@@ -141,7 +141,8 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
-  const handleApprove = async (userId: string) => {
+  const handleApprove = async (userId?: string) => {
+    if (!userId) return;
     setIsRefreshing(true);
     await updateUserStatus(userId, 'APPROVED');
     await loadData();
@@ -155,13 +156,15 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
-  const handleReject = async (userId: string) => {
+  const handleReject = async (userId?: string) => {
+    if (!userId) return;
     setIsRefreshing(true);
     await updateUserStatus(userId, 'REJECTED');
     await loadData();
   };
 
-  const handleDelete = async (userId: string) => {
+  const handleDelete = async (userId?: string) => {
+    if (!userId) return;
     if (window.confirm('Deseja realmente remover este cadastro?')) {
       setIsRefreshing(true);
       await deleteUser(userId);

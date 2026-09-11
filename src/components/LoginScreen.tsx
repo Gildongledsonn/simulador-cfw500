@@ -1,12 +1,8 @@
 import React, { useState } from 'react';
-import { getStoredUsers } from '../services/authService';
-
-// =========================================================================
-// CONFIGURAÇÃO DA API:
-// Substitua pela URL onde você enviou os arquivos PHP na sua hospedagem UOL Host
-// Exemplo: 'https://meusite.com.br/api' ou 'https://simulador.gaflink.com.br/api'
-// =========================================================================
-const API_URL = 'https://SEUDOMINIO.com.br/api';
+import {
+  authenticateUser,
+  registerNewUser,
+} from '../services/authService';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: { name: string; role: string; username: string; cpf?: string }) => void;
@@ -27,111 +23,43 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [isLoading, setIsLoading] = useState(false);
 
   // -------------------------------------------------------------
-  // AUTENTICAÇÃO / LOGIN VIA API (UOL HOST)
+  // AUTENTICAÇÃO — caminho único via authService (servidor + cache local)
   // -------------------------------------------------------------
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
     setIsLoading(true);
 
-    const cleanUser = usernameInput.trim().toLowerCase();
-    const cleanPass = passwordInput.trim();
-
     try {
-      const response = await fetch(`${API_URL}/login.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          usuario: cleanUser,
-          senha: cleanPass,
-        }),
-      });
+      const result = await authenticateUser(usernameInput, passwordInput);
 
-      const data = await response.json();
-
-      if (response.ok && data.sucesso) {
-        const userData = data.usuario;
-
-        const statusUpper = String(userData.status || '').toUpperCase();
-        const roleUpper = String(userData.tipo || userData.role || '').toUpperCase();
-
-        if (statusUpper === 'PENDENTE' && roleUpper !== 'ADMIN') {
-          setFeedback({
-            type: 'error',
-            text: '⏳ Cadastro aguardando aprovação. Peça para o instrutor liberar seu acesso no Painel ADM.',
-          });
-          return;
-        }
-
-        if (statusUpper === 'REJEITADO' || statusUpper === 'REJECTED') {
-          setFeedback({
-            type: 'error',
-            text: '⛔ Seu cadastro foi recusado pela administração.',
-          });
-          return;
-        }
-
+      if (result.ok && result.user) {
         const authData = {
-          name: userData.nome || userData.name,
-          role: roleUpper || 'ALUNO',
-          username: userData.usuario || userData.username,
-          cpf: userData.cpf || 'Não informado',
+          name: result.user.name,
+          role: result.user.role,
+          username: result.user.username,
+          cpf: result.user.cpf,
         };
 
         localStorage.setItem('cfw500_auth_user', JSON.stringify(authData));
         onLoginSuccess(authData);
         return;
       }
+
+      setFeedback({ type: 'error', text: result.message });
     } catch (err) {
-      console.error('Erro na requisição de login:', err);
-    }
-
-    const users = await getStoredUsers();
-    const found = users.find(
-      (u) =>
-        u.username.trim().toLowerCase() === cleanUser &&
-        String(u.password || '').trim() === cleanPass
-    );
-
-    if (!found) {
+      console.error('Erro na autenticação:', err);
       setFeedback({
         type: 'error',
-        text: 'Usuário ou senha incorretos. Verifique se digitou corretamente ou contate o instrutor.',
+        text: 'Erro ao autenticar. Verifique sua conexão e tente novamente.',
       });
-      return;
+    } finally {
+      setIsLoading(false);
     }
-
-    if (found.status === 'PENDING' && found.role !== 'ADMIN') {
-      setFeedback({
-        type: 'error',
-        text: '⏳ Cadastro aguardando aprovação. Peça para o instrutor liberar seu acesso no Painel ADM.',
-      });
-      return;
-    }
-
-    if (found.status === 'REJECTED') {
-      setFeedback({
-        type: 'error',
-        text: '⛔ Seu cadastro foi recusado pela administração.',
-      });
-      return;
-    }
-
-    const authData = {
-      name: found.name,
-      role: found.role,
-      username: found.username,
-      cpf: found.cpf || 'Não informado',
-    };
-
-    localStorage.setItem('cfw500_auth_user', JSON.stringify(authData));
-    onLoginSuccess(authData);
   };
 
   // -------------------------------------------------------------
-  // CADASTRO DE NOVO USUÁRIO VIA API (UOL HOST)
+  // CADASTRO DE NOVO USUÁRIO via authService
   // -------------------------------------------------------------
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,45 +76,30 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/cadastro.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          nome: regName.trim(),
-          email: regEmail.trim(),
-          cpf: regCpf.trim(),
-          usuario: regUsername.trim().toLowerCase(),
-          senha: regPassword.trim(),
-        }),
+      const result = await registerNewUser({
+        name: regName,
+        email: regEmail,
+        cpf: regCpf,
+        username: regUsername,
+        password: regPassword,
       });
 
-      const data = await response.json();
-
-      if (response.ok && data.sucesso) {
-        setFeedback({
-          type: 'success',
-          text: data.mensagem || 'Cadastro realizado com sucesso!',
-        });
+      if (result.success) {
+        setFeedback({ type: 'success', text: result.message });
         setRegName('');
         setRegEmail('');
         setRegCpf('');
         setRegUsername('');
         setRegPassword('');
-        // Retorna para a tela de login após 2.5 segundos
         setTimeout(() => setIsRegistering(false), 2500);
       } else {
-        setFeedback({
-          type: 'error',
-          text: data.mensagem || 'Não foi possível concluir o cadastro.',
-        });
+        setFeedback({ type: 'error', text: result.message });
       }
     } catch (err) {
       console.error('Erro no cadastro:', err);
       setFeedback({
         type: 'error',
-        text: 'Erro ao conectar ao servidor da UOL Host para cadastrar.',
+        text: 'Erro ao conectar ao servidor para cadastrar. Tente novamente.',
       });
     } finally {
       setIsLoading(false);
@@ -400,10 +313,6 @@ const inputStyle: React.CSSProperties = {
   padding: '8px 10px',
   color: '#fff',
   fontSize: '11px',
-  boxSizing: 'border-box',
-};
-
-const btnPrimaryStyle: React11px',
   boxSizing: 'border-box',
 };
 
