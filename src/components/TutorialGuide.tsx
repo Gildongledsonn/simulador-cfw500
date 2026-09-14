@@ -5,6 +5,7 @@ import { COURSE_MODULES_CFW300 } from '../constants/courseModulesCFW300';
 import { COURSE_MODULES_L1000 } from '../constants/courseModulesL1000';
 import { COURSE_MODULES_CLIC02 } from '../constants/courseModulesClic02';
 import { CLIC02_TRAINING_TOTAL_MINUTES } from '../constants/courseModulesClic02';
+import { Clic02RealisticPLC } from './Clic02RealisticPLC';
 import { Lesson } from '../types/tutorial';
 import {
   getUserProgress,
@@ -432,8 +433,8 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                 <span style={{ fontSize: '10px', color: '#90a4ae' }}>⏱️ {selectedLesson.durationMin} min</span>
               </div>
               <h2 style={{ fontSize: '15px', color: '#fff', margin: '6px 0 2px 0' }}>{selectedLesson.title}</h2>
-              <p style={{ fontSize: '11px', color: '#b0bec5', margin: 0 }}>{selectedLesson.description}</p>
-            </div>
+          <p style={{ fontSize: '11px', color: '#b0bec5', margin: 0 }}>{selectedLesson.description}</p>
+          </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {selectedLesson.type === 'PRACTICE' && (
@@ -453,6 +454,12 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
               )}
             </div>
           </div>
+
+          {activeInverterType === 'CLIC02' && (
+            <div style={{ marginTop: 12 }}>
+              <Clic02RealisticPLC activePlant="treinamento" />
+            </div>
+          )}
 
           {selectedLesson.type === 'THEORY' && selectedLesson.theoryData && (
             <div style={theoryContainerStyle}>
