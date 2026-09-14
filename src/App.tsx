@@ -105,18 +105,6 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
           </button>
 
           <button
-            onClick={() => setActiveTab('tutorial')}
-            style={{
-              ...tabButtonStyle,
-              background: activeTab === 'tutorial' ? '#0288d1' : '#1a1d21',
-              color: activeTab === 'tutorial' ? '#fff' : '#90a4ae',
-              borderColor: activeTab === 'tutorial' ? '#29b6f6' : '#323842',
-            }}
-          >
-            🎓 Treinamento de Automações
-          </button>
-
-          <button
             onClick={() => setActiveTab('comandos')}
             style={{
               ...tabButtonStyle,
