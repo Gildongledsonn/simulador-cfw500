@@ -176,7 +176,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
         ? COURSE_MODULES_CFW300
         : type === 'L1000'
         ? COURSE_MODULES_L1000
-        : activeInverterType === 'COMANDOS' ? COURSE_MODULES_COMANDOS : COURSE_MODULES_CLIC02;
+        : type === 'COMANDOS' ? COURSE_MODULES_COMANDOS : COURSE_MODULES_CLIC02;
 
     if (targetModules[0]?.lessons[0]) {
       setSelectedLesson(targetModules[0].lessons[0]);
@@ -268,12 +268,6 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
           </div>
 
           <button
-            onClick={() => handleSelectInverterType('COMANDOS')}
-            style={{ ...inverterTabBtnStyle, background: activeInverterType === 'COMANDOS' ? '#00897b' : '#161b22', borderColor: activeInverterType === 'COMANDOS' ? '#00e676' : '#30363d', color: activeInverterType === 'COMANDOS' ? '#fff' : '#80cbc4' }}
-          >
-            ⚡ Comandos Elétricos · 80 h
-          </button>
-          <button
             onClick={handleFullReset}
             style={{ ...adminBtnStyle, background: '#d32f2f', color: '#fff' }}
             title="Zera o progresso para testar o fluxo desde o início"
@@ -328,6 +322,9 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             }}
           >
             🪜 CLP CLIC-02 (Ladder)
+          </button>
+          <button onClick={() => handleSelectInverterType('COMANDOS')} style={{ ...inverterTabBtnStyle, background: activeInverterType === 'COMANDOS' ? '#00897b' : '#161b22', borderColor: activeInverterType === 'COMANDOS' ? '#00e676' : '#30363d', color: activeInverterType === 'COMANDOS' ? '#fff' : '#80cbc4' }}>
+            ⚡ Comandos Elétricos · 80 h
           </button>
         </div>
 
