@@ -1,0 +1,25 @@
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+const code=ts.transpileModule(readFileSync('src/utils/voltageModel.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2020}}).outputText;
+const {createVoltageModel}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+const comps=[{id:'grid',category:'REDE_TRIFASICA'}];
+function circuit(edges=[]){const graph={};for(const [a,b] of edges){(graph[a]??=[]).push(b);(graph[b]??=[]).push(a);}return createVoltageModel(comps,(a,b)=>{const seen=new Set(),q=[a];while(q.length){const n=q.pop();if(n===b)return true;if(seen.has(n))continue;seen.add(n);q.push(...(graph[n]||[]));}return false;});}
+let c=circuit([['grid:R','a'],['grid:R','b'],['grid:N','n'],['grid:S','s']]);
+assert.equal(c.voltage('a','b'),0);
+assert.equal(c.voltage('a','n'),220);
+assert.equal(c.voltage('a','s'),380);
+assert.equal(c.voltage('floating','n'),null);
+c=circuit([['grid:R','a'],['grid:S','a']]);
+assert.equal(c.voltage('a','grid:N'),null);
+c=circuit([['grid:R','start'],['start','A1'],['grid:N','A2']]);
+assert.equal(c.voltage('A1','A2'),220);
+c=circuit([['grid:R','start'],['grid:N','A2']]);
+assert.equal(c.voltage('A1','A2'),null);
+console.log('PASS: mesma fase, fase-neutro, fase-fase, circuito aberto, conflito de fontes e comando liga/desliga.');
+comps.push({id:'tr',category:'TRANSFORMADOR_ISOLADOR'});
+c=circuit([['grid:R','tr:PRI_L1'],['grid:N','tr:PRI_L2']]);
+assert.equal(c.voltage('tr:SEC_L','tr:SEC_N'),24,'isolated AC secondary');
+assert.equal(c.voltage('tr:SEC_L','grid:N'),null,'primary/secondary isolation');
+c=circuit([['grid:R','tr:PRI_L1'],['grid:S','tr:PRI_L2']]);
+assert.equal(c.voltage('tr:SEC_L','tr:SEC_N'),null,'reject 380 V on 220 V primary');

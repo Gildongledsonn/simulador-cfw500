@@ -449,11 +449,15 @@ export const RealisticPushButton: React.FC<{
 
       {/* Atuador de pulso verde com efeito de profundidade ao pressionar */}
       <g
-        onMouseDown={onPress}
-        onMouseUp={onRelease}
-        onTouchStart={onPress}
-        onTouchEnd={onRelease}
-        style={{ cursor: 'pointer' }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          onPress?.();
+        }}
+        onPointerUp={(e) => { e.stopPropagation(); onRelease?.(); }}
+        onPointerCancel={() => onRelease?.()}
+        onLostPointerCapture={() => onRelease?.()}
+        style={{ touchAction: 'none', cursor: 'pointer' }}
       >
         <circle
           cx={cx}

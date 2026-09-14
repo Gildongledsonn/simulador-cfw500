@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
 import { getSessionUser, clearSession } from './services/authService';
+import React, { useState, useEffect } from 'react';
 import { InverterProvider } from './context/InverterContext';
 import { usePhysicsLoop } from './hooks/usePhysicsLoop';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
@@ -20,10 +20,11 @@ import { Clic02RealisticPLC } from './components/Clic02RealisticPLC';
 import { ComandosEletricosWorkbench } from './components/ComandosEletricosWorkbench';
 import { StudentCertificatesTab } from './components/StudentCertificatesTab';
 import { CFW500ExamModal } from './components/CFW500ExamModal';
+import { FornoGasSimulator } from './components/treinamentos/FornoGasSimulator';
 import { COURSE_MODULES } from './constants/courseModules';
 import { Lesson } from './types/tutorial';
 
-type ActiveTab = 'workbench' | 'modbus' | 'tutorial' | 'comandos' | 'certificates' | 'admin';
+type ActiveTab = 'workbench' | 'modbus' | 'tutorial' | 'comandos' | 'forno_gas' | 'certificates' | 'admin';
 type InverterModel = 'CFW500' | 'CFW300' | 'L1000';
 
 interface AuthUser {
@@ -123,6 +124,18 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
             }}
           >
             ⚡ Comandos Elétricos
+          </button>
+
+          <button
+            onClick={() => setActiveTab('forno_gas')}
+            style={{
+              ...tabButtonStyle,
+              background: activeTab === 'forno_gas' ? '#d84315' : '#1a1d21',
+              color: activeTab === 'forno_gas' ? '#fff' : '#ff8a65',
+              borderColor: activeTab === 'forno_gas' ? '#ff7043' : '#323842',
+            }}
+          >
+            🔥 Forno a Gás (Inova)
           </button>
 
           <button
@@ -352,6 +365,12 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
       {activeTab === 'comandos' && (
         <div style={tabContentStyle}>
           <ComandosEletricosWorkbench />
+        </div>
+      )}
+
+      {activeTab === 'forno_gas' && (
+        <div style={tabContentStyle}>
+          <FornoGasSimulator />
         </div>
       )}
 

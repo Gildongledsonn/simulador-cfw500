@@ -1,3 +1,6 @@
+import { buildControlCircuit } from '../utils/controlCircuit';
+import { createVoltageModel } from '../utils/voltageModel';
+import { motorConnection } from '../utils/motorConnection';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useInverter } from '../context/InverterContext';
 import { MotorVisualizer } from './MotorVisualizer';
@@ -74,6 +77,8 @@ export interface PlacedComponent {
   state: boolean;
   tripped?: boolean;
   currentRating?: number;
+  timerStar?: boolean;
+  timerDelta?: boolean;
   lampColor?: LampColor;
   selectorPosition?: 'MAN' | '0' | 'AUT';
   terminals: TerminalPole[];
@@ -105,7 +110,7 @@ export interface CableConnection {
   toComponentId: string;
   toTerminalId: string;
   cableType: CableType;
-  customWaypoints?: Point2D[];
+  waypoints?: Point2D[];
 }
 
 export type MultimeterScale = 'V_AC' | 'V_DC' | 'CURRENT_A' | 'CONTINUITY' | 'RESISTANCE_OHM' | 'DIODE';
@@ -128,9 +133,9 @@ export interface TrainingLesson {
 export const CABLE_COLORS: Record<CableType, string> = {
   FORCA_R: '#ef4444',
   FORCA_S: '#f97316',
-  FORCA_T: '#3b82f6',
+  FORCA_T: '#64748b',
   COMANDO_FASE: '#ec4899',
-  COMANDO_NEUTRO: '#06b6d4',
+  COMANDO_NEUTRO: '#38bdf8',
   TERRA_PE: '#10b981',
   JUMPER_FECHAMENTO: '#eab308',
   CABO_PRETO: '#111827',
@@ -159,7 +164,7 @@ interface CatalogItem {
 }
 
 const CATALOG_ITEMS: CatalogItem[] = [
-  { category: 'DISJUNTOR_MONOPOLAR', title: 'Disjuntor Monopolar (WEG MDW 1P)', subtitle: 'Proteção DIN 1P modular com curva C ajustável', icon: '⚡', group: 'PROTECAO' },
+  { category: 'DISJUNTOR_MONOPOLAR', title: 'Disjuntor Monopolar (WEG MDW 1P)', subtitle: 'Disjuntor DIN 1P, curva C e corrente nominal selecionável', icon: '⚡', group: 'PROTECAO' },
   { category: 'DISJUNTOR_BIPOLAR', title: 'Disjuntor Bipolar (WEG MDW 2P)', subtitle: 'Proteção bipolar com amperagem ajustável', icon: '⚡', group: 'PROTECAO' },
   { category: 'DISJUNTOR_MOTOR', title: 'Disjuntor-Motor MPW', subtitle: 'Proteção termomagnética para motores', icon: '🎛️', group: 'PROTECAO' },
   { category: 'RELE_TERMICO', title: 'Relé Térmico de Sobrecarga RW', subtitle: 'Proteção com contatos 95-96 e 97-98', icon: '🔥', group: 'PROTECAO' },
@@ -172,15 +177,15 @@ const CATALOG_ITEMS: CatalogItem[] = [
   { category: 'REDE_TRIFASICA', title: 'Rede Trifásica 380V (R, S, T, N, PE)', subtitle: 'Alimentação principal de força', icon: '⚡', group: 'ALIMENTACAO' },
   { category: 'REDE_MONOFASICA', title: 'Rede Monofásica 220V (F, N, PE)', subtitle: 'Fonte monofásica auxiliar', icon: '🔌', group: 'ALIMENTACAO' },
   { category: 'SECCIONADORA_LOTO', title: 'Chave Seccionadora LOTO (NR-10)', subtitle: 'Bloqueio de segurança com cadeado', icon: '🛑', group: 'SEGURANCA' },
-  { category: 'TRANSFORMADOR_ISOLADOR', title: 'Trafo Isolador 220V/24V (NR-10)', subtitle: 'Extra baixa tensão de segurança', icon: '⚡', group: 'SEGURANCA' },
-  { category: 'RELE_SEGURANCA_NR12', title: 'Relé de Segurança Cat 4 (NR-12)', subtitle: 'Duplo canal com redundância', icon: '🛡️', group: 'SEGURANCA' },
+  { category: 'TRANSFORMADOR_ISOLADOR', title: 'Transformador Isolador 220V/24V CA', subtitle: 'Secundário CA; isolação e proteção dependem do projeto', icon: '⚡', group: 'SEGURANCA' },
+  { category: 'RELE_SEGURANCA_NR12', title: 'Relé de Segurança (representação didática)', subtitle: 'Contatos ilustrativos; supervisão de segurança não simulada', icon: '🛡️', group: 'SEGURANCA' },
   { category: 'CHAVE_INTERTRAVAMENTO_NR12', title: 'Chave Intertravamento (NR-12)', subtitle: 'Monitoramento de portas e proteções', icon: '🔒', group: 'SEGURANCA' },
   { category: 'BOTOEIRA_PULSO_NA', title: 'Botoeira Pulsadora Liga (NA)', subtitle: 'Botão verde (3-4 NO)', icon: '🟢', group: 'COMANDO' },
   { category: 'BOTOEIRA_COGUMELO_NF', title: 'Botoeira de Emergência Cogumelo (NF)', subtitle: 'Botão de parada com trava', icon: '🔴', group: 'COMANDO' },
   { category: 'SINALEIRO_LED', title: 'Sinalizador Luminoso LED (Cores Trocáveis)', subtitle: 'Lâmpada com opção de alterar a cor', icon: '💡', group: 'COMANDO' },
   { category: 'MOTOR_TRIFASICO_6P', title: 'Motor Trifásico W22 (6 Pontas)', subtitle: 'Fechamento Estrela / Triângulo', icon: '⚙️', group: 'CARGAS' },
   { category: 'MOTOR_MONOFASICO_CAPACITOR', title: 'Motor Monofásico com Capacitor', subtitle: 'Motor monofásico com bornes Fase, Neutro e Capacitor', icon: '🌀', group: 'CARGAS' },
-  { category: 'CAPACITOR_ELETROLITICO', title: 'Capacitor de Partida / Correção', subtitle: 'Armazenamento eletrostático e defasagem', icon: '🔋', group: 'PROTECAO' },
+  { category: 'CAPACITOR_ELETROLITICO', title: 'Capacitor de Partida', subtitle: 'Capacitor de partida não substitui capacitor permanente ou de correção', icon: '🔋', group: 'PROTECAO' },
   { category: 'RESISTOR_FREINAGEM', title: 'Resistor de Frenagem (Dynamic Braking)', subtitle: 'Dissipação de energia regenerativa de inversor', icon: '♨️', group: 'PROTECAO' },
 ];
 
@@ -199,7 +204,7 @@ const COMANDOS_LESSONS: TrainingLesson[] = [
     steps: [
       'Insira no painel: 1 Contator CWM25 (K1), 1 Relé Térmico (F1) e 1 Botoeira Verde NA (S1).',
       'Identifique visualmente os bornes de bobina A1 e A2 e os contatos auxiliares 13-14 NA do contator.',
-      'Use o multímetro na escala de continuidade para testar a condução dos contatos NA e NF.'
+      'Desconecte a alimentação e confirme a ausência de tensão antes de testar a continuidade dos contatos NA e NF.'
     ],
     schematicTips: 'Circuito de Comando: Fase -> Proteção 1P -> 95-96 do Relé Térmico -> Botoeiras -> Bobina A1-A2 -> Neutro.'
   },
@@ -207,18 +212,18 @@ const COMANDOS_LESSONS: TrainingLesson[] = [
     id: 'aula_02_nr10_nr12',
     title: '2. Segurança em Painéis: NR-10 e NR-12',
     module: 'Módulo 1: Fundamentos',
-    description: 'Implementação de chave seccionadora LOTO (bloqueio), trafo isolador SELV e relé de segurança de duplo canal.',
+    description: 'Estudo de seccionamento, bloqueio, extra-baixa tensão e funções de segurança. A bancada não valida categoria ou PL.',
     theory: [
-      'A NR-10 exige desenergização prévia, bloqueio mecânico com cadeado LOTO (Lockout/Tagout) e sinalização na seccionadora geral.',
-      'Para circuitos de comando e interfaces manuais, deve-se priorizar extra-baixa tensão de segurança (24V SELV) utilizando transformadores isoladores ou fontes protegidas.',
-      'A NR-12 determina que paradas de emergência e portas móveis utilizem duplo canal supervisionado com redundância e autocontrole (Relé de Segurança Categoria 4).'
+      'Desenergizar exige procedimento: seccionar, impedir reenergização, constatar ausência de tensão, aplicar aterramento temporário/equipotencialização conforme o procedimento, proteger partes próximas energizadas e sinalizar. Um cadeado isoladamente não comprova condição segura.',
+      'Um secundário de 24 V CA não é corrente contínua. A classificação SELV/PELV depende da fonte, separação elétrica, aterramento e demais requisitos do projeto.',
+      'A categoria ou o PL requerido de cada função de segurança depende da apreciação de riscos. A NR-12 não impõe categoria 4 a toda máquina; relé, sensores, atuadores e diagnóstico devem ser projetados e validados como sistema.'
     ],
     steps: [
       'Adicione a Chave Seccionadora LOTO (QS1) na entrada de alimentação trifásica da rede.',
       'Conecte a saída monofásica no primário do Transformador 220V/24V (TR1) para alimentar o circuito de comando em extra-baixa tensão.',
-      'Instale o Relé de Segurança Cat 4 (SR1) e a Chave de Intertravamento (SQ1) ligada aos canais S11 e duplo retorno.'
+      'Identifique os elementos de uma função de segurança no diagrama do fabricante. O relé da bancada é ilustrativo e não reproduz os canais de entrada, diagnóstico e rearme supervisionado.'
     ],
-    schematicTips: 'Rede 380V -> Seccionadora LOTO -> Disjuntor-Motor -> Trafo Isolador 24V -> Relé Cat 4 -> Bobinas.'
+    schematicTips: 'Força e comando têm ramais próprios. Primário de 220 V: use fase-neutro de rede 380/220 V, com proteção adequada; nunca 380 V entre fases. Secundário do trafo: 24 V CA.'
   },
   {
     id: 'aula_03_partida_direta',
@@ -232,10 +237,10 @@ const COMANDOS_LESSONS: TrainingLesson[] = [
       'Sinaleiros luminosos verdes indicam motor em operação (K1:13-14) e vermelhos indicam trip térmico (F1:97-98).'
     ],
     steps: [
-      'Alimente o comando: borne F da rede monofásica -> contato 95-96 NF do Relé Térmico F1 -> Botão NF S0 -> Botão NA S1 -> A1 de K1.',
+      'Alimente o comando: F -> disjuntor 1P -> F1:95-96 NF -> S0:11-12 NF -> S1:3-4 NA -> K1:A1 (bobina 220 V CA nesta bancada).',
       'Conecte o borne N da rede no borne A2 do contator K1.',
       'Faça o contato de selo conectando K1:13 e K1:14 em paralelo com os bornes 3 e 4 do botão S1.',
-      'Conecte o circuito de força: R, S, T -> Disjuntor-Motor -> Contator K1 -> Relé Térmico -> Motor W22 (U1, V1, W1 fechado em estrela).'
+      'Conecte o circuito de força: R, S, T -> Disjuntor-Motor -> Contator K1 -> Relé Térmico -> Motor W22 (U1, V1, W1; estrela para motor 220/380 V em rede 380 V, conforme placa).'
     ],
     schematicTips: 'Linha: [Fase] -> [95 F1 96] -> [1 S0 2] -> [3 S1 4 // 13 K1 14] -> [A1 K1 A2] -> [Neutro]'
   },
@@ -247,7 +252,7 @@ const COMANDOS_LESSONS: TrainingLesson[] = [
     theory: [
       'Para inverter o sentido de giro de um motor de indução trifásico, basta comutar duas de suas três fases de alimentação (ex: trocar R por S mantendo T).',
       'Dois contatores são utilizados: K1 (Sentido Horário) e K2 (Sentido Anti-horário).',
-      'INTERTRAVAMENTO ELÉTRICO OBRIGATÓRIO: Se K1 e K2 forem acionados juntos, ocorrerá um curto-circuito fase-fase violento. Por isso, a bobina de K1 passa pelo contato auxiliar NF (21-22) de K2, e vice-versa.'
+      'Use também intertravamento mecânico entre os contatores. INTERTRAVAMENTO ELÉTRICO: Se K1 e K2 forem acionados juntos, ocorrerá um curto-circuito fase-fase violento. Por isso, a bobina de K1 passa pelo contato auxiliar NF (21-22) de K2, e vice-versa.'
     ],
     steps: [
       'Insira dois contatores: K1 (Horário) e K2 (Anti-horário) e duas botoeiras NA: S1 (Horário) e S2 (Anti-horário).',
@@ -260,20 +265,20 @@ const COMANDOS_LESSONS: TrainingLesson[] = [
     id: 'aula_05_estrela_triangulo',
     title: '5. Partida Estrela-Triângulo (Y-Δ) com Temporizador',
     module: 'Módulo 3: Métodos de Partida Indireta',
-    description: 'Redução da corrente de partida (Ip) a 1/3 do valor nominal usando chaveamento transitório Estrela para Triângulo.',
+    description: 'Redução da corrente de linha na partida para aproximadamente 1/3 da partida direta em triângulo, na mesma rede.',
     theory: [
       'A corrente de partida direta de um motor pode atingir 6 a 8 vezes a corrente nominal (Ip/In), causando quedas de tensão na rede.',
-      'Na ligação Estrela (Y), a tensão aplicada em cada bobina é reduzida por $\\sqrt{3}$ (220V em rede 380V), reduzindo o conjugado e a corrente para 33% do valor nominal.',
-      'Após o motor atingir aproximadamente 85% da rotação de regime, o temporizador desliga o contator estrela (K3) e liga o contator triângulo (K2), aplicando a tensão plena de 380V.',
+      'Na ligação Estrela (Y), a tensão aplicada em cada bobina é reduzida por raiz de 3 (220V em rede 380V), reduzindo o conjugado de partida e a corrente de linha a cerca de 1/3 dos valores de partida direta em triângulo; não da corrente nominal.',
+      'A transição depende da aceleração e da carga: desligue K3, mantenha intervalo sem sobreposição e então ligue K2. O ajuste deve seguir o motor, a carga e o conjunto de partida.',
       'O motor deve ter 6 pontas acessíveis e sua tensão nominal em triângulo deve coincidir com a tensão de linha da rede.'
     ],
     steps: [
       'Componentes necessários: Contator de Linha K1, Contator Triângulo K2, Contator Estrela K3 e Relé Temporizador TON.',
       'Fechamento Estrela: K3 conecta em curto os terminais W2, U2 e V2 do motor.',
       'Fechamento Triângulo: K2 conecta U1-W2, V1-U2 e W1-V2.',
-      'Assegure o intertravamento elétrico rigoroso entre as bobinas de K2 e K3 para evitar curto-circuito durante a comutação.'
+      'Preveja intertravamento elétrico e mecânico entre K2 e K3 e tempo morto na transição. O temporizador automático ainda não está disponível no catálogo; esta etapa é estudo de esquema.'
     ],
-    schematicTips: 'Sequência: Parte K1 + K3 (Estrela) -> Conta tempo (5 a 8s) -> Desliga K3 -> Liga K2 (Triângulo) permanente.'
+    schematicTips: 'K1 + K3 -> aceleração -> abre K3 -> tempo morto -> K1 + K2. Em rede 380 V use motor 380/660 V Δ/Y; motor 220/380 V não pode operar em Δ a 380 V.'
   },
   {
     id: 'aula_06_partida_compensada',
@@ -281,14 +286,14 @@ const COMANDOS_LESSONS: TrainingLesson[] = [
     module: 'Módulo 3: Métodos de Partida Indireta',
     description: 'Partida de motores sob carga com redução de tensão via taps de 65% ou 80% em autotransformador de partida.',
     theory: [
-      'Diferente da partida estrela-triângulo (que exige partida quase a vazio), a partida compensada mantém torque proporcional suficiente para partir cargas mais pesadas.',
-      'O autotransformador trifásico fornece tensões reduzidas selecionáveis por tapes (ex: 65% da tensão nominal reduz a corrente para 42%).',
+      'A partida compensada pode oferecer mais conjugado que estrela-triângulo, conforme o tap. A capacidade de acelerar depende da curva de carga e do motor.',
+      'No tap de 65%, a corrente de linha e o conjugado de partida são aproximadamente 0,65² = 42% dos valores de partida direta, desprezando perdas; a corrente do motor é cerca de 65% da partida direta.',
       'São empregados três contatores: K1 (Linha Principal), K2 (Alimentação do Trafo) e K3 (Ponto Estrela do Trafo).',
       'O autotrafo possui regime intermitente de poucos segundos e deve ser protegido contra religamentos consecutivos sem resfriamento.'
     ],
     steps: [
-      'Identifique os bornes do Autotransformador: 0V, Tap 65%, Tap 80% e 100%.',
-      'Configure o temporizador para 6 segundos de aceleração no tap reduzido.',
+      'Estudo de esquema: o autotransformador de partida não está disponível nesta bancada. Identifique seus taps no diagrama do fabricante.',
+      'Determine o tempo de aceleração pelo motor, carga e limite de operação do autotransformador; não existe ajuste universal de 6 segundos.',
       'Ligue K2 e K3 para aplicar a tensão reduzida nos bornes U1-V1-W1; na transição, K2/K3 abrem e K1 fecha direto na rede 380V.'
     ],
     schematicTips: 'Transição: (K2 + K3 fecham no Tap) -> Tempo esgota -> Abre K3 -> Abre K2 -> Fecha K1 direto na rede.'
@@ -306,7 +311,7 @@ const COMANDOS_LESSONS: TrainingLesson[] = [
     ],
     steps: [
       'Insira a Chave Seletora 3 Posições (SA1: MAN - 0 - AUT) e dois contatores (K1 Bomba 1 e K2 Bomba 2).',
-      'Passe a linha de comando automático pelos contatos das boias do reservatório superior e cisterna inferior.',
+      'Estudo de esquema: boias e relé de alternância não estão disponíveis no catálogo. Preveja a proteção contra trabalho a seco também no modo manual.',
       'Adicione um bloco de sinalização sonora/visual para alerta de nível crítico ou desarme por sobrecarga térmica de bomba.'
     ],
     schematicTips: 'Linha AUT: [Fase] -> [Boia Cisterna OK] -> [Boia Caixa Baixa] -> [Relé de Revezamento K1/K2] -> [K1:A1 / K2:A1]'
@@ -316,7 +321,7 @@ const COMANDOS_LESSONS: TrainingLesson[] = [
 export const ComandosEletricosWorkbench: React.FC = () => {
   const { state: inverterState, dispatch } = useInverter();
 
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState(true);
+  const [isWorkbenchVisible, setIsWorkbenchVisible] = useState(true);
   const [isTrainingOpen, setIsTrainingOpen] = useState(false);
   const [selectedLessonId, setSelectedLessonId] = useState<string>(COMANDOS_LESSONS[0].id);
 
@@ -358,11 +363,21 @@ export const ComandosEletricosWorkbench: React.FC = () => {
   ]);
 
   const [cables, setCables] = useState<CableConnection[]>([]);
-  const [selectedCableId, setSelectedCableId] = useState<string | null>(null);
   const [selectedCompId, setSelectedCompId] = useState<string | null>(null);
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [catalogFilter, setCatalogFilter] = useState<'ALL' | 'ALIMENTACAO' | 'PROTECAO' | 'COMANDO' | 'SEGURANCA' | 'CARGAS'>('ALL');
 
+  // Ferramenta de Cabo e Roteamento por Waypoints
+  const [activeCableTool, setActiveCableTool] = useState<CableType | null>('COMANDO_FASE');
+  const [wiringOrigin, setWiringOrigin] = useState<{ compId: string; termId: string } | null>(null);
+  const [activeWaypoints, setActiveWaypoints] = useState<Point2D[]>([]);
+  const [mousePos, setMousePos] = useState<Point2D | null>(null);
+
+  // Modal Flutuante para 2 Cliques no Cabo
+  const [editingCableId, setEditingCableId] = useState<string | null>(null);
+  const [modalPos, setModalPos] = useState<Point2D>({ x: 0, y: 0 });
+
+  // Multímetro
   const [isMeterActive, setIsMeterActive] = useState(false);
   const [meterScale, setMeterScale] = useState<MultimeterScale>('V_AC');
   const [redProbe, setRedProbe] = useState<MeterProbePosition | null>(null);
@@ -371,12 +386,9 @@ export const ComandosEletricosWorkbench: React.FC = () => {
   const [meterReadout, setMeterReadout] = useState<string>('0.0 V');
   const [isContinuityBuzzer, setIsContinuityBuzzer] = useState(false);
 
-  const [activeCableTool, setActiveCableTool] = useState<CableType | null>(null);
-
-  const [wiringOrigin, setWiringOrigin] = useState<{ compId: string; termId: string } | null>(null);
+  // Arraste de Componentes
   const [draggingCompId, setDraggingCompId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<Point2D>({ x: 0, y: 0 });
-
   const panelRef = useRef<HTMLDivElement>(null);
 
   const activeLesson = COMANDOS_LESSONS.find((l) => l.id === selectedLessonId) || COMANDOS_LESSONS[0];
@@ -396,272 +408,124 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     };
   }, [components]);
 
-  const calculateSmartRoute = (
+  // MOTOR ORTOGONAL EM 90° PURO COM CURVA DE CONCORDÂNCIA ABERTA E LIMPA
+  const renderOrthogonalSmoothPath = (rawPts: Point2D[]): string => {
+    if (rawPts.length < 2) return '';
+
+    // 1. Converte qualquer sequência de cliques para eixos estritamente Manhattan (90°)
+    const orthoPts: Point2D[] = [rawPts[0]];
+
+    for (let i = 1; i < rawPts.length; i++) {
+      const pPrev = orthoPts[orthoPts.length - 1];
+      const pCurr = rawPts[i];
+
+      if (pPrev.x === pCurr.x || pPrev.y === pCurr.y) {
+        orthoPts.push(pCurr);
+      } else {
+        const dy = Math.abs(pCurr.y - pPrev.y);
+        const dx = Math.abs(pCurr.x - pPrev.x);
+
+        if (dy > dx && (pPrev.y < 120 || pPrev.y > 600)) {
+          orthoPts.push({ x: pPrev.x, y: pCurr.y });
+        } else {
+          orthoPts.push({ x: pCurr.x, y: pPrev.y });
+        }
+        orthoPts.push(pCurr);
+      }
+    }
+
+    // 2. Remove vértices colineares redundantes
+    const cleanPts: Point2D[] = [];
+    for (let i = 0; i < orthoPts.length; i++) {
+      if (i > 0 && i < orthoPts.length - 1) {
+        const p0 = orthoPts[i - 1];
+        const p1 = orthoPts[i];
+        const p2 = orthoPts[i + 1];
+
+        if ((p0.x === p1.x && p1.x === p2.x) || (p0.y === p1.y && p1.y === p2.y)) {
+          continue;
+        }
+      }
+      cleanPts.push(orthoPts[i]);
+    }
+
+    if (cleanPts.length < 2) return '';
+    if (cleanPts.length === 2) {
+      return `M ${cleanPts[0].x} ${cleanPts[0].y} L ${cleanPts[1].x} ${cleanPts[1].y}`;
+    }
+
+    // 3. Arredondamento aberto em cada curva de 90° (sem quina de caixa/quadrado)
+    let d = `M ${cleanPts[0].x} ${cleanPts[0].y}`;
+    const targetRadius = 24;
+
+    for (let i = 1; i < cleanPts.length - 1; i++) {
+      const pPrev = cleanPts[i - 1];
+      const pCurr = cleanPts[i];
+      const pNext = cleanPts[i + 1];
+
+      const len1 = Math.hypot(pCurr.x - pPrev.x, pCurr.y - pPrev.y);
+      const len2 = Math.hypot(pNext.x - pCurr.x, pNext.y - pCurr.y);
+
+      const r = Math.min(targetRadius, len1 * 0.48, len2 * 0.48);
+
+      const v1x = (pCurr.x - pPrev.x) / len1;
+      const v1y = (pCurr.y - pPrev.y) / len1;
+      const v2x = (pNext.x - pCurr.x) / len2;
+      const v2y = (pNext.y - pCurr.y) / len2;
+
+      const pStart = {
+        x: pCurr.x - v1x * r,
+        y: pCurr.y - v1y * r,
+      };
+      const pEnd = {
+        x: pCurr.x + v2x * r,
+        y: pCurr.y + v2y * r,
+      };
+
+      d += ` L ${pStart.x} ${pStart.y} Q ${pCurr.x} ${pCurr.y}, ${pEnd.x} ${pEnd.y}`;
+    }
+
+    d += ` L ${cleanPts[cleanPts.length - 1].x} ${cleanPts[cleanPts.length - 1].y}`;
+    return d;
+  };
+
+  // Traçado Automático Padrão caso não haja waypoints manuais
+  const calculateDefaultOrthoRoute = (
     fromCompId: string,
     fromTermId: string,
     toCompId: string,
-    toTermId: string,
-    customWaypoints?: Point2D[]
+    toTermId: string
   ): Point2D[] => {
     const p1 = getTerminalAbsolutePos(fromCompId, fromTermId);
     const p2 = getTerminalAbsolutePos(toCompId, toTermId);
 
-    if (customWaypoints && customWaypoints.length > 0) {
-      return [p1, ...customWaypoints, p2];
-    }
-
     const fromComp = components.find((c) => c.id === fromCompId);
-    const toComp = components.find((c) => c.id === toCompId);
     const fromTerm = fromComp?.terminals?.find((t) => t.id === fromTermId);
-    const toTerm = toComp?.terminals?.find((t) => t.id === toTermId);
 
     const fromDirY = fromTerm && fromTerm.relY > 50 ? 1 : -1;
-    const toDirY = toTerm && toTerm.relY > 50 ? 1 : -1;
-
     const marginY = 32;
     const p1Exit: Point2D = { x: p1.x, y: p1.y + fromDirY * marginY };
-    const p2Entry: Point2D = { x: p2.x, y: p2.y + toDirY * marginY };
 
-    if (fromCompId === toCompId && fromComp) {
-      const rightCorridorX = fromComp.x + fromComp.width + 36;
-      return [
-        p1,
-        p1Exit,
-        { x: rightCorridorX, y: p1Exit.y },
-        { x: rightCorridorX, y: p2Entry.y },
-        p2Entry,
-        p2,
-      ];
-    }
-
-    const obstacles = components.filter((c) => c.id !== fromCompId && c.id !== toCompId);
-
-    const minX = Math.min(p1.x, p2.x);
-    const maxX = Math.max(p1.x, p2.x);
-    const minY = Math.min(p1Exit.y, p2Entry.y);
-    const maxY = Math.max(p1Exit.y, p2Entry.y);
-
-    const blockingComp = obstacles.find((c) => {
-      const boxPad = 14;
-      return (
-        c.x - boxPad <= maxX &&
-        c.x + c.width + boxPad >= minX &&
-        c.y - boxPad <= maxY &&
-        c.y + c.height + boxPad >= minY
-      );
-    });
-
-    const pts: Point2D[] = [p1, p1Exit];
-
-    if (blockingComp) {
-      const bypassRightX = Math.max(
-        fromComp ? fromComp.x + fromComp.width : p1.x,
-        toComp ? toComp.x + toComp.width : p2.x,
-        blockingComp.x + blockingComp.width
-      ) + 28;
-
-      pts.push({ x: p1Exit.x, y: p1Exit.y });
-      pts.push({ x: bypassRightX, y: p1Exit.y });
-      pts.push({ x: bypassRightX, y: p2Entry.y });
-      pts.push({ x: p2Entry.x, y: p2Entry.y });
-    } else {
-      const channelY = (p1Exit.y + p2Entry.y) / 2;
-      pts.push({ x: p1Exit.x, y: channelY });
-      pts.push({ x: p2Entry.x, y: channelY });
-    }
-
-    pts.push(p2Entry);
-    pts.push(p2);
-
-    return pts;
+    return [p1, p1Exit, p2];
   };
 
-  const renderSmoothPath = (pts: Point2D[]): string => {
-    if (pts.length < 2) return '';
-    if (pts.length === 2) {
-      return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`;
-    }
-
-    let d = `M ${pts[0].x} ${pts[0].y}`;
-    const radius = 12;
-
-    for (let i = 1; i < pts.length - 1; i++) {
-      const prev = pts[i - 1];
-      const curr = pts[i];
-      const next = pts[i + 1];
-
-      const d1 = { x: curr.x - prev.x, y: curr.y - prev.y };
-      const d2 = { x: next.x - curr.x, y: next.y - curr.y };
-      const len1 = Math.hypot(d1.x, d1.y);
-      const len2 = Math.hypot(d2.x, d2.y);
-
-      if (len1 === 0 || len2 === 0) {
-        d += ` L ${curr.x} ${curr.y}`;
-        continue;
-      }
-
-      const r = Math.min(radius, len1 / 2, len2 / 2);
-      const pStart = { x: curr.x - (d1.x / len1) * r, y: curr.y - (d1.y / len1) * r };
-      const pEnd = { x: curr.x + (d2.x / len2) * r, y: curr.y + (d2.y / len2) * r };
-
-      d += ` L ${pStart.x} ${pStart.y} Q ${curr.x} ${curr.y}, ${pEnd.x} ${pEnd.y}`;
-    }
-
-    d += ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
-    return d;
-  };
-
+  // Motor Elétrico de Continuidade dos Comandos
   useEffect(() => {
-    const adj: Record<string, string[]> = {};
-    const addEdge = (u: string, v: string) => {
-      if (!adj[u]) adj[u] = [];
-      if (!adj[v]) adj[v] = [];
-      adj[u].push(v);
-      adj[v].push(u);
-    };
-
-    cables.forEach((c) => {
-      addEdge(`${c.fromComponentId}:${c.fromTerminalId}`, `${c.toComponentId}:${c.toTerminalId}`);
-    });
-
-    components.forEach((comp) => {
-      if (comp.category === 'SECCIONADORA_LOTO' || comp.category === 'DISJUNTOR_MOTOR' || comp.category === 'DISJUNTOR_BIPOLAR') {
-        if (comp.state) {
-          addEdge(`${comp.id}:1L1`, `${comp.id}:2T1`);
-          addEdge(`${comp.id}:3L2`, `${comp.id}:4T2`);
-          addEdge(`${comp.id}:5L3`, `${comp.id}:6T3`);
-        }
-      } else if (comp.category === 'DISJUNTOR_MONOPOLAR') {
-        if (comp.state) {
-          addEdge(`${comp.id}:1`, `${comp.id}:2`);
-        }
-      } else if (comp.category === 'CHAVE_SELETORA_3POS') {
-        if (comp.selectorPosition === 'MAN') {
-          addEdge(`${comp.id}:13`, `${comp.id}:14`);
-        } else if (comp.selectorPosition === 'AUT') {
-          addEdge(`${comp.id}:23`, `${comp.id}:24`);
-        }
-      } else if (comp.category === 'REGUA_BORNES') {
-        addEdge(`${comp.id}:X1_IN`, `${comp.id}:X1_OUT`);
-        addEdge(`${comp.id}:X2_IN`, `${comp.id}:X2_OUT`);
-        addEdge(`${comp.id}:X3_IN`, `${comp.id}:X3_OUT`);
-        addEdge(`${comp.id}:X4_IN`, `${comp.id}:X4_OUT`);
-      } else if (comp.category === 'BARRAMENTO_PENTE') {
-        addEdge(`${comp.id}:R1`, `${comp.id}:R2`);
-        addEdge(`${comp.id}:S1`, `${comp.id}:S2`);
-        addEdge(`${comp.id}:T1`, `${comp.id}:T2`);
-      } else if (comp.category === 'TRANSFORMADOR_ISOLADOR') {
-        if (comp.state) {
-          addEdge(`${comp.id}:SEC_L`, `${comp.id}:SEC_N`);
-        }
-      } else if (comp.category === 'RELE_SEGURANCA_NR12') {
-        if (comp.state && !comp.tripped) {
-          addEdge(`${comp.id}:13NO`, `${comp.id}:14NO`);
-        }
-      } else if (comp.category === 'CHAVE_INTERTRAVAMENTO_NR12') {
-        if (comp.state) {
-          addEdge(`${comp.id}:11NC`, `${comp.id}:12NC`);
-          addEdge(`${comp.id}:21NC`, `${comp.id}:22NC`);
-        }
-      } else if (comp.category === 'CONTATOR_TRIPOLAR') {
-        if (comp.state) {
-          addEdge(`${comp.id}:1L1`, `${comp.id}:2T1`);
-          addEdge(`${comp.id}:3L2`, `${comp.id}:4T2`);
-          addEdge(`${comp.id}:5L3`, `${comp.id}:6T3`);
-          addEdge(`${comp.id}:13NO`, `${comp.id}:14NO`);
-        }
-      } else if (comp.category === 'BLOCO_AUXILIAR') {
-        if (comp.state) {
-          addEdge(`${comp.id}:13NO`, `${comp.id}:14NO`);
-        } else {
-          addEdge(`${comp.id}:21NC`, `${comp.id}:22NC`);
-        }
-      } else if (comp.category === 'RELE_TERMICO') {
-        addEdge(`${comp.id}:1L1`, `${comp.id}:2T1`);
-        addEdge(`${comp.id}:3L2`, `${comp.id}:4T2`);
-        addEdge(`${comp.id}:5L3`, `${comp.id}:6T3`);
-        if (!comp.tripped) {
-          addEdge(`${comp.id}:95NC`, `${comp.id}:96NC`);
-        } else {
-          addEdge(`${comp.id}:97NO`, `${comp.id}:98NO`);
-        }
-      } else if (comp.category === 'BOTOEIRA_PULSO_NA') {
-        if (comp.state) {
-          addEdge(`${comp.id}:3NO`, `${comp.id}:4NO`);
-        }
-      } else if (comp.category === 'BOTOEIRA_COGUMELO_NF') {
-        if (comp.state) {
-          addEdge(`${comp.id}:11NC`, `${comp.id}:12NC`);
-        }
-      } else if (comp.category === 'CAPACITOR_ELETROLITICO') {
-        addEdge(`${comp.id}:C1`, `${comp.id}:C2`);
-      } else if (comp.category === 'RESISTOR_FREINAGEM') {
-        addEdge(`${comp.id}:B1`, `${comp.id}:B2`);
-      }
-    });
-
-    const hasPath = (start: string, goal: string) => {
-      if (!adj[start] || !adj[goal]) return false;
-      const visited = new Set<string>();
-      const queue = [start];
-      visited.add(start);
-
-      while (queue.length > 0) {
-        const curr = queue.shift()!;
-        if (curr === goal) return true;
-        for (const neighbor of adj[curr] || []) {
-          if (!visited.has(neighbor)) {
-            visited.add(neighbor);
-            queue.push(neighbor);
-          }
-        }
-      }
-      return false;
-    };
-
-    const phaseSources = ['comp_grid3p:R', 'comp_grid3p:S', 'comp_grid3p:T', 'comp_grid1p:F'];
-    const neutralSources = ['comp_grid3p:N', 'comp_grid1p:N'];
-
-    const isNodeEnergizedByPhase = (targetNode: string) =>
-      phaseSources.some((src) => hasPath(src, targetNode));
-
-    const isNodeEnergizedByNeutral = (targetNode: string) =>
-      neutralSources.some((src) => hasPath(src, targetNode));
-
-    const energizedTags = new Set<string>();
-    components.forEach((comp) => {
-      if (comp.category === 'CONTATOR_TRIPOLAR') {
-        const a1Powered = isNodeEnergizedByPhase(`${comp.id}:A1`);
-        const a2Powered = isNodeEnergizedByNeutral(`${comp.id}:A2`) || isNodeEnergizedByPhase(`${comp.id}:A2`);
-        if (a1Powered && a2Powered) {
-          energizedTags.add(comp.tag.toUpperCase().trim());
-        }
-      }
-    });
-
-    const motComp = components.find((c) => c.category === 'MOTOR_TRIFASICO_6P');
-    let isMot3pPowered = false;
-    if (motComp) {
-      const u1HasPhase = isNodeEnergizedByPhase(`${motComp.id}:U1`);
-      const v1HasPhase = isNodeEnergizedByPhase(`${motComp.id}:V1`);
-      const w1HasPhase = isNodeEnergizedByPhase(`${motComp.id}:W1`);
-      const isStarClosed = hasPath(`${motComp.id}:W2`, `${motComp.id}:U2`) && hasPath(`${motComp.id}:U2`, `${motComp.id}:V2`);
-      isMot3pPowered = u1HasPhase && v1HasPhase && w1HasPhase && isStarClosed;
-    }
-
-    const motMonoComp = components.find((c) => c.category === 'MOTOR_MONOFASICO_CAPACITOR');
-    let isMotMonoPowered = false;
-    if (motMonoComp) {
-      const phaseOnF = isNodeEnergizedByPhase(`${motMonoComp.id}:F`);
-      const neutralOnN = isNodeEnergizedByNeutral(`${motMonoComp.id}:N`) || isNodeEnergizedByPhase(`${motMonoComp.id}:N`);
-      const capConnected = hasPath(`${motMonoComp.id}:C1`, `${motMonoComp.id}:C2`);
-      isMotMonoPowered = phaseOnF && neutralOnN && capConnected;
-    }
+    const hasPath = buildControlCircuit(components, cables);
+    const { voltage, potential } = createVoltageModel(components, hasPath);
+    const energizedTags = new Set(components.filter(c => c.category === 'CONTATOR_TRIPOLAR' && voltage(`${c.id}:A1`, `${c.id}:A2`) === 220).map(c => c.tag.toUpperCase().trim()));
+    const motorPowered = (c: PlacedComponent) => c.category === 'MOTOR_TRIFASICO_6P'
+      ? motorConnection(c.id, hasPath, voltage) !== 'INVALID'
+      : voltage(`${c.id}:F`, `${c.id}:N`) === 220 && components.some(cap => cap.category === 'CAPACITOR_ELETROLITICO' &&
+          ((hasPath(`${c.id}:C1`, `${cap.id}:C1`) && hasPath(`${c.id}:C2`, `${cap.id}:C2`)) ||
+           (hasPath(`${c.id}:C1`, `${cap.id}:C2`) && hasPath(`${c.id}:C2`, `${cap.id}:C1`)))) && !hasPath(`${c.id}:C1`, `${c.id}:C2`);
+    const isMot3pPowered = components.some(c => c.category === 'MOTOR_TRIFASICO_6P' && motorPowered(c));
+    const isMotMonoPowered = components.some(c => c.category === 'MOTOR_MONOFASICO_CAPACITOR' && motorPowered(c));
 
     let stateChanged = false;
     const updated = components.map((c) => {
       const cleanTag = c.tag.toUpperCase().trim();
-      const shouldBeActive = energizedTags.has(cleanTag);
+      const shouldBeActive = c.category === 'CONTATOR_TRIPOLAR' ? voltage(`${c.id}:A1`, `${c.id}:A2`) === 220 : energizedTags.has(cleanTag);
 
       if (c.category === 'CONTATOR_TRIPOLAR' || c.category === 'BLOCO_AUXILIAR') {
         if (c.state !== shouldBeActive) {
@@ -672,26 +536,22 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       if (c.category === 'SINALEIRO_LED') {
         const nodeX1 = `${c.id}:X1`;
         const nodeX2 = `${c.id}:X2`;
-        const x1Phase = isNodeEnergizedByPhase(nodeX1);
-        const x1Neutral = isNodeEnergizedByNeutral(nodeX1);
-        const x2Phase = isNodeEnergizedByPhase(nodeX2);
-        const x2Neutral = isNodeEnergizedByNeutral(nodeX2);
-        const lampOn = (x1Phase && x2Neutral) || (x2Phase && x1Neutral) || (x1Phase && x2Phase);
+        const lampOn = voltage(nodeX1, nodeX2) === 220;
         if (c.state !== lampOn) {
           stateChanged = true;
           return { ...c, state: lampOn };
         }
       }
       if (c.category === 'MOTOR_TRIFASICO_6P') {
-        if (c.state !== isMot3pPowered) {
+        if (c.state !== motorPowered(c)) {
           stateChanged = true;
-          return { ...c, state: isMot3pPowered };
+          return { ...c, state: motorPowered(c) };
         }
       }
       if (c.category === 'MOTOR_MONOFASICO_CAPACITOR') {
-        if (c.state !== isMotMonoPowered) {
+        if (c.state !== motorPowered(c)) {
           stateChanged = true;
-          return { ...c, state: isMotMonoPowered };
+          return { ...c, state: motorPowered(c) };
         }
       }
       return c;
@@ -712,37 +572,25 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       const nodeA = `${redProbe.compId}:${redProbe.termId}`;
       const nodeB = `${blackProbe.compId}:${blackProbe.termId}`;
 
-      const aPhase = isNodeEnergizedByPhase(nodeA);
-      const aNeutral = isNodeEnergizedByNeutral(nodeA);
-      const bPhase = isNodeEnergizedByPhase(nodeB);
-      const bNeutral = isNodeEnergizedByNeutral(nodeB);
       const hasDirectContinuity = hasPath(nodeA, nodeB);
-
+      const powered = potential(nodeA) !== null || potential(nodeB) !== null;
+      setIsContinuityBuzzer(false);
       if (meterScale === 'V_AC') {
-        if ((aPhase && bNeutral) || (bPhase && aNeutral)) {
-          setMeterReadout('220.4 V~');
-        } else if (aPhase && bPhase && nodeA !== nodeB) {
-          setMeterReadout('380.2 V~');
-        } else {
-          setMeterReadout('0.0 V~');
-        }
-        setIsContinuityBuzzer(false);
+        const measured = voltage(nodeA, nodeB);
+        setMeterReadout(measured === null ? 'Indeterminado' : `${measured.toFixed(1)} V~`);
       } else if (meterScale === 'V_DC') {
-        const isTrafoSec = nodeA.includes('SEC_') && nodeB.includes('SEC_');
-        setMeterReadout(isTrafoSec ? '24.1 V=' : '0.00 V=');
-        setIsContinuityBuzzer(false);
+        setMeterReadout('0.0 V= (fontes CA)');
+      } else if (meterScale === 'CURRENT_A') {
+        setMeterReadout('Não simulado: medição em série');
+      } else if (powered) {
+        setMeterReadout('Desenergize para medir Ω/continuidade');
       } else if (meterScale === 'CONTINUITY') {
-        setMeterReadout(hasDirectContinuity ? '00.2 Ω (BIP)' : 'O.L (Aberto)');
+        setMeterReadout(hasDirectContinuity ? '0.0 Ω (BIP)' : 'O.L (Aberto)');
         setIsContinuityBuzzer(hasDirectContinuity);
       } else if (meterScale === 'RESISTANCE_OHM') {
-        setMeterReadout(hasDirectContinuity ? '0.4 Ω' : nodeA.includes('mot') && nodeB.includes('mot') ? '18.6 Ω' : 'O.L MΩ');
-        setIsContinuityBuzzer(false);
-      } else if (meterScale === 'DIODE') {
-        setMeterReadout(hasDirectContinuity ? '.001 V' : 'O.L V');
-        setIsContinuityBuzzer(false);
-      } else if (meterScale === 'CURRENT_A') {
-        setMeterReadout(anyRunning && (nodeA.includes('2T1') || nodeA.includes('U1') || nodeA.includes('F')) ? '6.42 A~' : '0.00 A~');
-        setIsContinuityBuzzer(false);
+        setMeterReadout(hasDirectContinuity ? '0.0 Ω' : 'O.L / carga não modelada');
+      } else {
+        setMeterReadout('Não simulado');
       }
     } else {
       setMeterReadout(meterScale === 'CONTINUITY' ? 'O.L' : '0.00');
@@ -763,11 +611,17 @@ export const ComandosEletricosWorkbench: React.FC = () => {
   };
 
   const handleMoveDrag = (clientX: number, clientY: number) => {
-    if (!panelRef.current || !draggingCompId) return;
+    if (!panelRef.current) return;
     const panelRect = panelRef.current.getBoundingClientRect();
+    const currX = clientX - panelRect.left;
+    const currY = clientY - panelRect.top;
 
-    const newX = Math.max(10, Math.min(panelRect.width - 160, clientX - panelRect.left - dragOffset.x));
-    const newY = Math.max(10, Math.min(panelRect.height - 180, clientY - panelRect.top - dragOffset.y));
+    setMousePos({ x: currX, y: currY });
+
+    if (!draggingCompId) return;
+
+    const newX = Math.max(10, Math.min(panelRect.width - 160, currX - dragOffset.x));
+    const newY = Math.max(10, Math.min(panelRect.height - 180, currY - dragOffset.y));
 
     setComponents((prev) =>
       prev.map((c) => (c.id === draggingCompId ? { ...c, x: newX, y: newY } : c))
@@ -781,9 +635,22 @@ export const ComandosEletricosWorkbench: React.FC = () => {
   const handleDoubleClickComp = (e: React.MouseEvent, compId: string) => {
     e.stopPropagation();
     setSelectedCompId(compId);
-    setSelectedCableId(null);
+    setEditingCableId(null);
   };
 
+  // Clique na Bancada para Criar Waypoint no Cabo em Andamento
+  const handlePanelClick = (e: React.MouseEvent) => {
+    if (!wiringOrigin || !panelRef.current) return;
+    const rect = panelRef.current.getBoundingClientRect();
+    const clickPt: Point2D = {
+      x: Math.round(e.clientX - rect.left),
+      y: Math.round(e.clientY - rect.top),
+    };
+
+    setActiveWaypoints((prev) => [...prev, clickPt]);
+  };
+
+  // Conexão do Cabo
   const handleTerminalClick = (e: React.MouseEvent | React.TouchEvent, compId: string, termId: string) => {
     e.stopPropagation();
 
@@ -805,9 +672,11 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
     if (!wiringOrigin) {
       setWiringOrigin({ compId, termId });
+      setActiveWaypoints([]);
     } else {
       if (wiringOrigin.compId === compId && wiringOrigin.termId === termId) {
         setWiringOrigin(null);
+        setActiveWaypoints([]);
         return;
       }
 
@@ -818,12 +687,54 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         toComponentId: compId,
         toTerminalId: termId,
         cableType: activeCableTool,
+        waypoints: activeWaypoints,
       };
 
       setCables((prev) => [...prev, newCable]);
       setWiringOrigin(null);
+      setActiveWaypoints([]);
     }
   };
+
+  // Duplo clique no cabo -> Abre janela flutuante
+  const handleCableDoubleClick = (e: React.MouseEvent, cableId: string) => {
+    e.stopPropagation();
+    if (!panelRef.current) return;
+    const rect = panelRef.current.getBoundingClientRect();
+    setModalPos({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+    setEditingCableId(cableId);
+    setSelectedCompId(null);
+  };
+
+  const handleChangeCableColor = (newColor: CableType) => {
+    if (!editingCableId) return;
+    setCables((prev) =>
+      prev.map((c) => (c.id === editingCableId ? { ...c, cableType: newColor } : c))
+    );
+    setEditingCableId(null);
+  };
+
+  const handleDeleteCable = () => {
+    if (!editingCableId) return;
+    setCables((prev) => prev.filter((c) => c.id !== editingCableId));
+    setEditingCableId(null);
+  };
+
+  // Tecla ESC cancela traçado de cabo ou fecha modais
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setWiringOrigin(null);
+        setActiveWaypoints([]);
+        setEditingCableId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleTagInputChange = (compId: string, newTag: string) => {
     setComponents((prev) =>
@@ -854,7 +765,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     );
   };
 
-  const tPole = (id: string, name: string, relX: number, relY: number, type: 'FORCA' | 'COMANDO' | 'TERRA' = 'COMANDO'): TerminalPole => ({
+  const tPoleLocal = (id: string, name: string, relX: number, relY: number, type: 'FORCA' | 'COMANDO' | 'TERRA' = 'COMANDO'): TerminalPole => ({
     id,
     name,
     relX,
@@ -878,7 +789,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 48;
       height = 140;
       currentRating = 16;
-      terminals = [tPole('1', '1', 50, 10), tPole('2', '2', 50, 90)];
+      terminals = [tPoleLocal('1', '1', 50, 10), tPoleLocal('2', '2', 50, 90)];
     } else if (category === 'DISJUNTOR_BIPOLAR') {
       tag = `Q${count}`;
       name = 'Disjuntor DIN 2P';
@@ -886,10 +797,10 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       height = 140;
       currentRating = 20;
       terminals = [
-        tPole('1L1', '1', 25, 10),
-        tPole('3L2', '3', 75, 10),
-        tPole('2T1', '2', 25, 90),
-        tPole('4T2', '4', 75, 90),
+        tPoleLocal('1L1', '1', 25, 10),
+        tPoleLocal('3L2', '3', 75, 10),
+        tPoleLocal('2T1', '2', 25, 90),
+        tPoleLocal('4T2', '4', 75, 90),
       ];
     } else if (category === 'DISJUNTOR_MOTOR') {
       tag = `Q${count}`;
@@ -898,12 +809,12 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       height = 150;
       currentRating = 20;
       terminals = [
-        tPole('1L1', '1/L1', 18, 10, 'FORCA'),
-        tPole('3L2', '3/L2', 50, 10, 'FORCA'),
-        tPole('5L3', '5/L3', 82, 10, 'FORCA'),
-        tPole('2T1', '2/T1', 18, 90, 'FORCA'),
-        tPole('4T2', '4/T2', 50, 90, 'FORCA'),
-        tPole('6T3', '6/T3', 82, 90, 'FORCA'),
+        tPoleLocal('1L1', '1/L1', 18, 10, 'FORCA'),
+        tPoleLocal('3L2', '3/L2', 50, 10, 'FORCA'),
+        tPoleLocal('5L3', '5/L3', 82, 10, 'FORCA'),
+        tPoleLocal('2T1', '2/T1', 18, 90, 'FORCA'),
+        tPoleLocal('4T2', '4/T2', 50, 90, 'FORCA'),
+        tPoleLocal('6T3', '6/T3', 82, 90, 'FORCA'),
       ];
     } else if (category === 'SINALEIRO_LED') {
       tag = `H${count}`;
@@ -911,17 +822,17 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 65;
       height = 100;
       lampColor = 'VERDE';
-      terminals = [tPole('X1', 'X1', 50, 8), tPole('X2', 'X2', 50, 92)];
+      terminals = [tPoleLocal('X1', 'X1', 50, 8), tPoleLocal('X2', 'X2', 50, 92)];
     } else if (category === 'CHAVE_SELETORA_3POS') {
       tag = `SA${count}`;
       name = 'Seletora MAN-0-AUT';
       width = 85;
       height = 140;
       terminals = [
-        tPole('13', '13', 30, 10),
-        tPole('23', '23', 70, 10),
-        tPole('14', '14', 30, 90),
-        tPole('24', '24', 70, 90),
+        tPoleLocal('13', '13', 30, 10),
+        tPoleLocal('23', '23', 70, 10),
+        tPoleLocal('14', '14', 30, 90),
+        tPoleLocal('24', '24', 70, 90),
       ];
     } else if (category === 'REGUA_BORNES') {
       tag = `XT${count}`;
@@ -929,14 +840,14 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 120;
       height = 130;
       terminals = [
-        tPole('X1_IN', '1', 20, 10, 'FORCA'),
-        tPole('X2_IN', '2', 40, 10, 'FORCA'),
-        tPole('X3_IN', '3', 60, 10, 'FORCA'),
-        tPole('X4_IN', '4', 80, 10),
-        tPole('X1_OUT', '1', 20, 90, 'FORCA'),
-        tPole('X2_OUT', '2', 40, 90, 'FORCA'),
-        tPole('X3_OUT', '3', 60, 90, 'FORCA'),
-        tPole('X4_OUT', '4', 80, 90),
+        tPoleLocal('X1_IN', '1', 20, 10, 'FORCA'),
+        tPoleLocal('X2_IN', '2', 40, 10, 'FORCA'),
+        tPoleLocal('X3_IN', '3', 60, 10, 'FORCA'),
+        tPoleLocal('X4_IN', '4', 80, 10),
+        tPoleLocal('X1_OUT', '1', 20, 90, 'FORCA'),
+        tPoleLocal('X2_OUT', '2', 40, 90, 'FORCA'),
+        tPoleLocal('X3_OUT', '3', 60, 90, 'FORCA'),
+        tPoleLocal('X4_OUT', '4', 80, 90),
       ];
     } else if (category === 'BARRAMENTO_PENTE') {
       tag = `BAR${count}`;
@@ -944,12 +855,12 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 130;
       height = 70;
       terminals = [
-        tPole('R1', 'R1', 20, 20, 'FORCA'),
-        tPole('S1', 'S1', 50, 20, 'FORCA'),
-        tPole('T1', 'T1', 80, 20, 'FORCA'),
-        tPole('R2', 'R2', 20, 80, 'FORCA'),
-        tPole('S2', 'S2', 50, 80, 'FORCA'),
-        tPole('T2', 'T2', 80, 80, 'FORCA'),
+        tPoleLocal('R1', 'R1', 20, 20, 'FORCA'),
+        tPoleLocal('S1', 'S1', 50, 20, 'FORCA'),
+        tPoleLocal('T1', 'T1', 80, 20, 'FORCA'),
+        tPoleLocal('R2', 'R2', 20, 80, 'FORCA'),
+        tPoleLocal('S2', 'S2', 50, 80, 'FORCA'),
+        tPoleLocal('T2', 'T2', 80, 80, 'FORCA'),
       ];
     } else if (category === 'SECCIONADORA_LOTO') {
       tag = `QS${count}`;
@@ -957,12 +868,12 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 95;
       height = 150;
       terminals = [
-        tPole('1L1', '1', 25, 8, 'FORCA'),
-        tPole('3L2', '3', 50, 8, 'FORCA'),
-        tPole('5L3', '5', 75, 8, 'FORCA'),
-        tPole('2T1', '2', 25, 92, 'FORCA'),
-        tPole('4T2', '4', 50, 92, 'FORCA'),
-        tPole('6T3', '6', 75, 92, 'FORCA'),
+        tPoleLocal('1L1', '1', 25, 8, 'FORCA'),
+        tPoleLocal('3L2', '3', 50, 8, 'FORCA'),
+        tPoleLocal('5L3', '5', 75, 8, 'FORCA'),
+        tPoleLocal('2T1', '2', 25, 92, 'FORCA'),
+        tPoleLocal('4T2', '4', 50, 92, 'FORCA'),
+        tPoleLocal('6T3', '6', 75, 92, 'FORCA'),
       ];
     } else if (category === 'TRANSFORMADOR_ISOLADOR') {
       tag = `TR${count}`;
@@ -970,10 +881,10 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 95;
       height = 130;
       terminals = [
-        tPole('PRI_L1', '220V', 30, 8),
-        tPole('PRI_L2', '0V', 70, 8),
-        tPole('SEC_L', '+24V', 30, 92),
-        tPole('SEC_N', '0V', 70, 92),
+        tPoleLocal('PRI_L1', '220V', 30, 8),
+        tPoleLocal('PRI_L2', '0V', 70, 8),
+        tPoleLocal('SEC_L', '24V~', 30, 92),
+        tPoleLocal('SEC_N', '0V', 70, 92),
       ];
     } else if (category === 'RELE_SEGURANCA_NR12') {
       tag = `SR${count}`;
@@ -981,11 +892,11 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 110;
       height = 160;
       terminals = [
-        tPole('A1', 'A1', 20, 8),
-        tPole('A2', 'A2', 50, 8),
-        tPole('S11', 'S11', 80, 8),
-        tPole('13NO', '13', 30, 92),
-        tPole('14NO', '14', 70, 92),
+        tPoleLocal('A1', 'A1', 20, 8),
+        tPoleLocal('A2', 'A2', 50, 8),
+        tPoleLocal('S11', 'S11', 80, 8),
+        tPoleLocal('13NO', '13', 30, 92),
+        tPoleLocal('14NO', '14', 70, 92),
       ];
     } else if (category === 'CHAVE_INTERTRAVAMENTO_NR12') {
       tag = `SQ${count}`;
@@ -993,39 +904,39 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 80;
       height = 120;
       terminals = [
-        tPole('11NC', '11', 30, 8),
-        tPole('21NC', '21', 70, 8),
-        tPole('12NC', '12', 30, 92),
-        tPole('22NC', '22', 70, 92),
+        tPoleLocal('11NC', '11', 30, 8),
+        tPoleLocal('21NC', '21', 70, 8),
+        tPoleLocal('12NC', '12', 30, 92),
+        tPoleLocal('22NC', '22', 70, 92),
       ];
     } else if (category === 'BOTOEIRA_PULSO_NA') {
       tag = `S${count}`;
       name = 'Botão Liga NA';
       width = 65;
       height = 100;
-      terminals = [tPole('3NO', '3', 50, 8), tPole('4NO', '4', 50, 92)];
+      terminals = [tPoleLocal('3NO', '3', 50, 8), tPoleLocal('4NO', '4', 50, 92)];
     } else if (category === 'BOTOEIRA_COGUMELO_NF') {
       tag = `S${count}`;
       name = 'Emergência NF';
       width = 65;
       height = 100;
-      terminals = [tPole('11NC', '11', 50, 8), tPole('12NC', '12', 50, 92)];
+      terminals = [tPoleLocal('11NC', '11', 50, 8), tPoleLocal('12NC', '12', 50, 92)];
     } else if (category === 'RELE_TERMICO') {
       tag = `F${count}`;
       name = 'Relé Térmico RW';
       width = 120;
       height = 190;
       terminals = [
-        tPole('1L1', '1/L1', 20, 8, 'FORCA'),
-        tPole('3L2', '3/L2', 50, 8, 'FORCA'),
-        tPole('5L3', '5/L3', 80, 8, 'FORCA'),
-        tPole('95NC', '95', 18, 58),
-        tPole('96NC', '96', 40, 58),
-        tPole('97NO', '97', 62, 58),
-        tPole('98NO', '98', 84, 58),
-        tPole('2T1', '2/T1', 20, 92, 'FORCA'),
-        tPole('4T2', '4/T2', 50, 92, 'FORCA'),
-        tPole('6T3', '6/T3', 80, 92, 'FORCA'),
+        tPoleLocal('1L1', '1/L1', 20, 8, 'FORCA'),
+        tPoleLocal('3L2', '3/L2', 50, 8, 'FORCA'),
+        tPoleLocal('5L3', '5/L3', 80, 8, 'FORCA'),
+        tPoleLocal('95NC', '95', 18, 58),
+        tPoleLocal('96NC', '96', 40, 58),
+        tPoleLocal('97NO', '97', 62, 58),
+        tPoleLocal('98NO', '98', 84, 58),
+        tPoleLocal('2T1', '2/T1', 20, 92, 'FORCA'),
+        tPoleLocal('4T2', '4/T2', 50, 92, 'FORCA'),
+        tPoleLocal('6T3', '6/T3', 80, 92, 'FORCA'),
       ];
     } else if (category === 'CONTATOR_TRIPOLAR') {
       tag = `K${count}`;
@@ -1033,16 +944,18 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 110;
       height = 180;
       terminals = [
-        tPole('1L1', '1/L1', 18, 8, 'FORCA'),
-        tPole('3L2', '3/L2', 38, 8, 'FORCA'),
-        tPole('5L3', '5/L3', 58, 8, 'FORCA'),
-        tPole('13NO', '13', 82, 8),
-        tPole('A1', 'A1', 82, 28),
-        tPole('2T1', '2/T1', 18, 92, 'FORCA'),
-        tPole('4T2', '4/T2', 38, 92, 'FORCA'),
-        tPole('6T3', '6/T3', 58, 92, 'FORCA'),
-        tPole('14NO', '14', 82, 92),
-        tPole('A2', 'A2', 82, 72),
+        tPoleLocal('1L1', '1/L1', 18, 8, 'FORCA'),
+        tPoleLocal('3L2', '3/L2', 38, 8, 'FORCA'),
+        tPoleLocal('5L3', '5/L3', 58, 8, 'FORCA'),
+        tPoleLocal('13NO', '13', 82, 8),
+        tPoleLocal('A1', 'A1', 82, 28),
+        tPoleLocal('2T1', '2/T1', 18, 92, 'FORCA'),
+        tPoleLocal('4T2', '4/T2', 38, 92, 'FORCA'),
+        tPoleLocal('6T3', '6/T3', 58, 92, 'FORCA'),
+        tPoleLocal('14NO', '14', 82, 92),
+        tPoleLocal('A2', 'A2', 82, 72),
+        tPoleLocal('21NC', '21 NF', 18, 45),
+        tPoleLocal('22NC', '22 NF', 18, 62),
       ];
     } else if (category === 'MOTOR_TRIFASICO_6P') {
       tag = `M${count}`;
@@ -1050,12 +963,12 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 170;
       height = 180;
       terminals = [
-        tPole('U1', 'U1', 25, 28, 'FORCA'),
-        tPole('V1', 'V1', 50, 28, 'FORCA'),
-        tPole('W1', 'W1', 75, 28, 'FORCA'),
-        tPole('W2', 'W2', 25, 72, 'FORCA'),
-        tPole('U2', 'U2', 50, 72, 'FORCA'),
-        tPole('V2', 'V2', 75, 72, 'FORCA'),
+        tPoleLocal('U1', 'U1', 25, 28, 'FORCA'),
+        tPoleLocal('V1', 'V1', 50, 28, 'FORCA'),
+        tPoleLocal('W1', 'W1', 75, 28, 'FORCA'),
+        tPoleLocal('W2', 'W2', 25, 72, 'FORCA'),
+        tPoleLocal('U2', 'U2', 50, 72, 'FORCA'),
+        tPoleLocal('V2', 'V2', 75, 72, 'FORCA'),
       ];
     } else if (category === 'MOTOR_MONOFASICO_CAPACITOR') {
       tag = `M${count}`;
@@ -1063,34 +976,34 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 150;
       height = 160;
       terminals = [
-        tPole('F', 'F (Fase)', 30, 15, 'FORCA'),
-        tPole('N', 'N (Neutro)', 70, 15),
-        tPole('C1', 'C1 (Cap)', 30, 85, 'FORCA'),
-        tPole('C2', 'C2 (Cap)', 70, 85, 'FORCA'),
+        tPoleLocal('F', 'F (Fase)', 30, 15, 'FORCA'),
+        tPoleLocal('N', 'N (Neutro)', 70, 15),
+        tPoleLocal('C1', 'C1 (Cap)', 30, 85, 'FORCA'),
+        tPoleLocal('C2', 'C2 (Cap)', 70, 85, 'FORCA'),
       ];
     } else if (category === 'CAPACITOR_ELETROLITICO') {
       tag = `C${count}`;
       name = 'Capacitor de Partida';
       width = 80;
       height = 120;
-      terminals = [tPole('C1', 'C1', 30, 10, 'FORCA'), tPole('C2', 'C2', 70, 90, 'FORCA')];
+      terminals = [tPoleLocal('C1', 'C1', 30, 10, 'FORCA'), tPoleLocal('C2', 'C2', 70, 90, 'FORCA')];
     } else if (category === 'RESISTOR_FREINAGEM') {
       tag = `R${count}`;
       name = 'Resistor de Frenagem';
       width = 110;
       height = 100;
-      terminals = [tPole('B1', 'B1', 25, 50, 'FORCA'), tPole('B2', 'B2', 75, 50, 'FORCA')];
+      terminals = [tPoleLocal('B1', 'B1', 25, 50, 'FORCA'), tPoleLocal('B2', 'B2', 75, 50, 'FORCA')];
     } else if (category === 'REDE_TRIFASICA') {
       tag = `GRID3-${count}`;
       name = 'Rede Trifásica 380V';
       width = 140;
       height = 80;
       terminals = [
-        tPole('R', 'R', 18, 80, 'FORCA'),
-        tPole('S', 'S', 38, 80, 'FORCA'),
-        tPole('T', 'T', 58, 80, 'FORCA'),
-        tPole('N', 'N', 78, 80),
-        tPole('PE', 'PE', 92, 80, 'TERRA'),
+        tPoleLocal('R', 'R', 18, 80, 'FORCA'),
+        tPoleLocal('S', 'S', 38, 80, 'FORCA'),
+        tPoleLocal('T', 'T', 58, 80, 'FORCA'),
+        tPoleLocal('N', 'N', 78, 80),
+        tPoleLocal('PE', 'PE', 92, 80, 'TERRA'),
       ];
     } else if (category === 'REDE_MONOFASICA') {
       tag = `GRID1-${count}`;
@@ -1098,9 +1011,9 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 120;
       height = 80;
       terminals = [
-        tPole('F', 'F', 25, 80),
-        tPole('N', 'N', 55, 80),
-        tPole('PE', 'PE', 85, 80, 'TERRA'),
+        tPoleLocal('F', 'F', 25, 80),
+        tPoleLocal('N', 'N', 55, 80),
+        tPoleLocal('PE', 'PE', 85, 80, 'TERRA'),
       ];
     } else if (category === 'RELE_FALTA_FASE') {
       tag = `RPF${count}`;
@@ -1108,12 +1021,12 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 65;
       height = 135;
       terminals = [
-        tPole('R', 'R', 25, 8, 'FORCA'),
-        tPole('S', 'S', 50, 8, 'FORCA'),
-        tPole('T', 'T', 75, 8, 'FORCA'),
-        tPole('95', '95', 25, 92),
-        tPole('96', '96', 50, 92),
-        tPole('98', '98', 75, 92),
+        tPoleLocal('R', 'R', 25, 8, 'FORCA'),
+        tPoleLocal('S', 'S', 50, 8, 'FORCA'),
+        tPoleLocal('T', 'T', 75, 8, 'FORCA'),
+        tPoleLocal('95', '95', 25, 92),
+        tPoleLocal('96', '96', 50, 92),
+        tPoleLocal('98', '98', 75, 92),
       ];
     } else if (category === 'BLOCO_AUXILIAR') {
       tag = `KA${count}`;
@@ -1121,15 +1034,15 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       width = 85;
       height = 95;
       terminals = [
-        tPole('13', '13', 30, 10),
-        tPole('14', '14', 70, 10),
-        tPole('21', '21', 30, 90),
-        tPole('22', '22', 70, 90),
+        tPoleLocal('13', '13', 30, 10),
+        tPoleLocal('14', '14', 70, 10),
+        tPoleLocal('21', '21', 30, 90),
+        tPoleLocal('22', '22', 70, 90),
       ];
     } else {
       tag = `C${count}`;
       name = 'Módulo';
-      terminals = [tPole('1', '1', 50, 10), tPole('2', '2', 50, 90)];
+      terminals = [tPoleLocal('1', '1', 50, 10), tPoleLocal('2', '2', 50, 90)];
     }
 
     const initialState = category !== 'BOTOEIRA_PULSO_NA' && category !== 'SINALEIRO_LED';
@@ -1161,30 +1074,27 @@ export const ComandosEletricosWorkbench: React.FC = () => {
     setSelectedCompId(null);
   };
 
-  const selectedCableObj = cables.find((c) => c.id === selectedCableId);
   const selectedCompObj = components.find((c) => c.id === selectedCompId);
 
   return (
     <div style={containerStyle}>
+      {/* Barra de Controle Superior */}
       <div style={topControlBarStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setIsCatalogModalOpen(true)}
-            style={btnOpenCatalogStyle}
-          >
+          <button onClick={() => setIsCatalogModalOpen(true)} style={btnOpenCatalogStyle}>
             📦 + Adicionar Componente
           </button>
 
           <button
-            onClick={() => setIsAdminUnlocked(!isAdminUnlocked)}
+            onClick={() => setIsWorkbenchVisible(!isWorkbenchVisible)}
             style={{
               ...btnMeterToggleStyle,
-              background: isAdminUnlocked ? '#166534' : '#991b1b',
+              background: isWorkbenchVisible ? '#166534' : '#991b1b',
               color: '#fff',
-              borderColor: isAdminUnlocked ? '#22c55e' : '#ef4444',
+              borderColor: isWorkbenchVisible ? '#22c55e' : '#ef4444',
             }}
           >
-            {isAdminUnlocked ? '🔓 Admin: Comandos Livres' : '🔒 Admin: Comandos Bloqueados'}
+            {isWorkbenchVisible ? '🔓 Bancada visível' : '🔒 Bancada oculta'}
           </button>
 
           <button
@@ -1206,36 +1116,42 @@ export const ComandosEletricosWorkbench: React.FC = () => {
               background: isTrainingOpen ? '#6a1b9a' : '#2e1065',
               color: '#f3e8ff',
               borderColor: '#a855f7',
-              boxShadow: isTrainingOpen ? '0 0 12px rgba(168, 85, 247, 0.4)' : 'none',
             }}
           >
             🎓 {isTrainingOpen ? 'Ocultar Treinamento' : 'Treinamento'}
           </button>
         </div>
 
+        {/* Seletor de Cores de Cabo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#00e676', marginRight: '4px' }}>
-            🔌 Cor do Cabo:
+            🔌 Cabo 90°:
           </span>
 
           <button onClick={() => { setActiveCableTool('FORCA_R'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_R' ? '#ef4444' : '#263238', borderColor: '#f87171', color: '#fff' }} title="Fase R (Vermelho)">R</button>
           <button onClick={() => { setActiveCableTool('FORCA_S'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_S' ? '#f97316' : '#263238', borderColor: '#fb923c', color: '#fff' }} title="Fase S (Laranja)">S</button>
-          <button onClick={() => { setActiveCableTool('FORCA_T'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_T' ? '#3b82f6' : '#263238', borderColor: '#60a5fa', color: '#fff' }} title="Fase T (Azul Escuro)">T</button>
-          <button onClick={() => { setActiveCableTool('COMANDO_FASE'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'COMANDO_FASE' ? '#ec4899' : '#263238', borderColor: '#f472b6', color: '#fff' }} title="Comando Fase (+24V)">+24V</button>
+          <button onClick={() => { setActiveCableTool('FORCA_T'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'FORCA_T' ? '#64748b' : '#263238', borderColor: '#60a5fa', color: '#fff' }} title="Fase T (Cinza)">T</button>
+          <button onClick={() => { setActiveCableTool('COMANDO_FASE'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'COMANDO_FASE' ? '#ec4899' : '#263238', borderColor: '#f472b6', color: '#fff' }} title="Condutor de comando (tensão definida pela fonte)">Comando</button>
           <button onClick={() => { setActiveCableTool('COMANDO_NEUTRO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'COMANDO_NEUTRO' ? '#06b6d4' : '#263238', borderColor: '#22d3ee', color: '#fff' }} title="Neutro / 0V">0V / N</button>
-          <button onClick={() => { setActiveCableTool('TERRA_PE'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'TERRA_PE' ? '#10b981' : '#263238', borderColor: '#34d399', color: '#fff' }} title="Condutor de Proteção (PE)">PE Terra</button>
-          <button onClick={() => { setActiveCableTool('JUMPER_FECHAMENTO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'JUMPER_FECHAMENTO' ? '#eab308' : '#263238', borderColor: '#fde047', color: '#000', fontWeight: 'bold' }} title="Jumper Estrela / Triângulo">⭐/Δ Jumper</button>
+          <button onClick={() => { setActiveCableTool('TERRA_PE'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'TERRA_PE' ? '#10b981' : '#263238', borderColor: '#34d399', color: '#fff' }} title="Proteção Terra (PE)">PE Terra</button>
+          <button onClick={() => { setActiveCableTool('JUMPER_FECHAMENTO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'JUMPER_FECHAMENTO' ? '#eab308' : '#263238', borderColor: '#fde047', color: '#000', fontWeight: 'bold' }} title="Jumper Estrela / Triângulo">⭐/Δ</button>
+          <button onClick={() => { setActiveCableTool('CABO_PRETO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_PRETO' ? '#111827' : '#1f2937', borderColor: '#4b5563', color: '#fff' }} title="Preto">Preto</button>
+          <button onClick={() => { setActiveCableTool('CABO_BRANCO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_BRANCO' ? '#f8fafc' : '#263238', borderColor: '#e2e8f0', color: activeCableTool === 'CABO_BRANCO' ? '#000' : '#fff' }} title="Branco">Branco</button>
+          <button onClick={() => { setActiveCableTool('CABO_CINZA'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_CINZA' ? '#64748b' : '#263238', borderColor: '#94a3b8', color: '#fff' }} title="Cinza">Cinza</button>
+          <button onClick={() => { setActiveCableTool('CABO_ROXO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_ROXO' ? '#a855f7' : '#263238', borderColor: '#c084fc', color: '#fff' }} title="Roxo">Roxo</button>
+          <button onClick={() => { setActiveCableTool('CABO_LARANJA'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_LARANJA' ? '#ea580c' : '#263238', borderColor: '#fb923c', color: '#fff' }} title="Laranja">Laranja</button>
 
-          <button onClick={() => { setActiveCableTool('CABO_PRETO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_PRETO' ? '#111827' : '#1f2937', borderColor: '#4b5563', color: '#fff' }} title="Preto (Alimentação / Força)">Preto</button>
-          <button onClick={() => { setActiveCableTool('CABO_BRANCO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_BRANCO' ? '#f8fafc' : '#263238', borderColor: '#e2e8f0', color: activeCableTool === 'CABO_BRANCO' ? '#000' : '#fff' }} title="Branco (Retorno de Sinal)">Branco</button>
-          <button onClick={() => { setActiveCableTool('CABO_CINZA'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_CINZA' ? '#64748b' : '#263238', borderColor: '#94a3b8', color: '#fff' }} title="Cinza (Comando AC 110/220V)">Cinza</button>
-          <button onClick={() => { setActiveCableTool('CABO_ROXO'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_ROXO' ? '#a855f7' : '#263238', borderColor: '#c084fc', color: '#fff' }} title="Roxo (CLP / Sinal Digital)">Roxo</button>
-          <button onClick={() => { setActiveCableTool('CABO_LARANJA'); setWiringOrigin(null); }} style={{ ...btnCableSelectStyle, background: activeCableTool === 'CABO_LARANJA' ? '#ea580c' : '#263238', borderColor: '#fb923c', color: '#fff' }} title="Laranja (Intertravamento Externo)">Laranja</button>
+          {wiringOrigin && (
+            <button onClick={() => { setWiringOrigin(null); setActiveWaypoints([]); }} style={{ ...btnCableSelectStyle, background: '#dc2626', borderColor: '#ef4444', color: '#fff' }}>
+              ✕ Cancelar
+            </button>
+          )}
 
-          <button onClick={() => { setCables([]); setWiringOrigin(null); setSelectedCableId(null); setSelectedCompId(null); }} style={btnClearCablesBtnStyle} title="Limpar todos os cabos">🗑️</button>
+          <button onClick={() => { setCables([]); setWiringOrigin(null); setActiveWaypoints([]); setSelectedCompId(null); setEditingCableId(null); }} style={btnClearCablesBtnStyle} title="Limpar todos os cabos">🗑️</button>
         </div>
       </div>
 
+      {/* Janela de Treinamento */}
       {isTrainingOpen && (
         <div style={trainingContainerStyle}>
           <div style={trainingHeaderStyle}>
@@ -1322,6 +1238,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       )}
 
+      {/* Multímetro Digital */}
       {isMeterActive && (
         <div style={multimeterContainerStyle}>
           <div style={meterDisplayHeader}>
@@ -1385,6 +1302,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       )}
 
+      {/* Catálogo */}
       {isCatalogModalOpen && (
         <div style={modalOverlayStyle} onClick={() => setIsCatalogModalOpen(false)}>
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
@@ -1423,33 +1341,26 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       )}
 
+      {/* Alertas contextuais */}
       {selectedCompObj ? (
         <div style={{ ...selectedCableAlertBarStyle, borderColor: '#ffd600', background: 'rgba(255, 214, 0, 0.15)', color: '#fff' }}>
           <span>📦 <strong>Selecionado:</strong> {selectedCompObj.name} ({selectedCompObj.tag})</span>
           <div style={{ display: 'flex', gap: '6px' }}>
-            <button onClick={handleRemoveSelectedComponent} style={btnDeleteSingleCableStyle}>❌ Excluir</button>
+            <button onClick={handleRemoveSelectedComponent} style={btnDeleteSingleCableStyle}>❌ Excluir Componente</button>
             <button onClick={() => setSelectedCompId(null)} style={btnDeselectCableStyle}>Fechar</button>
           </div>
         </div>
-      ) : selectedCableObj ? (
-        <div style={selectedCableAlertBarStyle}>
-          <span>📍 <strong>Cabo:</strong> {selectedCableObj.cableType}</span>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <button onClick={() => { setCables((prev) => prev.filter((c) => c.id !== selectedCableObj.id)); setSelectedCableId(null); }} style={btnDeleteSingleCableStyle}>❌ Remover</button>
-            <button onClick={() => setSelectedCableId(null)} style={btnDeselectCableStyle}>Fechar</button>
-          </div>
-        </div>
-      ) : isMeterActive ? (
-        <div style={{ ...wiringPromptBarStyle, background: 'rgba(234, 179, 8, 0.15)', borderColor: '#eab308', color: '#fef08a' }}>
-          📟 <strong>Multímetro Ativo:</strong> Toque no borne para posicionar a ponta <strong style={{ color: activeProbeTarget === 'RED' ? '#ef4444' : '#fff' }}>{activeProbeTarget === 'RED' ? 'VERMELHA (+)' : 'PRETA (-)'}</strong>.
-        </div>
       ) : wiringOrigin ? (
-        <div style={wiringPromptBarStyle}>⚡ Toque no <strong>borne de destino</strong> para conectar o cabo.</div>
+        <div style={wiringPromptBarStyle}>
+          ⚡ Roteamento ativo: <strong>{wiringOrigin.compId}:{wiringOrigin.termId}</strong> ({activeWaypoints.length} curvas em 90° fixadas). Clique na bancada para guiar o cabo ou clique no borne de destino para conectar.
+        </div>
       ) : null}
 
-      {isAdminUnlocked ? (
+      {/* BANCADA DE COMANDOS ELÉTRICOS */}
+      {isWorkbenchVisible ? (
         <div
           ref={panelRef}
+          onClick={handlePanelClick}
           onMouseMove={(e) => handleMoveDrag(e.clientX, e.clientY)}
           onMouseUp={handleEndDrag}
           onTouchMove={(e) => {
@@ -1458,32 +1369,124 @@ export const ComandosEletricosWorkbench: React.FC = () => {
             }
           }}
           onTouchEnd={handleEndDrag}
-          onClick={() => { setSelectedCableId(null); setSelectedCompId(null); }}
           style={panelMountStyle}
         >
+          {/* CAMADA SVG: ROTEAMENTO ORTOGONAL SUAVE 90° */}
           <svg style={svgOverlayStyle}>
+            {/* Cabos Concluídos */}
             {cables.map((cb) => {
-              const routePoints = calculateSmartRoute(
-                cb.fromComponentId,
-                cb.fromTerminalId,
-                cb.toComponentId,
-                cb.toTerminalId,
-                cb.customWaypoints
-              );
+              const p1 = getTerminalAbsolutePos(cb.fromComponentId, cb.fromTerminalId);
+              const p2 = getTerminalAbsolutePos(cb.toComponentId, cb.toTerminalId);
+
+              const allPoints = cb.waypoints && cb.waypoints.length > 0
+                ? [p1, ...cb.waypoints, p2]
+                : calculateDefaultOrthoRoute(cb.fromComponentId, cb.fromTerminalId, cb.toComponentId, cb.toTerminalId);
+
+              const pathString = renderOrthogonalSmoothPath(allPoints);
               const color = CABLE_COLORS[cb.cableType] || '#fff';
-              const isSelected = selectedCableId === cb.id;
-              const pathString = renderSmoothPath(routePoints);
 
               return (
-                <g key={cb.id} onClick={(e) => { e.stopPropagation(); setSelectedCableId(cb.id); setSelectedCompId(null); }}>
-                  <path d={pathString} fill="none" stroke="transparent" strokeWidth="24" style={{ cursor: 'pointer', pointerEvents: 'stroke' }} />
-                  <path d={pathString} fill="none" stroke={isSelected ? '#00e676' : 'rgba(0,0,0,0.55)'} strokeWidth={isSelected ? '7' : '5'} strokeDasharray={isSelected ? '6,4' : 'none'} />
-                  <path d={pathString} fill="none" stroke={color} strokeWidth={isSelected ? '4.5' : '3.5'} strokeLinecap="round" strokeLinejoin="round" />
+                <g
+                  key={cb.id}
+                  style={{ pointerEvents: 'stroke' }}
+                  onDoubleClick={(e) => handleCableDoubleClick(e, cb.id)}
+                >
+                  <path d={pathString} fill="none" stroke="transparent" strokeWidth="24" style={{ cursor: 'pointer' }} />
+                  <path d={pathString} fill="none" stroke="rgba(0,0,0,0.65)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d={pathString} fill="none" stroke={color} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
                 </g>
               );
             })}
+
+            {/* Cabo Elástico em 90° Sendo Traçado */}
+            {wiringOrigin && (
+              (() => {
+                const pStart = getTerminalAbsolutePos(wiringOrigin.compId, wiringOrigin.termId);
+                const currentPts = [pStart, ...activeWaypoints];
+                if (mousePos) currentPts.push(mousePos);
+
+                const activePath = renderOrthogonalSmoothPath(currentPts);
+                const activeColor = CABLE_COLORS[activeCableTool || 'COMANDO_FASE'];
+
+                return (
+                  <g>
+                    <path
+                      d={activePath}
+                      fill="none"
+                      stroke={activeColor}
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray="6,4"
+                    />
+                  </g>
+                );
+              })()
+            )}
           </svg>
 
+          {/* JANELA FLUTUANTE (MODAL): DUPLO CLIQUE NO CABO */}
+          {editingCableId && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute',
+                left: `${Math.min(modalPos.x, 850)}px`,
+                top: `${Math.min(modalPos.y, 800)}px`,
+                backgroundColor: '#0f172a',
+                border: '2px solid #38bdf8',
+                borderRadius: '10px',
+                padding: '12px',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.9)',
+                zIndex: 50,
+                width: '240px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #334155', paddingBottom: '4px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#38bdf8' }}>CONFIGURAÇÃO DO CABO</span>
+                <button onClick={() => setEditingCableId(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px' }}>✕</button>
+              </div>
+
+              <span style={{ fontSize: '10px', color: '#cbd5e1', display: 'block', marginBottom: '6px' }}>
+                Mudar Cor do Condutor:
+              </span>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px', marginBottom: '10px' }}>
+                {(Object.keys(CABLE_COLORS) as CableType[]).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => handleChangeCableColor(type)}
+                    style={{
+                      backgroundColor: CABLE_COLORS[type],
+                      height: '22px',
+                      borderRadius: '4px',
+                      border: '1px solid #fff',
+                      cursor: 'pointer',
+                    }}
+                    title={type}
+                  />
+                ))}
+              </div>
+
+              <button
+                onClick={handleDeleteCable}
+                style={{
+                  width: '100%',
+                  backgroundColor: '#dc2626',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '6px 0',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                }}
+              >
+                🗑️ Excluir Cabo
+              </button>
+            </div>
+          )}
+
+          {/* Renderizador de Componentes */}
           {components.map((comp) => {
             const isSelected = selectedCompId === comp.id;
             const isGrid = comp.category.startsWith('REDE_');
@@ -1894,10 +1897,11 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         </div>
       ) : (
         <div style={{ padding: '50px', textAlign: 'center', color: '#94a3b8', background: '#13171d', borderRadius: '10px', border: '1px dashed #334155' }}>
-          🔒 <strong>Painel de comandos bloqueado pelo Administrador.</strong> Clique no botão no topo para liberar a bancada.
+          🔒 <strong>Bancada oculta.</strong> Clique no botão no topo para liberar a bancada.
         </div>
       )}
 
+      {/* Visualizador de Motor Inferior */}
       <div style={bottomVisualizerRowStyle}>
         <div style={{ flex: '1 1 360px' }}>
           <MotorVisualizer loadTorquePercent={25} />
@@ -1905,17 +1909,17 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
         <div style={guideCardStyle}>
           <strong style={{ fontSize: '12px', color: '#00e676' }}>
-            ⚡ Bancada com Controle de Admin e Novos Cargas:
+            ⚡ Roteamento Ortogonal em 90° e Edição Dinâmica de Cabos:
           </strong>
           <ul style={{ fontSize: '11px', color: '#cfd8dc', margin: '6px 0 0 16px', lineHeight: '1.6' }}>
             <li>
-              <strong>Aulas e Treinamento Prático:</strong> Clique no botão roxo <strong>"🎓 Treinamento"</strong> no topo para consultar teorias de comandos e instruções passo a passo de ligação.
+              <strong>Traçado em 90°:</strong> Clique no borne inicial, clique em qualquer ponto da bancada para fixar curvas em ângulo reto (sem quina viva de caixa) e clique no borne final.
             </li>
             <li>
-              <strong>Modo Administrador:</strong> Use o botão verde/vermelho no topo para bloquear ou liberar a visualização da bancada para os alunos.
+              <strong>Dois Cliques no Cabo:</strong> Dê dois cliques em cima de qualquer cabo para abrir a janela de alteração de cor ou exclusão imediata.
             </li>
             <li>
-              <strong>Capacitores e Resistores:</strong> Adicione componentes de frenagem e correção de fator de potência pelo catálogo.
+              <strong>Cancelamento Rápido:</strong> Pressione a tecla <strong>ESC</strong> para cancelar o cabo em andamento.
             </li>
           </ul>
         </div>
