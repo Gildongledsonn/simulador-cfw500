@@ -99,7 +99,7 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
               borderColor: activeTab === 'modbus' ? '#29b6f6' : '#323842',
             }}
           >
-            📡 Modbus RTU & CLIC-02
+            🪜 CLP WEG CLIC02
           </button>
 
           <button

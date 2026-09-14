@@ -1,798 +1,145 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useInverter } from '../context/InverterContext';
+import { addresses, ANALOG_TAGS, Comparator, defaultComparator, defaultHmi, defaultRtc, Hmi, Operand, Rtc, CONTACTS, Counter, defaultCounter, defaultTimer, freshRuntime, initialProgram, INPUTS, OUTPUTS, Program, Rung, scan, Timer, WRITABLE } from '../utils/clic02Engine';
+import './Clic02RealisticPLC.css';
 
-export type ContactType = 'NONE' | 'WIRE' | 'NO' | 'NC' | 'PULSE_RISING';
-export type CoilType = 'OUT' | 'SET' | 'RST' | 'PULSE_FF' | 'TON' | 'COUNTER' | 'RTC' | 'COMP' | 'HMI' | 'MB_SPEED';
+const timerModes = ['Marcador', '1 · Retardo na energização', '2 · Retardo retentivo', '3 · Retardo na desenergização', '4 · Pulso na desenergização', '5 · Cíclico com habilitação', '6 · Cíclico com retenção'];
+const manual = 'https://static.weg.net/medias/downloadcenter/h86/hcf/WEG-CLIC-02-user-manual-10009280784-pt-en-es.pdf';
+const integer = (value: string, max: number) => Math.min(max, Math.max(0, Math.round(Number(value) || 0)));
+const selectTags = (tags: string[]) => tags.map(tag => <option key={tag}>{tag}</option>);
 
-export interface LadderCell {
-  type: ContactType;
-  tag: string;
-}
-
-export interface LadderRung {
-  id: string;
-  cells: [LadderCell, LadderCell, LadderCell];
-  coil: {
-    type: CoilType;
-    tag: string;
-    value?: number;
-    subParam?: number; // Para modos de temporizador (1 a 7) ou comparador
-  };
-}
-
-interface Clic02Props {
-  onModbusTx?: (frame: string, description: string) => void;
-  activePlant: string;
-}
-
-const AVAILABLE_CONTACT_TAGS = [
-  'I01', 'I02', 'I03', 'I04', 'I05', 'I06', 'I07', 'I08',
-  'Z01', 'Z02', 'Z03', 'Z04',
-  'M01', 'M02', 'M03', 'M31', 'M32',
-  'Q01', 'Q02', 'Q03', 'Q04',
-  'T01', 'T02',
-  'C01', 'C02',
-  'R01',
-  'G01'
-];
-
-const AVAILABLE_COIL_TAGS = [
-  'Q01', 'Q02', 'Q03', 'Q04',
-  'M01', 'M02', 'M03',
-  'T01', 'T02',
-  'C01', 'C02',
-  'R01',
-  'G01',
-  'H01',
-  'P0681'
-];
-
-export const Clic02RealisticPLC: React.FC<Clic02Props> = ({ onModbusTx, activePlant }) => {
-  const { state, dispatch } = useInverter();
-
-  const [isRun, setIsRun] = useState<boolean>(true);
-  const [selectedRung, setSelectedRung] = useState<number>(0);
-  const [selectedCol, setSelectedCol] = useState<number>(0);
-  const [activeScreenMode, setActiveScreenMode] = useState<'MAIN' | 'LADDER' | 'HMI' | 'MENU'>('LADDER');
-
-  // Entradas Físicas I01 a I08
-  const [inputs, setInputs] = useState<{ [key: string]: boolean }>({
-    I01: false,
-    I02: true, // NF de Parada/Emergência
-    I03: false,
-    I04: false,
-    I05: false,
-    I06: false,
-    I07: false,
-    I08: false,
-  });
-
-  // Teclas Z01 a Z04 (direcionais como entradas lógicas)
-  const [zKeys, setZKeys] = useState<{ [key: string]: boolean }>({
-    Z01: false,
-    Z02: false,
-    Z03: false,
-    Z04: false,
-  });
-
-  // Saídas Físicas Q01 a Q04
-  const [outputs, setOutputs] = useState<{ [key: string]: boolean }>({
-    Q01: false,
-    Q02: false,
-    Q03: false,
-    Q04: false,
-  });
-
-  // Marcadores Auxiliares M e Especiais
-  const [flags, setFlags] = useState<{ [key: string]: boolean }>({
-    M01: false,
-    M02: false,
-    M03: false,
-    M31: false, // Pulso inicial de primeiro scan
-    M32: false, // Oscilador 1s (0.5s ON / 0.5s OFF)
-  });
-
-  // Temporizadores T01 a T1F
-  const [timers, setTimers] = useState<{ [key: string]: { currentSec: number; targetSec: number; done: boolean } }>({
-    T01: { currentSec: 0, targetSec: 3.0, done: false },
-    T02: { currentSec: 0, targetSec: 5.0, done: false },
-  });
-
-  // Contadores C01 a C1F
-  const [counters, setCounters] = useState<{ [key: string]: { current: number; target: number; done: boolean } }>({
-    C01: { current: 0, target: 5, done: false },
-    C02: { current: 0, target: 10, done: false },
-  });
-
-  // Lógica Ladder de Exemplo
-  const [rungs, setRungs] = useState<LadderRung[]>([
-    {
-      id: 'rung_1',
-      cells: [
-        { type: 'NO', tag: 'I01' },
-        { type: 'NC', tag: 'I02' },
-        { type: 'WIRE', tag: '' },
-      ],
-      coil: { type: 'OUT', tag: 'Q01' },
-    },
-    {
-      id: 'rung_2',
-      cells: [
-        { type: 'NO', tag: 'Q01' },
-        { type: 'WIRE', tag: '' },
-        { type: 'WIRE', tag: '' },
-      ],
-      coil: { type: 'TON', tag: 'T01', value: 3.0 },
-    },
-    {
-      id: 'rung_3',
-      cells: [
-        { type: 'NO', tag: 'T01' },
-        { type: 'WIRE', tag: '' },
-        { type: 'WIRE', tag: '' },
-      ],
-      coil: { type: 'MB_SPEED', tag: 'P0681', value: 60.0 },
-    },
-  ]);
-
-  const lastScanTimeRef = useRef<number>(performance.now());
-  const prevInputsRef = useRef<{ [key: string]: boolean }>({ ...inputs });
-  const isFirstScanRef = useRef<boolean>(true);
-
-  // Avaliação de continuidade de um contato
-  const evalCell = (cell: LadderCell): boolean => {
-    if (cell.type === 'NONE') return false;
-    if (cell.type === 'WIRE') return true;
-
-    let val = false;
-    const tag = cell.tag;
-
-    if (tag.startsWith('I')) val = !!inputs[tag];
-    else if (tag.startsWith('Z')) val = !!zKeys[tag];
-    else if (tag.startsWith('Q')) val = !!outputs[tag];
-    else if (tag.startsWith('M')) val = !!flags[tag];
-    else if (tag.startsWith('T')) val = !!timers[tag]?.done;
-    else if (tag.startsWith('C')) val = !!counters[tag]?.done;
-
-    if (cell.type === 'PULSE_RISING') {
-      const prevVal = !!prevInputsRef.current[tag];
-      return val && !prevVal;
-    }
-
-    return cell.type === 'NO' ? val : !val;
-  };
-
-  // Avaliação da linha (Rung)
-  const evalRung = (r: LadderRung): boolean => {
-    for (const cell of r.cells) {
-      if (cell.type === 'NONE') return false;
-      if (!evalCell(cell)) return false;
-    }
-    return true;
-  };
-
-  // Ciclo de Varredura Scan (IEC 61131-3 / CLIC-02 Scan Engine)
+export const Clic02RealisticPLC: React.FC<{ activePlant: string }> = ({ activePlant }) => {
+  const { dispatch } = useInverter();
+  const [program, setProgram] = useState<Program>(initialProgram);
+  const [runtime, setRuntime] = useState(freshRuntime);
+  const [running, setRunning] = useState(false);
+  const [inputs, setInputs] = useState<Record<string, boolean>>({ I02: true });
+  const [analog, setAnalog] = useState([0, 0, 0, 0]);
+  const [analogMode, setAnalogMode] = useState([false, false, false, false]);
+  const [gains, setGains] = useState([10, 10, 10, 10]);
+  const [offsets, setOffsets] = useState([0, 0, 0, 0]);
+  const [registers, setRegisters] = useState<Record<string, number>>({});
+  const [register, setRegister] = useState('DR01');
+  const [signed, setSigned] = useState(false);
+  const [hmiIndex, setHmiIndex] = useState(0);
+  const [zEnabled, setZEnabled] = useState(false);
+  const [zKeys, setZKeys] = useState<Record<string, boolean>>({});
+  const [retainCounters, setRetainCounters] = useState(false);
+  const [screen, setScreen] = useState('STATUS');
+  const [menuIndex, setMenuIndex] = useState(0);
+  const [confirmYes, setConfirmYes] = useState(false);
+  const [selected, setSelected] = useState(0);
+  const [panel, setPanel] = useState('LADDER');
+  const [block, setBlock] = useState('T01');
+  const [clock, setClock] = useState(Date.now());
+  const [clockOffset, setClockOffset] = useState(0);
+  const [relayWired, setRelayWired] = useState(false);
+  const [memory, setMemory] = useState<Program | null>(null);
+  const [notice, setNotice] = useState('Programa de exemplo: selo Q01 e atraso T01 → Q02. CLP em STOP.');
+  const analogValues = { ...registers, ...Object.fromEntries(analog.flatMap((v, i) => [[addresses('A', 4)[i], analogMode[i] ? v : 0], [addresses('V', 4)[i], (analogMode[i] ? v : 0) * gains[i] + offsets[i]]])) };
+  const physicalInputs = { ...inputs, ...Object.fromEntries(INPUTS.slice(8).map((t, i) => [t, !analogMode[i] && !!inputs[t]])) };
+  const config = useRef({ program, inputs: physicalInputs, zKeys, zEnabled, analogValues, clockOffset });
+  config.current = { program, inputs: physicalInputs, zKeys, zEnabled, analogValues, clockOffset };
   useEffect(() => {
-    if (!isRun) {
-      lastScanTimeRef.current = performance.now();
+    const id = window.setInterval(() => setClock(Date.now()), 500);
+    return () => window.clearInterval(id);
+  }, []);
+  useEffect(() => {
+    if (!running) return;
+    let previous = performance.now();
+    const id = window.setInterval(() => {
+      const now = performance.now();
+      const dt = (now - previous) / 1000; previous = now;
+      const c = config.current;
+      const keys = Object.fromEntries(addresses('Z', 4).map(t => [t, c.zEnabled && !!c.zKeys[t]]));
+      setRuntime(s => scan(c.program, s, { ...c.inputs, ...keys }, dt, c.analogValues, new Date(Date.now() + c.clockOffset)));
+    }, 25);
+    return () => window.clearInterval(id);
+  }, [running]);
+  const q1 = running && !!runtime.bits.Q01;
+  useEffect(() => {
+    if (relayWired) dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di1', value: q1 } });
+  }, [q1, relayWired, dispatch]);
+  useEffect(() => () => { if (relayWired) dispatch({ type: 'SET_DIGITAL_INPUT', payload: { input: 'di1', value: false } }); }, [relayWired, dispatch]);
+  const menu = ['LADDER', 'BLOCO FUN.', 'PARÂMETRO', 'DATA REGISTER', running ? 'STOP' : 'RUN', ...(!running ? ['LIMPAR PROG.', 'ESCREVER', 'LER', 'CONFIG.', 'CONFIG. ANALÓG'] : []), 'CONFIG. RTC'];
+  const changeRun = () => {
+    if (!running) setRuntime(s => ({ ...freshRuntime(), ...(retainCounters ? { counts: s.counts, bits: Object.fromEntries(Object.entries(s.bits).filter(([k]) => k.startsWith('C'))) } : {}) }));
+    else setRuntime(s => ({ ...s, bits: Object.fromEntries(Object.entries(s.bits).map(([k, v]) => [k, k.startsWith('Q') ? false : v])) }));
+    setRunning(v => !v); setScreen('STATUS'); setZKeys({});
+  };
+  const key = (name: string) => {
+    if (name === 'ESC') { setScreen(screen === 'STATUS' ? 'MENU' : 'STATUS'); setMenuIndex(0); return; }
+    if (screen === 'CONFIRM') {
+      if (['▲', '▼', '◀', '▶'].includes(name)) setConfirmYes(v => !v);
+      if (name === 'OK') { if (confirmYes) changeRun(); else setScreen('MENU'); }
       return;
     }
-
-    const interval = setInterval(() => {
-      const now = performance.now();
-      const dt = (now - lastScanTimeRef.current) / 1000;
-      lastScanTimeRef.current = now;
-
-      const nextFlags = { ...flags };
-      const nextOutputs = { ...outputs };
-      const nextTimers = { ...timers };
-      const nextCounters = { ...counters };
-
-      // Marcadores especiais M31 (First Scan) e M32 (1s Clock)
-      if (isFirstScanRef.current) {
-        nextFlags.M31 = true;
-        isFirstScanRef.current = false;
-      } else {
-        nextFlags.M31 = false;
+    if (screen === 'MENU') {
+      if (name === '▲' || name === '▼') setMenuIndex(i => (i + (name === '▲' ? menu.length - 1 : 1)) % menu.length);
+      if (name === 'OK') {
+        const item = menu[menuIndex];
+        if (item === 'RUN' || item === 'STOP') { setScreen('CONFIRM'); setConfirmYes(false); }
+        else if (item === 'LIMPAR PROG.') { setPanel('MEMÓRIA'); setScreen('DETAIL'); }
+        else if (item === 'ESCREVER') { setMemory(structuredClone(program)); setNotice('Programa copiado para a memória PM05 simulada desta sessão.'); setScreen('STATUS'); }
+        else if (item === 'LER') { if (memory) { setProgram(structuredClone(memory)); setSelected(0); } setNotice(memory ? 'Programa lido da memória simulada.' : 'Memória simulada vazia.'); setScreen('STATUS'); }
+        else { setPanel(item === 'BLOCO FUN.' || item === 'PARÂMETRO' ? 'PARÂMETRO' : item); setScreen(item === 'LADDER' ? 'LADDER' : 'DETAIL'); }
       }
-      nextFlags.M32 = Math.floor(now / 500) % 2 === 0;
-
-      rungs.forEach((r) => {
-        const energized = evalRung(r);
-        const coilTag = r.coil.tag;
-
-        if (r.coil.type === 'OUT') {
-          if (coilTag.startsWith('Q')) nextOutputs[coilTag] = energized;
-          else if (coilTag.startsWith('M')) nextFlags[coilTag] = energized;
-        } else if (r.coil.type === 'SET' && energized) {
-          if (coilTag.startsWith('Q')) nextOutputs[coilTag] = true;
-          else if (coilTag.startsWith('M')) nextFlags[coilTag] = true;
-        } else if (r.coil.type === 'RST' && energized) {
-          if (coilTag.startsWith('Q')) nextOutputs[coilTag] = false;
-          else if (coilTag.startsWith('M')) nextFlags[coilTag] = false;
-          else if (coilTag.startsWith('T')) nextTimers[coilTag] = { currentSec: 0, targetSec: nextTimers[coilTag]?.targetSec || 3.0, done: false };
-          else if (coilTag.startsWith('C')) nextCounters[coilTag] = { current: 0, target: nextCounters[coilTag]?.target || 5, done: false };
-        } else if (r.coil.type === 'PULSE_FF' && energized) {
-          if (coilTag.startsWith('Q')) nextOutputs[coilTag] = !nextOutputs[coilTag];
-          else if (coilTag.startsWith('M')) nextFlags[coilTag] = !nextFlags[coilTag];
-        } else if (r.coil.type === 'TON') {
-          const tName = coilTag || 'T01';
-          const target = r.coil.value ?? 3.0;
-          const current = nextTimers[tName]?.currentSec || 0;
-
-          if (energized) {
-            const nextSec = Math.min(target, current + dt);
-            nextTimers[tName] = { currentSec: nextSec, targetSec: target, done: nextSec >= target };
-          } else {
-            nextTimers[tName] = { currentSec: 0, targetSec: target, done: false };
-          }
-        } else if (r.coil.type === 'MB_SPEED' && energized) {
-          const targetHz = r.coil.value ?? 60.0;
-          const curParamVal = state.parameters?.P0121?.currentValue ?? 0;
-          if (Math.abs(curParamVal - targetHz) > 0.5) {
-            const rawVal = Math.round((targetHz / 60) * 8192);
-            const rawHex = rawVal.toString(16).toUpperCase().padStart(4, '0');
-            if (onModbusTx) {
-              onModbusTx(`01 06 00 01 ${rawHex.slice(0, 2)} ${rawHex.slice(2)}`, `CLIC-02 -> Write Register 40002 (${targetHz} Hz)`);
-            }
-            dispatch({ type: 'SELECT_PARAM_DIRECT', payload: 'P0121' });
-            dispatch({ type: 'SET_ANALOG_INPUT_1', payload: (targetHz / 60) * 10 });
-          }
-        }
-      });
-
-      setFlags(nextFlags);
-      setOutputs(nextOutputs);
-      setTimers(nextTimers);
-      setCounters(nextCounters);
-      prevInputsRef.current = { ...inputs };
-
-      // Sincronização da saída Q01 com o Inversor via Modbus
-      if (state.controlSource !== 'REM') {
-        dispatch({ type: 'PRESS_LOCREM' });
-      }
-
-      if (nextOutputs.Q01 && state.motorStatus !== 'RUNNING') {
-        if (onModbusTx) onModbusTx('01 06 00 00 00 01 48 0A', 'CLIC-02 -> Modbus RUN (Reg 40001 = 1)');
-        dispatch({ type: 'PRESS_RUN' });
-      } else if (!nextOutputs.Q01 && state.motorStatus === 'RUNNING') {
-        if (onModbusTx) onModbusTx('01 06 00 00 00 00 89 CA', 'CLIC-02 -> Modbus STOP (Reg 40001 = 0)');
-        dispatch({ type: 'PRESS_STOP' });
-      }
-    }, 50);
-
-    return () => clearInterval(interval);
-  }, [isRun, inputs, zKeys, flags, outputs, timers, counters, rungs, state.motorStatus, state.controlSource, state.parameters?.P0121?.currentValue, dispatch, onModbusTx]);
-
-  // Edição de células da matriz Ladder
-  const handleCellClick = (rIdx: number, cIdx: number) => {
-    if (isRun) return;
-    const next = [...rungs];
-    const types: ContactType[] = ['NO', 'NC', 'PULSE_RISING', 'WIRE', 'NONE'];
-    const curIdx = types.indexOf(next[rIdx].cells[cIdx].type);
-    const nextType = types[(curIdx + 1) % types.length];
-
-    next[rIdx].cells[cIdx] = {
-      type: nextType,
-      tag: nextType === 'WIRE' || nextType === 'NONE' ? '' : next[rIdx].cells[cIdx].tag || 'I01',
-    };
-    setRungs(next);
+      return;
+    }
+    if (screen === 'HMI' && (name === '▲' || name === '▼')) setHmiIndex(i => Math.max(0, i + (name === '▲' ? -1 : 1)));
+    if (screen === 'LADDER') {
+      if (name === '▲' || name === '▼') setSelected(i => Math.max(0, Math.min(program.rungs.length - 1, i + (name === '▲' ? -1 : 1))));
+      if (name === 'OK') { const r = program.rungs[selected]; if (r && ['TIMER', 'COUNTER', 'COMPARE', 'RTC', 'HMI'].includes(r.kind)) { setBlock(r.tag); setPanel('PARÂMETRO'); setScreen('DETAIL'); } }
+    }
+    if (name === 'SEL' && screen === 'STATUS') { setHmiIndex(0); setScreen('HMI'); }
+    if (name === 'DEL') setNotice('Selecione a linha no editor ampliado e use Excluir linha em STOP.');
   };
-
-  const handleTagRotate = (rIdx: number, cIdx: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (isRun) return;
-    const next = [...rungs];
-    const curTag = next[rIdx].cells[cIdx].tag;
-    const tagIdx = AVAILABLE_CONTACT_TAGS.indexOf(curTag);
-    const nextTag = AVAILABLE_CONTACT_TAGS[(tagIdx + 1) % AVAILABLE_CONTACT_TAGS.length];
-    next[rIdx].cells[cIdx].tag = nextTag;
-    setRungs(next);
-  };
-
-  // Edição de bobinas
-  const handleCoilClick = (rIdx: number) => {
-    if (isRun) return;
-    const next = [...rungs];
-    const types: CoilType[] = ['OUT', 'SET', 'RST', 'PULSE_FF', 'TON', 'MB_SPEED'];
-    const curIdx = types.indexOf(next[rIdx].coil.type);
-    const nextType = types[(curIdx + 1) % types.length];
-
-    next[rIdx].coil = {
-      type: nextType,
-      tag: nextType === 'TON' ? 'T01' : nextType === 'MB_SPEED' ? 'P0681' : next[rIdx].coil.tag || 'Q01',
-      value: nextType === 'TON' ? 3.0 : nextType === 'MB_SPEED' ? 60.0 : undefined,
-    };
-    setRungs(next);
-  };
-
-  const handleCoilTagRotate = (rIdx: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (isRun) return;
-    const next = [...rungs];
-    const curTag = next[rIdx].coil.tag;
-    const tagIdx = AVAILABLE_COIL_TAGS.indexOf(curTag);
-    const nextTag = AVAILABLE_COIL_TAGS[(tagIdx + 1) % AVAILABLE_COIL_TAGS.length];
-    next[rIdx].coil.tag = nextTag;
-    setRungs(next);
-  };
-
-  const handleAddRung = () => {
-    if (isRun || rungs.length >= 8) return;
-    const newRung: LadderRung = {
-      id: `rung_${Date.now()}`,
-      cells: [
-        { type: 'NO', tag: 'I01' },
-        { type: 'WIRE', tag: '' },
-        { type: 'WIRE', tag: '' },
-      ],
-      coil: { type: 'OUT', tag: `M0${rungs.length}` },
-    };
-    setRungs([...rungs, newRung]);
-  };
-
-  const handleRemoveRung = () => {
-    if (isRun || rungs.length <= 1) return;
-    setRungs(rungs.slice(0, -1));
-  };
-
-  // Formatação de linhas da tela inicial oficial
-  const renderStatusScreen = () => {
-    const activeInputsStr = ['I01', 'I02', 'I03', 'I04', 'I05', 'I06', 'I07', 'I08']
-      .map((k, i) => (inputs[k] ? String(i + 1) : '.'))
-      .join('');
-
-    const activeOutputsStr = ['Q01', 'Q02', 'Q03', 'Q04']
-      .map((k, i) => (outputs[k] ? String(i + 1) : '.'))
-      .join('');
-
-    const activeZStr = ['Z01', 'Z02', 'Z03', 'Z04']
-      .map((k, i) => (zKeys[k] ? String(i + 1) : '.'))
-      .join('');
-
-    return (
-      <div style={lcdScreenStyle}>
-        <div style={lcdTextRowStyle}>
-          <span>I:{activeInputsStr}</span>
-          <span>PLANTA:{activePlant.toUpperCase().slice(0, 4)}</span>
-        </div>
-        <div style={lcdTextRowStyle}>
-          <span>Z:{activeZStr}</span>
-          <span>Q:{activeOutputsStr}</span>
-        </div>
-        <div style={lcdTextRowStyle}>
-          <span style={{ color: isRun ? '#004d40' : '#b71c1c', fontWeight: 'bold' }}>
-            {isRun ? 'MODE: RUN' : 'MODE: STOP'}
-          </span>
-          <span>RTC: 10:38</span>
-        </div>
-        <div style={lcdTextRowStyle}>
-          <span>T01:{timers.T01?.currentSec.toFixed(1)}s</span>
-          <span>F:{(state.outputFrequency ?? 0).toFixed(1)}Hz</span>
-        </div>
+  const date = new Date(clock + clockOffset);
+  const rung = program.rungs[selected];
+  const activeMessages = addresses('H', 31).filter(t => running && runtime.bits[t]);
+  const message = activeMessages.length ? program.hmi?.[activeMessages[hmiIndex % activeMessages.length]] ?? defaultHmi() : null;
+  const lines = screen === 'HMI' ? message?.lines ?? ['SEM TELAS ATIVAS', '', '', 'ESC: RETORNAR'] : screen === 'MENU' ? menu.slice(Math.max(0, menuIndex - 3), Math.max(0, menuIndex - 3) + 4).map((s, i) => (Math.max(0, menuIndex - 3) + i === menuIndex ? '>' : ' ') + s)
+    : screen === 'CONFIRM' ? [running ? 'STOP PROGRAMA?' : 'RUN PROGRAMA?', '', (confirmYes ? '>' : ' ') + 'SIM', (!confirmYes ? '>' : ' ') + 'NAO']
+    : screen === 'LADDER' ? [`${running ? 'MONITOR' : 'LADDER'} ${String(selected + 1).padStart(3, '0')}`, rung?.cells.map(c => c.type === 'WIRE' ? '----' : `${c.type === 'NC' ? '/' : '['}${c.tag}`).join(' ') ?? 'VAZIO', rung ? `${rung.kind} ${rung.tag}` : '', 'ESC  ↑↓  OK']
+    : screen === 'DETAIL' ? [panel, block, 'EDITOR AMPLIADO', 'ESC: RETORNAR']
+    : ['I:' + INPUTS.map(t => physicalInputs[t] ? t.slice(-1) : '-').join(''), 'Q:' + OUTPUTS.map(t => running && runtime.bits[t] ? t.slice(-1) : '-').join('') + (zEnabled ? ' Z' : ''), date.toLocaleDateString('pt-BR', { weekday: 'short' }).toUpperCase().slice(0, 3) + ' ' + date.toLocaleTimeString('pt-BR'), running ? 'RUN' : 'STOP'];
+  const updateRung = (patch: Partial<Rung>) => setProgram(p => ({ ...p, rungs: p.rungs.map((r, i) => i === selected ? { ...r, ...patch } : r) }));
+  const timer = program.timers[block] ?? defaultTimer();
+  const counter = program.counters[block] ?? defaultCounter();
+  const updateTimer = (patch: Partial<Timer>) => setProgram(p => ({ ...p, timers: { ...p.timers, [block]: { ...timer, ...patch } } }));
+  const updateCounter = (patch: Partial<Counter>) => setProgram(p => ({ ...p, counters: { ...p.counters, [block]: { ...counter, ...patch } } }));
+  const comparator = program.comparators?.[block] ?? defaultComparator();
+  const rtc = program.rtc?.[block] ?? defaultRtc();
+  const hmi = program.hmi?.[block] ?? defaultHmi();
+  const updateComparator = (patch: Partial<Comparator>) => setProgram(p => ({ ...p, comparators: { ...p.comparators, [block]: { ...comparator, ...patch } } }));
+  const updateRtc = (patch: Partial<Rtc>) => setProgram(p => ({ ...p, rtc: { ...p.rtc, [block]: { ...rtc, ...patch } } }));
+  const updateHmi = (patch: Partial<Hmi>) => setProgram(p => ({ ...p, hmi: { ...p.hmi, [block]: { ...hmi, ...patch } } }));
+  const operandEditor = (label: string, operand: Operand, field: 'x' | 'y' | 'reference') => <label>{label}<select value={operand.tag} onChange={e => updateComparator({ [field]: { ...operand, tag: e.target.value } })}><option value="">Constante</option>{selectTags(ANALOG_TAGS)}</select>{!operand.tag && <input type="number" step="0.01" value={operand.value} onChange={e => updateComparator({ [field]: { ...operand, value: Number(e.target.value) || 0 } })} />}</label>;
+  return <section className="clic-workbench" aria-label="CLP WEG CLIC02 20HR-D">
+    <div className="clic-device">
+      <div className="clic-terminal-row">{['+', '−', ...INPUTS.map((_, i) => i < 8 ? String(i + 1) : `A${i - 7}`)].map(t => <div className="clic-terminal" key={t}><i />{t}</div>)}</div>
+      <div className="clic-print">DC 24V <span>INPUT 12×DC (A1–A4 0–10V)</span></div>
+      <div className="clic-face">
+        <div className="clic-display" role="status" aria-label="Display LCD 4 linhas de 16 caracteres">{Array.from({ length: 4 }, (_, i) => <div key={i}>{(lines[i] ?? '').slice(0, 16).padEnd(16, ' ')}</div>)}</div>
+        <div className="clic-keypad">{['DEL', '▲', 'SEL', '◀', '', '▶', 'ESC', '▼', 'OK'].map((name, i) => name ? <button key={name} className={`clic-key key-${i}`} aria-label={`Tecla ${name}`} onClick={() => key(name)} onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); const z = ({ '▲': 'Z01', '◀': 'Z02', '▼': 'Z03', '▶': 'Z04' } as Record<string, string>)[name]; if (z && zEnabled && running && screen === 'STATUS') setZKeys(v => ({ ...v, [z]: true })); }} onPointerUp={() => setZKeys({})} onPointerCancel={() => setZKeys({})} onLostPointerCapture={() => setZKeys({})}>{name}</button> : <span key="center" />)}</div>
       </div>
-    );
-  };
-
-  return (
-    <div style={chassisStyle}>
-      {/* 1. BORNES SUPERIORES DE ENTRADA (I01 - I08 + ALIMENTAÇÃO) */}
-      <div style={terminalRowStyle}>
-        <div style={powerTerminalStyle}>L (+)</div>
-        <div style={powerTerminalStyle}>N (-)</div>
-        {['I01', 'I02', 'I03', 'I04', 'I05', 'I06', 'I07', 'I08'].map((inName) => (
-          <button
-            key={inName}
-            onClick={() => setInputs((prev) => ({ ...prev, [inName]: !prev[inName] }))}
-            style={{
-              ...inputScrewBtnStyle,
-              background: inputs[inName] ? '#00e676' : '#263238',
-              color: inputs[inName] ? '#000' : '#cfd8dc',
-              borderColor: inputs[inName] ? '#69f0ae' : '#37474f',
-            }}
-            title={`Alternar ${inName} (24V CC)`}
-          >
-            {inName}: {inputs[inName] ? 'ON' : 'OFF'}
-          </button>
-        ))}
-      </div>
-
-      {/* 2. PAINEL FRONTAL OFICIAL WEG CLIC-02 */}
-      <div style={frontFaceStyle}>
-        <div style={headerBrandRow}>
-          <div>
-            <strong style={{ fontSize: '18px', color: '#005ea6', letterSpacing: '1px' }}>WEG</strong>
-            <span style={{ fontSize: '11px', color: '#37474f', fontWeight: 'bold', marginLeft: '6px' }}>CLIC02 20HR-D</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ fontSize: '9px', fontWeight: 'bold', color: isRun ? '#00e676' : '#78909c' }}>● RUN</span>
-            <span style={{ fontSize: '9px', fontWeight: 'bold', color: !isRun ? '#ff1744' : '#78909c' }}>● STOP</span>
-            <span style={{ fontSize: '9px', color: '#00e676', fontWeight: 'bold' }}>RS-485 [ONLINE]</span>
-          </div>
-        </div>
-
-        {/* DISPLAY LCD (LADDER OU TELA INICIAL DE STATUS) */}
-        {activeScreenMode === 'MAIN' ? (
-          renderStatusScreen()
-        ) : (
-          <div style={lcdScreenStyle}>
-            <div style={lcdHeaderLineStyle}>
-              <span>{isRun ? 'PLC: [RUNNING]' : 'PLC: [STOP/EDIT]'}</span>
-              <span>LADDER VIEW</span>
-            </div>
-
-            <div style={ladderMatrixStyle}>
-              {rungs.map((r, rIdx) => {
-                const rungOn = isRun && evalRung(r);
-                return (
-                  <div key={r.id} style={ladderRowStyle}>
-                    <span style={{ color: '#1b5e20', fontWeight: 'bold', marginRight: '2px' }}>|</span>
-                    {r.cells.map((c, cIdx) => (
-                      <div
-                        key={cIdx}
-                        onClick={() => handleCellClick(rIdx, cIdx)}
-                        style={{
-                          cursor: isRun ? 'default' : 'pointer',
-                          padding: '1px 3px',
-                          background: selectedRung === rIdx && selectedCol === cIdx && !isRun ? '#a5d6a7' : 'transparent',
-                          borderRadius: '2px',
-                          fontWeight: 'bold',
-                          color: isRun && evalCell(c) ? '#004d40' : '#2e7d32',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '2px',
-                        }}
-                      >
-                        {c.type === 'NONE' && '----'}
-                        {c.type === 'WIRE' && '————'}
-                        {c.type === 'NO' && (
-                          <span>
-                            [{' '}
-                            <span
-                              onClick={(e) => handleTagRotate(rIdx, cIdx, e)}
-                              style={{ textDecoration: !isRun ? 'underline' : 'none', color: '#004d40' }}
-                            >
-                              {c.tag}
-                            </span>{' '}
-                            ]
-                          </span>
-                        )}
-                        {c.type === 'NC' && (
-                          <span>
-                            [/{' '}
-                            <span
-                              onClick={(e) => handleTagRotate(rIdx, cIdx, e)}
-                              style={{ textDecoration: !isRun ? 'underline' : 'none', color: '#004d40' }}
-                            >
-                              {c.tag}
-                            </span>{' '}
-                            ]
-                          </span>
-                        )}
-                        {c.type === 'PULSE_RISING' && (
-                          <span>
-                            [D{' '}
-                            <span
-                              onClick={(e) => handleTagRotate(rIdx, cIdx, e)}
-                              style={{ textDecoration: !isRun ? 'underline' : 'none', color: '#004d40' }}
-                            >
-                              {c.tag}
-                            </span>{' '}
-                            ]
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                    <div
-                      onClick={() => handleCoilClick(rIdx)}
-                      style={{
-                        cursor: isRun ? 'default' : 'pointer',
-                        fontWeight: 'bold',
-                        color: rungOn ? '#b71c1c' : '#1b5e20',
-                        marginLeft: 'auto',
-                        padding: '1px 3px',
-                      }}
-                    >
-                      (
-                      <span onClick={(e) => handleCoilTagRotate(rIdx, e)} style={{ textDecoration: !isRun ? 'underline' : 'none' }}>
-                        {r.coil.type === 'TON'
-                          ? `${r.coil.tag} ${r.coil.value}s`
-                          : r.coil.type === 'SET'
-                          ? `↑ ${r.coil.tag}`
-                          : r.coil.type === 'RST'
-                          ? `↓ ${r.coil.tag}`
-                          : r.coil.type === 'PULSE_FF'
-                          ? `P ${r.coil.tag}`
-                          : r.coil.type === 'MB_SPEED'
-                          ? `MB:${r.coil.value}Hz`
-                          : `${r.coil.tag}`}
-                      </span>
-                      )
-                    </div>
-                    <span style={{ color: '#1b5e20', fontWeight: 'bold', marginLeft: '2px' }}>|</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={lcdFooterLineStyle}>
-              <span>Q01:{outputs.Q01 ? 'ON' : 'OFF'}</span>
-              <span>T01:{timers.T01?.currentSec.toFixed(1)}s</span>
-              <span>M32:{flags.M32 ? '1' : '0'}</span>
-            </div>
-          </div>
-        )}
-
-        {/* FERRAMENTAS DE EDIÇÃO EM MODO STOP */}
-        {!isRun && (
-          <div style={editToolbarStyle}>
-            <button onClick={handleAddRung} style={btnEditStyle}>
-              ➕ Inserir Linha
-            </button>
-            <button onClick={handleRemoveRung} style={{ ...btnEditStyle, background: '#c62828' }}>
-              ➖ Excluir Linha
-            </button>
-            <span style={{ fontSize: '9px', color: '#37474f' }}>Clique nas portas para alternar (I, Z, M, Q, T)</span>
-          </div>
-        )}
-
-        {/* TECLADO DE MEMBRANA DO CLIC-02 */}
-        <div style={keypadChassisStyle}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <button
-              onClick={() => setIsRun(!isRun)}
-              style={{
-                ...btnKeypadStyle,
-                background: isRun ? '#2e7d32' : '#c62828',
-                color: '#fff',
-                width: '74px',
-              }}
-            >
-              {isRun ? 'RUN' : 'STOP'}
-            </button>
-            <button
-              onClick={() => setActiveScreenMode(activeScreenMode === 'LADDER' ? 'MAIN' : 'LADDER')}
-              style={{ ...btnKeypadStyle, width: '74px', background: '#455a64' }}
-            >
-              SEL/ESC
-            </button>
-          </div>
-
-          {/* TECLADO DE NAVEGAÇÃO E TECLAS Z01 A Z04 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
-            <div />
-            <button
-              onMouseDown={() => setZKeys((prev) => ({ ...prev, Z01: true }))}
-              onMouseUp={() => setZKeys((prev) => ({ ...prev, Z01: false }))}
-              onClick={() => setSelectedRung(Math.max(0, selectedRung - 1))}
-              style={btnKeypadStyle}
-              title="Cima / Tecla Z01"
-            >
-              ▲
-            </button>
-            <div />
-
-            <button
-              onMouseDown={() => setZKeys((prev) => ({ ...prev, Z02: true }))}
-              onMouseUp={() => setZKeys((prev) => ({ ...prev, Z02: false }))}
-              onClick={() => setSelectedCol(Math.max(0, selectedCol - 1))}
-              style={btnKeypadStyle}
-              title="Esquerda / Tecla Z02"
-            >
-              ◀
-            </button>
-            <button
-              onClick={() => handleCellClick(selectedRung, selectedCol)}
-              style={{ ...btnKeypadStyle, background: '#0288d1', color: '#fff' }}
-              title="Confirmação OK"
-            >
-              OK
-            </button>
-            <button
-              onMouseDown={() => setZKeys((prev) => ({ ...prev, Z04: true }))}
-              onMouseUp={() => setZKeys((prev) => ({ ...prev, Z04: false }))}
-              onClick={() => setSelectedCol(Math.min(2, selectedCol + 1))}
-              style={btnKeypadStyle}
-              title="Direita / Tecla Z04"
-            >
-              ▶
-            </button>
-
-            <div />
-            <button
-              onMouseDown={() => setZKeys((prev) => ({ ...prev, Z03: true }))}
-              onMouseUp={() => setZKeys((prev) => ({ ...prev, Z03: false }))}
-              onClick={() => setSelectedRung(Math.min(rungs.length - 1, selectedRung + 1))}
-              style={btnKeypadStyle}
-              title="Baixo / Tecla Z03"
-            >
-              ▼
-            </button>
-            <div />
-          </div>
-        </div>
-      </div>
-
-      {/* 3. BORNES INFERIORES DE SAÍDA A RELÉ (Q01 - Q04) */}
-      <div style={terminalRowStyle}>
-        {['Q01', 'Q02', 'Q03', 'Q04'].map((qName) => {
-          const isActive = !!outputs[qName];
-          return (
-            <div key={qName} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <div
-                style={{
-                  ...outputLedStyle,
-                  background: isActive ? '#00e676' : '#263238',
-                  boxShadow: isActive ? '0 0 8px #00e676' : 'none',
-                }}
-              />
-              <span style={{ fontSize: '10px', color: '#cfd8dc', fontWeight: 'bold' }}>{qName}</span>
-            </div>
-          );
-        })}
-      </div>
+      <div className="clic-brand"><strong>WEG</strong><b>CLIC02</b></div>
+      <div className="clic-print">CLW-02/20HR-D <span>OUTPUT 8×RELAY / 8A</span></div>
+      <div className="clic-terminal-row outputs">{OUTPUTS.map(t => <div className={'clic-output ' + (running && runtime.bits[t] ? 'on' : '')} key={t}><span>{t}</span><div><i /><i /></div></div>)}</div>
     </div>
-  );
-};
-
-const chassisStyle: React.CSSProperties = {
-  background: '#cfd8dc',
-  border: '3px solid #78909c',
-  borderRadius: '12px',
-  padding: '10px',
-  boxShadow: '0 12px 32px rgba(0,0,0,0.6)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '8px',
-  maxWidth: '460px',
-  width: '100%',
-  boxSizing: 'border-box',
-};
-
-const terminalRowStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  background: '#263238',
-  padding: '6px 10px',
-  borderRadius: '6px',
-  flexWrap: 'wrap',
-  gap: '4px',
-};
-
-const powerTerminalStyle: React.CSSProperties = {
-  background: '#37474f',
-  color: '#eceff1',
-  fontSize: '9px',
-  fontWeight: 'bold',
-  padding: '4px 6px',
-  borderRadius: '4px',
-};
-
-const inputScrewBtnStyle: React.CSSProperties = {
-  border: '1px solid',
-  borderRadius: '4px',
-  padding: '3px 6px',
-  fontSize: '10px',
-  fontWeight: 'bold',
-  cursor: 'pointer',
-  transition: 'all 0.15s ease',
-};
-
-const frontFaceStyle: React.CSSProperties = {
-  background: '#eceff1',
-  border: '2px solid #b0bec5',
-  borderRadius: '8px',
-  padding: '8px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '8px',
-};
-
-const headerBrandRow: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  borderBottom: '2px solid #b0bec5',
-  paddingBottom: '4px',
-};
-
-const lcdScreenStyle: React.CSSProperties = {
-  background: '#c8e6c9',
-  border: '3px inset #81c784',
-  borderRadius: '6px',
-  padding: '6px',
-  fontFamily: '"Courier New", monospace',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '4px',
-  boxShadow: 'inset 0 0 10px rgba(0,0,0,0.15)',
-};
-
-const lcdHeaderLineStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  fontSize: '10px',
-  fontWeight: 'bold',
-  color: '#1b5e20',
-  borderBottom: '1px dashed #81c784',
-  paddingBottom: '2px',
-};
-
-const lcdTextRowStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  fontSize: '11px',
-  fontWeight: 'bold',
-  color: '#1b5e20',
-};
-
-const ladderMatrixStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '2px',
-  margin: '4px 0',
-  minHeight: '60px',
-};
-
-const ladderRowStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  fontSize: '11px',
-};
-
-const lcdFooterLineStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  fontSize: '9px',
-  fontWeight: 'bold',
-  color: '#2e7d32',
-  borderTop: '1px dashed #81c784',
-  paddingTop: '2px',
-};
-
-const editToolbarStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-  background: '#b0bec5',
-  padding: '4px 6px',
-  borderRadius: '4px',
-};
-
-const btnEditStyle: React.CSSProperties = {
-  background: '#0288d1',
-  color: '#fff',
-  border: 'none',
-  borderRadius: '4px',
-  padding: '3px 6px',
-  fontSize: '9px',
-  fontWeight: 'bold',
-  cursor: 'pointer',
-};
-
-const keypadChassisStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  background: '#b0bec5',
-  padding: '6px',
-  borderRadius: '6px',
-};
-
-const btnKeypadStyle: React.CSSProperties = {
-  background: '#37474f',
-  color: '#eceff1',
-  border: '1px solid #263238',
-  borderRadius: '4px',
-  padding: '4px 8px',
-  fontSize: '10px',
-  fontWeight: 'bold',
-  cursor: 'pointer',
-};
-
-const outputLedStyle: React.CSSProperties = {
-  width: '10px',
-  height: '10px',
-  borderRadius: '50%',
-  border: '1px solid #37474f',
+    <p className="clic-help">24 Vcc · 12 entradas (I09–I0C compartilham A1–A4) · 8 saídas a relé. ESC abre o menu; ↑/↓ selecionam; OK confirma RUN/STOP.</p>
+    <div className="clic-notice" aria-live="polite">{notice}</div>
+    <details open><summary>Entradas de teste e monitor · {activePlant.replace(/_/g, ' ')}</summary><div className="clic-inputs">{INPUTS.map(t => <button key={t} className={inputs[t] ? 'active' : ''} disabled={INPUTS.indexOf(t) >= 8 && analogMode[INPUTS.indexOf(t) - 8]} aria-pressed={!!physicalInputs[t]} onClick={() => setInputs(v => ({ ...v, [t]: !v[t] }))}>{t}<small>{INPUTS.indexOf(t) >= 8 && analogMode[INPUTS.indexOf(t) - 8] ? 'ANALÓG' : inputs[t] ? '24 V' : '0 V'}</small></button>)}</div><p>I01: liga; I02: parada física NF, energizada em repouso. O exemplo usa contato lógico NA de I02.</p><div className="clic-inputs">{OUTPUTS.map(t => <span key={t} className={running && runtime.bits[t] ? 'active' : ''}>{t}: {running && runtime.bits[t] ? '1' : '0'}</span>)}</div><label><input type="checkbox" checked={relayWired} onChange={e => setRelayWired(e.target.checked)} /> Ligar contato Q01 à DI1 do inversor</label><p>O inversor deve estar configurado para comando por borne. O CLP não altera os parâmetros do inversor.</p></details>
+    <nav className="clic-tabs">{['LADDER', 'PARÂMETRO', 'CONFIG.', 'CONFIG. ANALÓG', 'CONFIG. RTC', 'DATA REGISTER', 'MEMÓRIA'].map(t => <button key={t} aria-pressed={panel === t} onClick={() => setPanel(t)}>{t}</button>)}</nav>
+    {panel === 'LADDER' && <div className="clic-editor"><p>{running ? 'RUN · Monitoramento. Pare o programa para editar as linhas.' : 'STOP · Editor ampliado: três contatos em série e uma bobina por linha.'} {program.rungs.length}/300 linhas</p><div className="clic-rungs">{program.rungs.map((r, i) => <button key={i} className={selected === i ? 'selected' : ''} onClick={() => setSelected(i)}><code>{String(i + 1).padStart(3, '0')} {r.cells.map((c, j) => c.type === 'WIRE' ? '────' : `${c.type === 'NC' ? '[/ ' : '[ '}${c.tag}${j === 0 && r.seal ? ' ∥ ' + r.seal : ''} ]`).join('─')}─({r.kind} {r.tag})</code><b>{running && runtime.bits[r.tag] ? ' ●' : ' ○'}</b></button>)}</div>
+      {rung && <fieldset disabled={running}><legend>Linha {selected + 1}</legend>{rung.cells.map((c, i) => <div className="clic-fields" key={i}><label>Contato {i + 1}<select value={c.type} onChange={e => updateRung({ cells: rung.cells.map((v, j) => j === i ? { ...v, type: e.target.value as typeof c.type } : v) })}><option value="NO">NA</option><option value="NC">NF</option><option value="WIRE">Ligação</option></select></label><label>Endereço<select disabled={c.type === 'WIRE'} value={c.tag} onChange={e => updateRung({ cells: rung.cells.map((v, j) => j === i ? { ...v, tag: e.target.value } : v) })}>{selectTags(CONTACTS)}</select></label></div>)}<label>Contato NA em paralelo ao primeiro contato<select value={rung.seal} onChange={e => updateRung({ seal: e.target.value })}><option value="">Sem paralelo</option>{selectTags(CONTACTS)}</select></label><div className="clic-fields"><label>Bobina<select value={rung.kind} onChange={e => { const kind = e.target.value as Rung['kind']; updateRung({ kind, tag: kind === 'TIMER' ? 'T01' : kind === 'COUNTER' ? 'C01' : kind === 'COMPARE' ? 'G01' : kind === 'RTC' ? 'R01' : kind === 'HMI' ? 'H01' : 'Q01' }); }}><option value="OUT">Saída normal</option><option value="SET">SET</option><option value="RST">RESET</option><option value="PULSE_FF">Relé de impulso</option><option value="TIMER">Temporizador</option><option value="COUNTER">Contador</option><option value="COMPARE">Comparador analógico</option><option value="RTC">Relógio semanal/calendário</option><option value="HMI">Tela IHM</option></select></label><label>Endereço<select value={rung.tag} onChange={e => updateRung({ tag: e.target.value })}>{selectTags(rung.kind === 'TIMER' ? addresses('T', 31) : rung.kind === 'COUNTER' ? addresses('C', 31) : rung.kind === 'COMPARE' ? addresses('G', 31) : rung.kind === 'RTC' ? addresses('R', 31) : rung.kind === 'HMI' ? addresses('H', 31) : WRITABLE)}</select></label></div><button onClick={() => { setProgram(p => ({ ...p, rungs: p.rungs.filter((_, i) => i !== selected) })); setSelected(i => Math.max(0, i - 1)); }}>Excluir linha</button></fieldset>}
+      <button disabled={running || program.rungs.length >= 300} onClick={() => { setProgram(p => ({ ...p, rungs: [...p.rungs, { cells: [{ type: 'NO', tag: 'I01' }, { type: 'WIRE', tag: 'I01' }, { type: 'WIRE', tag: 'I01' }], seal: '', kind: 'OUT', tag: 'Q01' }] })); setSelected(program.rungs.length); }}>Adicionar linha</button></div>}
+    {panel === 'PARÂMETRO' && <div className="clic-editor"><label>Bloco<select value={block} onChange={e => setBlock(e.target.value)}>{selectTags([...addresses('T', 31), ...addresses('C', 31), ...addresses('G', 31), ...addresses('R', 31), ...addresses('H', 31)])}</select></label>{block.startsWith('T') ? <><label>Modo<select value={timer.mode} onChange={e => updateTimer({ mode: Number(e.target.value) })}>{timerModes.slice(1).map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label><label>Base de tempo<select value={timer.base} onChange={e => updateTimer({ base: Number(e.target.value) })}><option value="0.01">0,01 s · máximo 99,99 s</option><option value="0.1">0,1 s · máximo 999,9 s</option><option value="1">1 s · máximo 9999 s</option><option value="60">1 min · máximo 9999 min</option></select></label><label>Preset (0–9999 unidades da base)<input type="number" min="0" max="9999" step="1" value={timer.preset} onChange={e => updateTimer({ preset: integer(e.target.value, 9999) })} /></label><p>Preset: {timer.preset * timer.base} s · Atual: {(runtime.elapsed[block] || 0).toFixed(2)} s · Contato: {runtime.bits[block] ? '1' : '0'}</p></> : block.startsWith('C') ? <><label>Modo<select value={counter.continuous ? '2' : '1'} onChange={e => updateCounter({ continuous: e.target.value === '2' })}><option value="1">1 · Contagem limitada, não retentivo</option><option value="2">2 · Contagem contínua, não retentivo</option></select></label><label>Preset (0–999999)<input type="number" min="0" max="999999" step="1" value={counter.preset} onChange={e => updateCounter({ preset: integer(e.target.value, 999999) })} /></label><label>Direção (0 crescente / 1 decrescente)<select value={counter.direction} onChange={e => updateCounter({ direction: e.target.value })}><option value="">Sempre crescente</option>{selectTags(CONTACTS)}</select></label><p>Contagem: {runtime.counts[block] ?? 0} · Contato: {runtime.bits[block] ? '1' : '0'}</p></> : block.startsWith('G') ? <><label>Modo<select value={comparator.mode} onChange={e => updateComparator({ mode: Number(e.target.value) })}>{['0 · Marcador', '1 · Ay − Ref ≤ Ax ≤ Ay + Ref', '2 · Ax ≤ Ay', '3 · Ax ≥ Ay', '4 · Ref ≥ Ax', '5 · Ref ≤ Ax', '6 · Ref = Ax', '7 · Ref ≠ Ax'].map((v, i) => <option value={i} key={v}>{v}</option>)}</select></label>{operandEditor('Ax', comparator.x, 'x')}{operandEditor('Ay', comparator.y, 'y')}{operandEditor('Ref', comparator.reference, 'reference')}<p>Contato {block}: {runtime.bits[block] ? '1' : '0'}</p></> : block.startsWith('R') ? <><label>Modo<select value={rtc.mode} onChange={e => updateRtc({ mode: Number(e.target.value) })}>{['0 · Marcador', '1 · Diário', '2 · Intervalo semanal', '3 · Ano/mês/dia', '4 · Precisão em segundos'].map((v, i) => <option key={v} value={i}>{v}</option>)}</select></label>{rtc.mode === 3 ? <><label>Data para ligar<input type="date" value={rtc.startDate} onChange={e => updateRtc({ startDate: e.target.value })} /></label><label>Data para desligar (00:00)<input type="date" value={rtc.endDate} onChange={e => updateRtc({ endDate: e.target.value })} /></label></> : <>{(['startDay', 'endDay'] as const).filter(f => rtc.mode !== 4 || f === 'startDay').map(f => <label key={f}>{f === 'startDay' ? 'Dia inicial' : 'Dia final'}<select value={rtc[f]} onChange={e => updateRtc({ [f]: Number(e.target.value) })}>{['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((v, i) => <option key={v} value={i}>{v}</option>)}</select></label>)}<label>Hora de ligar<input type="time" value={rtc.on} onChange={e => updateRtc({ on: e.target.value })} /></label>{rtc.mode === 4 ? <label>Segundos (0–30: duração; 31–59: pulso de um scan)<input type="number" min="0" max="59" value={rtc.second} onChange={e => updateRtc({ second: integer(e.target.value, 59) })} /></label> : <label>Hora de desligar<input type="time" value={rtc.off} onChange={e => updateRtc({ off: e.target.value })} /></label>}<p>Dias iguais nos modos 1 e 2: todos os dias. Horário invertido atravessa a meia-noite.</p></>}</> : <><label>Modo IHM<select value={hmi.mode} onChange={e => updateHmi({ mode: Number(e.target.value) })}><option value="1">1 · Exibir</option><option value="2">2 · Não exibir</option></select></label>{hmi.lines.map((line, i) => <label key={i}>Linha {i + 1} (16 caracteres)<input maxLength={16} value={line} onChange={e => updateHmi({ lines: hmi.lines.map((v, j) => i === j ? e.target.value : v) })} /></label>)}<p>A bobina H habilita a tela. Pressione SEL na tela de estado e use ↑/↓ para alternar mensagens.</p></>}{(block.startsWith('T') || block.startsWith('C')) && <label>Reset prioritário<select value={block.startsWith('T') ? timer.reset : counter.reset} onChange={e => block.startsWith('T') ? updateTimer({ reset: e.target.value }) : updateCounter({ reset: e.target.value })}><option value="">Sem reset externo</option>{selectTags(CONTACTS)}</select></label>}</div>}
+    {panel === 'CONFIG.' && <fieldset disabled={running}><legend>Configuração em STOP</legend><label><input type="checkbox" checked={zEnabled} onChange={e => { setZEnabled(e.target.checked); setZKeys({}); }} /> Habilitar Z01 ↑ · Z02 ← · Z03 ↓ · Z04 →</label><label><input type="checkbox" checked={retainCounters} onChange={e => setRetainCounters(e.target.checked)} /> Reter contadores na transição STOP/RUN</label><p>M31: primeiro scan · M32: pulso de 1 s. M31–M3F são reservados e não podem ser bobinas.</p></fieldset>}
+    {panel === 'CONFIG. ANALÓG' && <div className="clic-editor"><p>A1–A4 compartilham os bornes I09–I0C. Selecione a fonte de teste de cada borne. V = A × ganho + offset.</p>{analog.map((value, i) => <fieldset key={i}><legend>A0{i + 1} / {INPUTS[i + 8]}</legend><label><input type="checkbox" checked={analogMode[i]} onChange={e => setAnalogMode(v => v.map((x, j) => j === i ? e.target.checked : x))} /> Fonte analógica de 0–10 V</label><label>Tensão<input type="range" min="0" max="10" step="0.01" disabled={!analogMode[i]} value={value} onChange={e => setAnalog(v => v.map((x, j) => j === i ? Number(e.target.value) : x))} />{value.toFixed(2)} V</label><label>Ganho (0–999)<input type="number" disabled={running} min="0" max="999" value={gains[i]} onChange={e => setGains(v => v.map((x, j) => j === i ? integer(e.target.value, 999) : x))} /></label><label>Offset (−50 a +50)<input type="number" disabled={running} min="-50" max="50" value={offsets[i]} onChange={e => setOffsets(v => v.map((x, j) => j === i ? Math.max(-50, Math.min(50, Math.round(Number(e.target.value) || 0))) : x))} /></label><p>V0{i + 1} = {analogValues[addresses('V', 4)[i]].toFixed(2)}</p></fieldset>)}</div>}
+    {panel === 'DATA REGISTER' && <div className="clic-editor"><label>Registrador<select value={register} onChange={e => setRegister(e.target.value)}>{selectTags(addresses('DR', 240))}</select></label><label><input type="checkbox" disabled={running} checked={signed} onChange={e => { setSigned(e.target.checked); setRegisters(v => Object.fromEntries(Object.entries(v).map(([k, n]) => [k, e.target.checked && n > 32767 ? n - 65536 : !e.target.checked && n < 0 ? n + 65536 : n]))); }} /> Inteiro com sinal (S)</label><label>Valor {signed ? '−32768…32767' : '0…65535'}<input type="number" min={signed ? -32768 : 0} max={signed ? 32767 : 65535} value={registers[register] ?? 0} onChange={e => setRegisters(v => ({ ...v, [register]: Math.max(signed ? -32768 : 0, Math.min(signed ? 32767 : 65535, Math.round(Number(e.target.value) || 0))) }))} /></label></div>}
+    {panel === 'CONFIG. RTC' && <label>Relógio do CLP<input type="datetime-local" onChange={e => { const value = new Date(e.target.value).getTime(); if (Number.isFinite(value)) setClockOffset(value - Date.now()); }} /><small>Relógio independente do computador, mantido nesta sessão.</small></label>}
+    {panel === 'MEMÓRIA' && <fieldset disabled={running}><legend>Memória de programa simulada · sessão atual</legend><button onClick={() => { setMemory(structuredClone(program)); setNotice('Programa salvo na memória simulada desta sessão.'); }}>Escrever programa</button><button disabled={!memory} onClick={() => { if (memory) { setProgram(structuredClone(memory)); setSelected(0); } }}>Ler programa</button><button onClick={() => { setProgram({ rungs: [], timers: {}, counters: {} }); setRuntime(freshRuntime()); setSelected(0); }}>Limpar programa</button><button onClick={() => { setProgram(initialProgram()); setRuntime(freshRuntime()); setSelected(0); }}>Carregar exemplo de selo</button></fieldset>}
+    <details><summary>Referência e recursos desta simulação</summary><p>Base: WEG CLIC02 CLW-02/20HR-D, LCD 4×16, teclado DEL/SEL/ESC/OK e quatro setas. Este modelo não possui RS-485 integrado.</p><p>Executados: Ladder, selo, saídas, SET/RESET, relé de impulso por borda, temporizadores modos 1–6, contadores modos 1–2, comparadores G, escalas analógicas V, RTC modos 0–4, registradores DR e telas de texto HMI. O scan usa tempo decorrido do navegador.</p><p>Ainda não executados: FBD, temporizador modo 7, contador rápido e modos 3–8, blocos PID/aritméticos, campos dinâmicos da HMI, expansões e edição de instruções pelo teclado frontal. O editor ampliado e a memória de sessão são recursos didáticos.</p><a href={manual} target="_blank" rel="noreferrer">Manual oficial WEG CLIC02</a></details>
+  </section>;
 };

@@ -7,32 +7,9 @@ import { COURSE_MODULES_CLIC02 } from '../constants/courseModulesClic02';
 
 type PlantType = 'esteira' | 'elevador' | 'ponte_rolante' | 'maquina_industrial';
 
-interface ModbusLog {
-  id: number;
-  time: string;
-  frame: string;
-  description: string;
-}
-
 export const ModbusPanel: React.FC = () => {
   const [activePlant, setActivePlant] = useState<PlantType>('esteira');
   const [selectedLessonIdx, setSelectedLessonIdx] = useState<number>(0);
-  const [modbusLogs, setModbusLogs] = useState<ModbusLog[]>([
-    {
-      id: 1,
-      time: new Date().toLocaleTimeString(),
-      frame: '01 03 00 00 00 04 44 09',
-      description: 'Master Polling: Read Inverter Holding Registers (40001 - 40004)',
-    },
-  ]);
-
-  const handleModbusTx = (frame: string, description: string) => {
-    setModbusLogs((prev) => [
-      { id: Date.now(), time: new Date().toLocaleTimeString(), frame, description },
-      ...prev.slice(0, 9),
-    ]);
-  };
-
   const currentCourse = COURSE_MODULES_CLIC02[0];
   const currentLesson = currentCourse?.lessons[selectedLessonIdx] || currentCourse?.lessons[0];
 
@@ -41,7 +18,7 @@ export const ModbusPanel: React.FC = () => {
       {/* 1. SELETOR DE PLANTAS INDUSTRIAIS (NO TOPO) */}
       <div style={plantSelectorBarStyle}>
         <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#90a4ae' }}>
-          Planta Mecânica Conectada em Rede RS-485:
+          Planta de teste · comando por contato a relé:
         </span>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
@@ -95,7 +72,7 @@ export const ModbusPanel: React.FC = () => {
       <div style={lessonsContainerCard}>
         <div style={lessonsHeaderStyle}>
           <strong style={{ fontSize: '13px', color: '#00e676' }}>
-            🎓 AULAS DE AUTOMAÇÃO & PROGRAMAÇÃO DO CLIC-02 (IEC 61131-3)
+            🎓 AULAS DE AUTOMAÇÃO & PROGRAMAÇÃO DO CLIC-02
           </strong>
           <span style={{ fontSize: '11px', color: '#90a4ae' }}>
             Planta Ativa: <strong>{activePlant.toUpperCase()}</strong>
@@ -166,8 +143,8 @@ export const ModbusPanel: React.FC = () => {
 
       {/* 3. BANCADA OPERACIONAL: CLP CLIC-02 + IHM + VISUALIZADOR 3D */}
       <div style={workbenchLayoutGrid}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', width: '380px' }}>
-          <Clic02RealisticPLC onModbusTx={handleModbusTx} activePlant={activePlant} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', width: 'min(100%, 620px)', flex: '1 1 520px', minWidth: 0 }}>
+          <Clic02RealisticPLC activePlant={activePlant} />
           <IHM />
         </div>
 
@@ -178,22 +155,9 @@ export const ModbusPanel: React.FC = () => {
             <MotorVisualizer loadTorquePercent={activePlant === 'esteira' ? 35 : 15} />
           )}
 
-          {/* TELEMETRIA SERIAL MODBUS */}
           <div style={snifferCardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #263238', paddingBottom: '4px', marginBottom: '6px' }}>
-              <strong style={{ fontSize: '11px', color: '#00e676' }}>📡 Monitor de Tráfego Serial RS-485 (Modbus RTU)</strong>
-              <span style={{ fontSize: '10px', color: '#81d4fa' }}>19200 bps • 8-E-1</span>
-            </div>
-            <div style={terminalLogArea}>
-              {modbusLogs.map((log) => (
-                <div key={log.id} style={{ display: 'flex', gap: '8px', fontSize: '10px', fontFamily: 'monospace' }}>
-                  <span style={{ color: '#78909c' }}>[{log.time}]</span>
-                  <span style={{ color: '#00e676', fontWeight: 'bold' }}>TX/RX:</span>
-                  <span style={{ color: '#fff' }}>{log.frame}</span>
-                  <span style={{ color: '#90a4ae' }}>— {log.description}</span>
-                </div>
-              ))}
-            </div>
+            <strong>CLIC02 20HR-D · interface por relé</strong>
+            <p>Este modelo não possui RS-485 integrado. Na bancada, a ligação opcional Q01 → DI1 utiliza o contato do relé. Configure o inversor para comando por bornes usando a IHM.</p>
           </div>
         </div>
       </div>
@@ -324,10 +288,3 @@ const snifferCardStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-const terminalLogArea: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '4px',
-  maxHeight: '120px',
-  overflowY: 'auto',
-};
