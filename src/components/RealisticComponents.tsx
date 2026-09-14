@@ -1136,7 +1136,8 @@ export const RealisticInterlockSwitch: React.FC<{
 // ============================================================================
 export const RealisticMotor3Phase: React.FC<{
   width?: number; height?: number; tag?: string; name?: string; state: boolean; isSelected?: boolean;
-}> = ({ width = 170, height = 180, tag = 'M', state, isSelected = false }) => {
+  rotationDirection?: 'FWD' | 'REV';
+}> = ({ width = 170, height = 180, tag = 'M', state, isSelected = false, rotationDirection = 'FWD' }) => {
   const cx = width / 2;
   const topY = height * 0.28;
   const botY = height * 0.72;
@@ -1152,13 +1153,11 @@ export const RealisticMotor3Phase: React.FC<{
 
       {/* Tampa dianteira / eixo */}
       <circle cx="8" cy={height / 2} r="14" fill="#334155" stroke="#1e293b" strokeWidth="1.5" />
-      <circle
-        cx="8"
-        cy={height / 2}
-        r="6"
-        fill={state ? '#00e676' : '#64748b'}
-        style={state ? { animation: 'spin 0.4s linear infinite', transformOrigin: `8px ${height / 2}px` } : {}}
-      />
+      <g>
+        {state && <animateTransform key={rotationDirection} attributeName="transform" type="rotate" from={`0 8 ${height / 2}`} to={`${rotationDirection === 'REV' ? -360 : 360} 8 ${height / 2}`} dur="0.8s" repeatCount="indefinite" />}
+        <circle cx="8" cy={height / 2} r="6" fill={state ? '#00e676' : '#64748b'} />
+        <line x1="8" y1={height / 2} x2="13" y2={height / 2} stroke="#0f172a" strokeWidth="2" />
+      </g>
 
       {/* Etiqueta WEG W22 */}
       <rect x={width * 0.32} y="14" width={width * 0.36} height="16" rx="3" fill="#005ea6" stroke="#003b66" strokeWidth="1" />
@@ -1192,7 +1191,7 @@ export const RealisticMotor3Phase: React.FC<{
       <text x={termX[2]} y={botY + 20} textAnchor="middle" fill="#fde68a" fontSize="6" fontWeight="bold">V2</text>
 
       <text x={cx} y={height - 8} textAnchor="middle" fill="#00e676" fontSize="8" fontWeight="900" fontFamily="monospace">{tag}</text>
-      <text x={width - 14} y={height / 2} textAnchor="middle" fill={state ? '#22c55e' : '#64748b'} fontSize="6" fontWeight="bold">{state ? 'GIRANDO' : 'PARADO'}</text>
+      <text x={width - 14} y={height / 2} textAnchor="middle" fill={state ? '#22c55e' : '#64748b'} fontSize="6" fontWeight="bold">{state ? rotationDirection === 'REV' ? '↺ REV' : '↻ FWD' : 'PARADO'}</text>
     </svg>
   );
 };

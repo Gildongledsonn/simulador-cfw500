@@ -77,11 +77,14 @@ export const MOTOR_NAMEPLATES: Record<string, MotorNameplateData> = {
 interface MotorVisualizerProps {
   loadTorquePercent?: number;
   customNameplate?: MotorNameplateData;
+  /** External contactor workbench direction; inverter views keep their existing controls. */
+  rotationDirection?: 'FWD' | 'REV';
 }
 
 export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
   loadTorquePercent = 0,
   customNameplate,
+  rotationDirection,
 }) => {
   const { state } = useInverter();
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -92,6 +95,8 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
 
   const stateRef = useRef(state);
   stateRef.current = state;
+  const rotationDirectionRef = useRef(rotationDirection);
+  rotationDirectionRef.current = rotationDirection;
 
   const activeNameplateRef = useRef(activeNameplate);
   activeNameplateRef.current = activeNameplate;
@@ -111,6 +116,7 @@ export const MotorVisualizer: React.FC<MotorVisualizerProps> = ({
   });
 
   const isMotorReverse = (s: any): boolean => {
+    if (rotationDirectionRef.current) return rotationDirectionRef.current === 'REV';
     if (!s) return false;
 
     const di2 = Boolean(

@@ -1,6 +1,6 @@
 import { buildControlCircuit } from '../utils/controlCircuit';
 import { createVoltageModel } from '../utils/voltageModel';
-import { motorConnection } from '../utils/motorConnection';
+import { motorConnection, motorPhaseDirection } from '../utils/motorConnection';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useInverter } from '../context/InverterContext';
 import { MotorVisualizer } from './MotorVisualizer';
@@ -79,6 +79,7 @@ export interface PlacedComponent {
   currentRating?: number;
   timerStar?: boolean;
   timerDelta?: boolean;
+  rotationDirection?: 'FWD' | 'REV';
   lampColor?: LampColor;
   selectorPosition?: 'MAN' | '0' | 'AUT';
   terminals: TerminalPole[];
@@ -322,6 +323,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
   const { state: inverterState, dispatch } = useInverter();
 
   const [isWorkbenchVisible, setIsWorkbenchVisible] = useState(true);
+  const [motorDirection, setMotorDirection] = useState<'FWD' | 'REV'>('FWD');
   const [isTrainingOpen, setIsTrainingOpen] = useState(false);
   const [selectedLessonId, setSelectedLessonId] = useState<string>(COMANDOS_LESSONS[0].id);
 
@@ -521,6 +523,11 @@ export const ComandosEletricosWorkbench: React.FC = () => {
            (hasPath(`${c.id}:C1`, `${cap.id}:C2`) && hasPath(`${c.id}:C2`, `${cap.id}:C1`)))) && !hasPath(`${c.id}:C1`, `${c.id}:C2`);
     const isMot3pPowered = components.some(c => c.category === 'MOTOR_TRIFASICO_6P' && motorPowered(c));
     const isMotMonoPowered = components.some(c => c.category === 'MOTOR_MONOFASICO_CAPACITOR' && motorPowered(c));
+    const runningMotor = components.find(c => c.category === 'MOTOR_TRIFASICO_6P' && motorPowered(c));
+    if (runningMotor) {
+      const direction = motorPhaseDirection(runningMotor.id, potential);
+      if (direction) setMotorDirection(direction);
+    }
 
     let stateChanged = false;
     const updated = components.map((c) => {
@@ -543,9 +550,11 @@ export const ComandosEletricosWorkbench: React.FC = () => {
         }
       }
       if (c.category === 'MOTOR_TRIFASICO_6P') {
-        if (c.state !== motorPowered(c)) {
+        const powered = motorPowered(c);
+        const direction = powered ? motorPhaseDirection(c.id, potential) ?? c.rotationDirection : c.rotationDirection;
+        if (c.state !== powered || c.rotationDirection !== direction) {
           stateChanged = true;
-          return { ...c, state: motorPowered(c) };
+          return { ...c, state: powered, rotationDirection: direction };
         }
       }
       if (c.category === 'MOTOR_MONOFASICO_CAPACITOR') {
@@ -1811,6 +1820,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
 
                 {isMotor && (
                   <RealisticMotor3Phase
+                    rotationDirection={comp.rotationDirection}
                     width={comp.width}
                     height={comp.height}
                     tag={comp.tag}
@@ -1904,7 +1914,7 @@ export const ComandosEletricosWorkbench: React.FC = () => {
       {/* Visualizador de Motor Inferior */}
       <div style={bottomVisualizerRowStyle}>
         <div style={{ flex: '1 1 360px' }}>
-          <MotorVisualizer loadTorquePercent={25} />
+          <MotorVisualizer loadTorquePercent={25} rotationDirection={motorDirection} />
         </div>
 
         <div style={guideCardStyle}>
