@@ -18,6 +18,7 @@ import { CFW300Workbench } from './components/CFW300Workbench';
 import { L1000Workbench } from './components/L1000Workbench';
 import { Clic02RealisticPLC } from './components/Clic02RealisticPLC';
 import { ComandosEletricosWorkbench } from './components/ComandosEletricosWorkbench';
+import { ComandosTrainingPanel } from './components/ComandosTrainingPanel';
 import { StudentCertificatesTab } from './components/StudentCertificatesTab';
 import { CFW500ExamModal } from './components/CFW500ExamModal';
 import { FornoGasSimulator } from './components/treinamentos/FornoGasSimulator';
@@ -41,6 +42,7 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
   const [loadTorque, setLoadTorque] = useState(20);
   const [currentLesson, setCurrentLesson] = useState<Lesson>(COURSE_MODULES[0].lessons[0]);
   const [isExamOpen, setIsExamOpen] = useState(false);
+  const [comandosTraining, setComandosTraining] = useState(false);
 
   usePhysicsLoop({ loadTorquePercent: loadTorque, enableNoise: true });
   useKeyboardControls();
@@ -364,7 +366,9 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
 
       {activeTab === 'comandos' && (
         <div style={tabContentStyle}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}><button onClick={() => setComandosTraining(false)} style={tabButtonStyle}>🧰 Bancada de Comandos</button><button onClick={() => setComandosTraining(true)} style={{ ...tabButtonStyle, background: comandosTraining ? '#00897b' : '#1a1d21', color: comandosTraining ? '#fff' : '#80cbc4' }}>🎓 Treinamento</button></div>
           <ComandosEletricosWorkbench />
+          {comandosTraining && <ComandosTrainingPanel />}
         </div>
       )}
 
