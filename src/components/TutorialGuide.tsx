@@ -4,6 +4,7 @@ import { COURSE_MODULES } from '../constants/courseModules';
 import { COURSE_MODULES_CFW300 } from '../constants/courseModulesCFW300';
 import { COURSE_MODULES_L1000 } from '../constants/courseModulesL1000';
 import { COURSE_MODULES_CLIC02 } from '../constants/courseModulesClic02';
+import { CLIC02_TRAINING_TOTAL_MINUTES } from '../constants/courseModulesClic02';
 import { Lesson } from '../types/tutorial';
 import {
   getUserProgress,
@@ -322,6 +323,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
           </button>
         </div>
 
+        {activeInverterType === 'CLIC02' && <div style={{ background: '#123c48', border: '1px solid #2aaec2', borderRadius: '6px', padding: '9px 12px', color: '#d9fbff', fontSize: '12px' }}><strong>Trilha CLIC02 20HR-D · 58 horas</strong><span style={{ marginLeft: 10 }}>10 módulos · teoria + prática no simulador · conclusão por aula e exercício</span><small style={{ display: 'block', marginTop: 4, opacity: .8 }}>Carga cadastrada: {CLIC02_TRAINING_TOTAL_MINUTES / 60} h</small></div>}
         <div style={modulesTabsRowStyle}>
           {activeCourseModules.map((mod, mIdx) => {
             const unlocked = isModuleUnlocked(mIdx, progress, activeCourseModules);

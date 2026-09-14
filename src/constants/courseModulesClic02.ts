@@ -1,65 +1,18 @@
-import { CourseModule } from '../types/tutorial';
+import { CourseModule, Lesson } from '../types/tutorial';
 
-export const COURSE_MODULES_CLIC02: CourseModule[] = [
-  {
-    id: 'mod_clic02_completo',
-    moduleNumber: 1,
-    title: 'Automação Industrial com SoftPLC CLIC-02 & Rede Modbus',
-    description: 'Do Ladder básico (IEC 61131-3) até integração serial com inversores de frequência.',
-    icon: '🪜',
-    lessons: [
-      {
-        id: 'clic_l1_teoria_ladder',
-        title: 'Lição 1: Fundamentos do Ciclo de Varredura e Linguagem Ladder',
-        type: 'THEORY',
-        durationMin: 12,
-        description: 'Estrutura de barramentos elétricos virtuais, contatos NA/NF e tempo de scan.',
-        theoryData: {
-          title: 'Arquitetura de Programação do WEG CLIC-02',
-          content: [
-            'O CLIC-02 executa sua lógica ciclicamente: Leitura das Entradas -> Execução do Programa Ladder -> Atualização das Saídas.',
-            'Entradas físicas I1 a I8 leem sinais de 24V CC de botoeiras e sensores indutivos.',
-            'O contato NA fecha com 24V; o contato NF conduz em repouso (0V) e abre sob 24V.',
-            'A saída Q1 comuta um relé interno para comandar contatores de potência ou enviar sinal de partida.'
-          ],
-          diagramInfo: '|--[ I1 (Liga NA) ]----[/ I2 (Desliga NF) ]----( Q1 Inversor )--|',
-          keyTakeaway: 'O botão de parada de emergência deve sempre usar contato NF para garantir desligamento se o fio romper.'
-        }
-      },
-      {
-        id: 'clic_l2_partida_selo',
-        title: 'Lição 2: Circuito de Retenção (Selo) e Intertravamento',
-        type: 'THEORY',
-        durationMin: 12,
-        description: 'Auto-retenção com botoeiras de pulso e segurança de partida.',
-        theoryData: {
-          title: 'Lógica de Retenção de Potência',
-          content: [
-            'Botoeiras de pulso não mantêm o contato fechado após a soltura do operador.',
-            'O circuito de selo coloca um contato NA da própria saída Q1 em paralelo com o botão Liga (I1).',
-            'Ao pressionar o botão Desliga (I2), a linha perde continuidade e a saída desliga com segurança.'
-          ],
-          diagramInfo: '|--[ I1 ]--+--[/ I2 ]----------------( Q1 )--|\n|--[ Q1 ]--+|',
-          keyTakeaway: 'O contato de selo garante retorno seguro em caso de queda de energia.'
-        }
-      },
-      {
-        id: 'clic_l3_teoria_temporizadores',
-        title: 'Lição 3: Temporizadores TON e Escrita de Velocidade Modbus',
-        type: 'THEORY',
-        durationMin: 15,
-        description: 'Atraso na partida de esteiras e envio da referência de frequência para o registrador 40002.',
-        theoryData: {
-          title: 'Integração de Temporização e Rede RS-485',
-          content: [
-            'O bloco temporizador T1 (Timer On Delay) conta o tempo configurado antes de acionar seu contato.',
-            'O bloco de escrita Modbus (MB_SPEED) envia um telegrama serial para o registrador 40002 (P0681) do inversor.',
-            'Uma referência de 60.0 Hz é enviada como valor numérico 8192 (100% da escala de velocidade).'
-          ],
-          diagramInfo: '|--[ I1 ]------------------------[ TON T1 3.0s ]--|\n|--[ T1 ]------------------------( MB_SPEED 60Hz )--|',
-          keyTakeaway: 'A rede Modbus RTU permite comandar velocidade e ler corrente por apenas 2 fios blindados.'
-        }
-      }
-    ]
-  }
+const data = [
+ ['Segurança e arquitetura do CLIC02',300,'Modelo 20HR-D: 24 Vcc, LCD 4×16, 12 entradas (I09–I0C/A1–A4 compartilhadas) e 8 relés. Identifique bornes, proteção e categoria das cargas.'],
+ ['Ciclo de varredura e diagnóstico de entradas',300,'Leia entradas, execute Ladder e atualize saídas. Compare I01–I08 digitais com I09–I0C em 24 V ou 0–10 V.'],
+ ['Ladder: contatos, ligações e bobinas',300,'Edite em STOP; NA, NF, ligações e endereços I/Q/M/N/T/C/R/G/H. Valide cada estado no monitor.'],
+ ['Partida, selo e intertravamento',360,'Monte partida/parada com contato NF, selo de Q01 e intertravamento entre direções. Teste rompimento do fio de parada.'],
+ ['Temporizadores T01–T1F',420,'Pratique TON, retentivo, TOF, pulso e osciladores. Bases 0,01 s, 0,1 s, 1 s e 1 min; preset 0–9999.'],
+ ['Contadores C01–C1F',420,'Use contagem crescente/decrescente, reset, preset até 999999, retenção e pulsos de bancada.'],
+ ['Analógicas e comparadores G01–G1F',420,'Ajuste V=A×ganho+offset; ganho padrão 10. Use faixa, menor/maior, igualdade e diferença com 0–10 V.'],
+ ['RTC diário, semanal e calendário',420,'Programe turnos, virada da meia-noite, datas e precisão em segundos nos blocos R01–R1F.'],
+ ['IHM H01–H1F e registradores DR',300,'Crie telas de quatro linhas por 16 caracteres e trabalhe DR01–DR240 com inteiro com ou sem sinal.'],
+ ['Memória, retenção e entrega',540,'Edite em STOP, grave/leia PM05, defina retentividade e execute checklist de comissionamento e relatório final.'],
 ];
+const lesson = (row: typeof data[number], i: number): Lesson => { const [title, minutes, text] = row; return { id: `clic58_m${i + 1}`, title: `Aula ${i + 1}: ${title}`, type: i % 2 ? 'PRACTICE' : 'THEORY', durationMin: minutes as number, description: `${(minutes as number) / 60} horas de teoria aplicada e prática guiada no CLIC02 20HR-D.`, category: i < 3 ? 'Básico' : i < 7 ? 'Controle Remoto' : 'Diagnóstico', theoryData: { title: title as string, content: [text as string, 'Execute a sequência no simulador, observe o display e registre o resultado.'], diagramInfo: 'I/A → varredura → Ladder → T/C/G/R/H → Q', keyTakeaway: `Prática: ${text}` }, steps: [{ id: `clic58_step_${i + 1}`, title: 'Executar e registrar', instruction: `Configure a aula “${title}”, rode em RUN e confirme o comportamento esperado.`, tip: 'Use STOP para editar e RUN apenas para monitorar.', isCompleted: () => false }] }; };
+export const COURSE_MODULES_CLIC02: CourseModule[] = data.map((row, i) => ({ id: `clic58_modulo_${i + 1}`, moduleNumber: i + 1, title: `Módulo ${i + 1} · ${row[0]}`, description: `${(row[1] as number) / 60} horas de treinamento com simulação.`, icon: i % 2 ? '🛠️' : '📘', lessons: [lesson(row, i)] }));
+export const CLIC02_TRAINING_TOTAL_MINUTES = COURSE_MODULES_CLIC02.reduce((sum, m) => sum + m.lessons[0].durationMin, 0);
+
