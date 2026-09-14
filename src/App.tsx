@@ -18,7 +18,6 @@ import { CFW300Workbench } from './components/CFW300Workbench';
 import { L1000Workbench } from './components/L1000Workbench';
 import { Clic02RealisticPLC } from './components/Clic02RealisticPLC';
 import { ComandosEletricosWorkbench } from './components/ComandosEletricosWorkbench';
-import { ComandosTrainingPanel } from './components/ComandosTrainingPanel';
 import { StudentCertificatesTab } from './components/StudentCertificatesTab';
 import { CFW500ExamModal } from './components/CFW500ExamModal';
 import { FornoGasSimulator } from './components/treinamentos/FornoGasSimulator';
@@ -366,7 +365,6 @@ const SimulatorWorkbench: React.FC<{ user: AuthUser; onLogout: () => void }> = (
       {activeTab === 'comandos' && (
         <div style={tabContentStyle}>
           <ComandosEletricosWorkbench />
-          <ComandosTrainingPanel />
         </div>
       )}
 

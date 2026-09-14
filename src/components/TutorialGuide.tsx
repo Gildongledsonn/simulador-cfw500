@@ -5,6 +5,7 @@ import { COURSE_MODULES_CFW300 } from '../constants/courseModulesCFW300';
 import { COURSE_MODULES_L1000 } from '../constants/courseModulesL1000';
 import { COURSE_MODULES_CLIC02 } from '../constants/courseModulesClic02';
 import { CLIC02_TRAINING_TOTAL_MINUTES } from '../constants/courseModulesClic02';
+import { COURSE_MODULES_COMANDOS, COMANDOS_TRAINING_TOTAL_MINUTES } from '../constants/courseModulesComandos';
 import { Clic02RealisticPLC } from './Clic02RealisticPLC';
 import { Lesson } from '../types/tutorial';
 import {
@@ -33,7 +34,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
   userRole,
 }) => {
   const { state, dispatch } = useInverter();
-  const [activeInverterType, setActiveInverterType] = useState<'CFW500' | 'CFW300' | 'L1000' | 'CLIC02'>('CFW500');
+  const [activeInverterType, setActiveInverterType] = useState<'CFW500' | 'CFW300' | 'L1000' | 'CLIC02' | 'COMANDOS'>('CFW500');
   const [progress, setProgress] = useState<UserProgressData>(() => getUserProgress());
   const [adminMode, setAdminMode] = useState<boolean>(() => isAdminUnlockAllActive());
   const [isInitializingLesson, setIsInitializingLesson] = useState<boolean>(true);
@@ -45,7 +46,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
       ? COURSE_MODULES_CFW300
       : activeInverterType === 'L1000'
       ? COURSE_MODULES_L1000
-      : COURSE_MODULES_CLIC02;
+      : activeInverterType === 'COMANDOS' ? COURSE_MODULES_COMANDOS : COURSE_MODULES_CLIC02;
 
   const previousLessonIdRef = useRef<string>(selectedLesson.id);
 
@@ -175,7 +176,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
         ? COURSE_MODULES_CFW300
         : type === 'L1000'
         ? COURSE_MODULES_L1000
-        : COURSE_MODULES_CLIC02;
+        : activeInverterType === 'COMANDOS' ? COURSE_MODULES_COMANDOS : COURSE_MODULES_CLIC02;
 
     if (targetModules[0]?.lessons[0]) {
       setSelectedLesson(targetModules[0].lessons[0]);
@@ -267,6 +268,12 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
           </div>
 
           <button
+            onClick={() => handleSelectInverterType('COMANDOS')}
+            style={{ ...inverterTabBtnStyle, background: activeInverterType === 'COMANDOS' ? '#00897b' : '#161b22', borderColor: activeInverterType === 'COMANDOS' ? '#00e676' : '#30363d', color: activeInverterType === 'COMANDOS' ? '#fff' : '#80cbc4' }}
+          >
+            ⚡ Comandos Elétricos · 80 h
+          </button>
+          <button
             onClick={handleFullReset}
             style={{ ...adminBtnStyle, background: '#d32f2f', color: '#fff' }}
             title="Zera o progresso para testar o fluxo desde o início"
@@ -324,7 +331,8 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
           </button>
         </div>
 
-        {activeInverterType === 'CLIC02' && <div style={{ background: '#123c48', border: '1px solid #2aaec2', borderRadius: '6px', padding: '9px 12px', color: '#d9fbff', fontSize: '12px' }}><strong>Trilha CLIC02 20HR-D · 58 horas</strong><span style={{ marginLeft: 10 }}>10 módulos · teoria + prática no simulador · conclusão por aula e exercício</span><small style={{ display: 'block', marginTop: 4, opacity: .8 }}>Carga cadastrada: {CLIC02_TRAINING_TOTAL_MINUTES / 60} h</small></div>}
+        {activeInverterType === 'CLIC02' && <div style={{ background: '#123c48', border: '1px solid #2aaec2', borderRadius: '6px', padding: '9px 12px', color: '#d9fbff', fontSize: '12px' }}><strong>Trilha CLIC02 20HR-D · 58 horas</strong><span style={{ marginLeft: 10 }}>10 módulos · teoria + prática no simulador</span><small style={{ display: 'block', marginTop: 4, opacity: .8 }}>Carga cadastrada: {CLIC02_TRAINING_TOTAL_MINUTES / 60} h</small></div>}
+        {activeInverterType === 'COMANDOS' && <div style={{ background: '#123c48', border: '1px solid #2aaec2', borderRadius: '6px', padding: '9px 12px', color: '#d9fbff', fontSize: '12px' }}><strong>Comandos Elétricos · 80 horas</strong><span style={{ marginLeft: 10 }}>10 módulos · aulas, práticas e simulações</span><small style={{ display: 'block', marginTop: 4, opacity: .8 }}>Carga cadastrada: {COMANDOS_TRAINING_TOTAL_MINUTES / 60} h</small></div>}
         <div style={modulesTabsRowStyle}>
           {activeCourseModules.map((mod, mIdx) => {
             const unlocked = isModuleUnlocked(mIdx, progress, activeCourseModules);
@@ -455,7 +463,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
             </div>
           </div>
 
-          {activeInverterType === 'CLIC02' && (
+          {(activeInverterType === 'CLIC02' || activeInverterType === 'COMANDOS') && (
             <div style={{ marginTop: 12 }}>
               <Clic02RealisticPLC activePlant="treinamento" />
             </div>
