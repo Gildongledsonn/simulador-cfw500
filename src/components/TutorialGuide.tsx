@@ -341,6 +341,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
                   opacity: unlocked ? 1 : 0.5,
                   cursor: unlocked ? 'pointer' : 'not-allowed',
                 }}
+                aria-label={`${mod.title} — ${completed ? 'concluído' : unlocked ? 'em andamento' : 'pendente, bloqueado'}`}
                 onClick={() => {
                   if (unlocked) {
                     triggerHardReset();
@@ -353,8 +354,8 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '14px' }}>{unlocked ? mod.icon : '🔒'}</span>
-                  <span style={{ fontSize: '10px', color: completed ? '#00e676' : '#81d4fa', fontWeight: 'bold' }}>
-                    {completed ? '✅ 100%' : `${percent}%`}
+                  <span style={{ fontSize: '10px', color: completed ? '#00e676' : unlocked ? '#81d4fa' : '#9ca3af', fontWeight: 'bold' }}>
+                    {completed ? '✅ 100%' : unlocked ? `▶ ${percent}%` : '🔒 PENDENTE'}
                   </span>
                 </div>
                 <strong style={{ fontSize: '11px', color: unlocked ? '#fff' : '#6b7280', marginTop: '4px', display: 'block' }}>
