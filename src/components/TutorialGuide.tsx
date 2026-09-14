@@ -164,7 +164,7 @@ export const TutorialGuide: React.FC<TutorialGuideProps> = ({
     }
   }, [state, selectedLesson, progress.completedSteps, progress.completedLessons, activeCourseModules, isInitializingLesson]);
 
-  const handleSelectInverterType = (type: 'CFW500' | 'CFW300' | 'L1000' | 'CLIC02') => {
+  const handleSelectInverterType = (type: 'CFW500' | 'CFW300' | 'L1000' | 'CLIC02' | 'COMANDOS') => {
     if (type === activeInverterType) return;
     setActiveInverterType(type);
     triggerHardReset();
